@@ -1,0 +1,185 @@
+<!-- Jobs Tab -->
+<section x-show="currentTab === 'jobs'" class="section-modern animate-fade-in">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <div>
+            <h2 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Job Management</h2>
+            <p class="text-gray-600">Create and monitor cracking jobs across your distributed agents</p>
+        </div>
+        <button @click="openJobModal()" class="btn-primary">
+            <i class="fas fa-plus mr-2"></i>Create New Job
+        </button>
+    </div>
+    
+    <!-- Mobile Jobs View -->
+    <div class="block sm:hidden space-y-4">
+        <template x-for="job in jobs" :key="job.id">
+            <div class="card-modern p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
+                            <i class="fas fa-tasks text-sm"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900" x-text="job.name">Job Name</h3>
+                            <p class="text-sm text-gray-500" x-text="job.hash_file_name || 'No file selected'">Hash File</p>
+                        </div>
+                    </div>
+                    <span class="status-indicator" 
+                          :class="job.status === 'running' ? 'status-busy' : 
+                                 job.status === 'completed' ? 'status-online' : 
+                                 job.status === 'failed' ? 'status-offline' : 'status-pending'"
+                          x-text="job.status">Status</span>
+                </div>
+                
+                <div class="space-y-3 mb-6">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-list text-green-500 mr-3 w-4"></i>
+                        <span x-text="job.wordlist_name || 'No wordlist selected'">Wordlist</span>
+                    </div>
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-server text-blue-500 mr-3 w-4"></i>
+                        <span x-text="job.agent_name || 'Unassigned'">Agent</span>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-medium text-gray-700">Progress</span>
+                        <span class="text-sm font-medium text-gray-700" x-text="`${job.progress || 0}%`">0%</span>
+                    </div>
+                    <div class="progress-modern">
+                        <div class="progress-bar" :style="`width: ${job.progress || 0}%`"></div>
+                    </div>
+                    <!-- NEW: Speed and ETA Info -->
+                    <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex justify-between items-center mt-2 text-xs text-gray-500">
+                        <span x-show="job.speed" x-text="`Speed: ${formatNumber(job.speed || 0)} H/s`"></span>
+                        <span x-show="job.eta" x-text="`ETA: ${formatDate(job.eta)}`"></span>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3">
+                    <button @click="startJob(job.id)" 
+                            :disabled="job.status === 'running'"
+                            :class="job.status === 'running' ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-success'"
+                            class="flex-1 text-sm py-2">
+                        <i class="fas fa-play mr-2"></i>Start
+                    </button>
+                    <button @click="pauseJob(job.id)" 
+                            :disabled="job.status !== 'running'"
+                            :class="job.status !== 'running' ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-warning'"
+                            class="flex-1 text-sm py-2">
+                        <i class="fas fa-pause mr-2"></i>Pause
+                    </button>
+                    <button @click="deleteJob(job.id)" class="btn-danger text-sm py-2 px-4">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+    
+    <!-- Desktop Jobs Table -->
+    <div class="hidden sm:block table-modern">
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead class="table-header">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Job Details</th>
+                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
+                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Progress</th>
+                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Resources</th>
+                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Agent</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="job in jobs" :key="job.id">
+                        <tr class="table-row">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
+                                        <i class="fas fa-tasks text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-semibold text-gray-900" x-text="job.name">Job Name</div>
+                                        <div class="text-sm text-gray-500 flex items-center mt-1">
+                                            <i class="fas fa-file-alt mr-1"></i>
+                                            <span x-text="job.hash_file_name || 'No file'">Hash File</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="status-indicator" 
+                                      :class="job.status === 'running' ? 'status-busy' : 
+                                             job.status === 'completed' ? 'status-online' : 
+                                             job.status === 'failed' ? 'status-offline' : 'status-pending'"
+                                      x-text="job.status">Status</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="progress-modern w-24">
+                                        <div class="progress-bar" :style="`width: ${job.progress || 0}%`"></div>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-700" x-text="`${job.progress || 0}%`">0%</span>
+                                </div>
+                                <!-- NEW: Speed and ETA for desktop -->
+                                <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex items-center space-x-3 mt-1">
+                                    <span x-show="job.speed" class="text-xs text-gray-500" x-text="`${formatNumber(job.speed || 0)} H/s`"></span>
+                                    <span x-show="job.eta" class="text-xs text-blue-600" x-text="`ETA: ${formatDate(job.eta)}`"></span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-600 flex items-center">
+                                    <i class="fas fa-list text-green-500 mr-2"></i>
+                                    <span x-text="job.wordlist_name || 'No wordlist'">Wordlist</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-600 flex items-center">
+                                    <i class="fas fa-server text-blue-500 mr-2"></i>
+                                    <span x-text="job.agent_name || 'Unassigned'">Agent</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button @click="startJob(job.id)" 
+                                            :disabled="job.status === 'running'"
+                                            :class="job.status === 'running' ? 'text-gray-400 cursor-not-allowed' : 'text-green-600 hover:text-green-800'"
+                                            class="p-2 rounded-lg hover:bg-green-50 transition-colors duration-200" 
+                                            title="Start Job">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button @click="pauseJob(job.id)" 
+                                            :disabled="job.status !== 'running'"
+                                            :class="job.status !== 'running' ? 'text-gray-400 cursor-not-allowed' : 'text-amber-600 hover:text-amber-800'"
+                                            class="p-2 rounded-lg hover:bg-amber-50 transition-colors duration-200" 
+                                            title="Pause Job">
+                                        <i class="fas fa-pause"></i>
+                                    </button>
+                                    <button @click="deleteJob(job.id)" 
+                                            class="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors duration-200"
+                                            title="Delete Job">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <div x-show="jobs.length === 0" class="text-center py-16">
+            <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-tasks text-3xl text-gray-400"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">No Jobs Yet</h3>
+            <p class="text-gray-500 mb-6">Create your first cracking job to get started</p>
+            <button @click="openJobModal()" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i>Create First Job
+            </button>
+        </div>
+    </div>
+</section> 

@@ -1,0 +1,68 @@
+# Production Configuration Template
+# Copy to config.yaml and adjust for your environment
+
+server:
+  port: ${SERVER_PORT:1337}
+  host: ${SERVER_HOST:0.0.0.0}
+  mode: ${GIN_MODE:release}  # debug, test, release
+
+database:
+  # Database type: sqlite, postgres, mysql
+  type: ${DB_TYPE:sqlite}
+  
+  # SQLite configuration
+  sqlite:
+    path: ${DB_SQLITE_PATH:./data/hashcat.db}
+    
+  # PostgreSQL configuration  
+  postgres:
+    host: ${DB_POSTGRES_HOST:localhost}
+    port: ${DB_POSTGRES_PORT:5432}
+    username: ${DB_POSTGRES_USER:hashcat}
+    password: ${DB_POSTGRES_PASSWORD:}
+    database: ${DB_POSTGRES_DB:hashcat_distributed}
+    sslmode: ${DB_POSTGRES_SSL:disable}
+    
+  # MySQL configuration
+  mysql:
+    host: ${DB_MYSQL_HOST:localhost}
+    port: ${DB_MYSQL_PORT:3306}
+    username: ${DB_MYSQL_USER:hashcat}
+    password: ${DB_MYSQL_PASSWORD:}
+    database: ${DB_MYSQL_DB:hashcat_distributed}
+    
+  # Connection pool settings
+  pool:
+    max_open_conns: ${DB_MAX_OPEN_CONNS:25}
+    max_idle_conns: ${DB_MAX_IDLE_CONNS:5}
+    conn_max_lifetime: ${DB_CONN_MAX_LIFETIME:30m}
+    conn_max_idle_time: ${DB_CONN_MAX_IDLE_TIME:5m}
+
+upload:
+  directory: ${UPLOAD_DIR:./uploads}
+  max_file_size: ${MAX_FILE_SIZE:100MB}
+  allowed_extensions: ${ALLOWED_EXTENSIONS:txt,hash,hccapx,hccap,cap}
+
+security:
+  cors:
+    allowed_origins: ${CORS_ORIGINS:http://localhost:3000}
+    allowed_methods: ${CORS_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    allowed_headers: ${CORS_HEADERS:Content-Type,Authorization,X-Requested-With}
+  
+  rate_limit:
+    requests_per_minute: ${RATE_LIMIT_RPM:100}
+    burst: ${RATE_LIMIT_BURST:10}
+
+logging:
+  level: ${LOG_LEVEL:info}  # debug, info, warn, error
+  format: ${LOG_FORMAT:json}  # text, json
+  file: ${LOG_FILE:}  # empty for stdout
+
+metrics:
+  enabled: ${METRICS_ENABLED:true}
+  port: ${METRICS_PORT:9090}
+  
+agent:
+  heartbeat_interval: ${AGENT_HEARTBEAT:30s}
+  timeout: ${AGENT_TIMEOUT:5m}
+  max_jobs_per_agent: ${MAX_JOBS_PER_AGENT:5} 

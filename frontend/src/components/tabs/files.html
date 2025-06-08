@@ -1,0 +1,73 @@
+<!-- Files Tab -->
+<section x-show="currentTab === 'files'" class="section-modern animate-fade-in">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <div>
+            <h2 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Hash Files</h2>
+            <p class="text-gray-600">Upload and manage hash files for cracking jobs</p>
+        </div>
+        <button @click="openFileModal()" class="btn-primary">
+            <i class="fas fa-upload mr-2"></i>Upload File
+        </button>
+    </div>
+    
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <template x-for="item in hashFiles" :key="item.id">
+            <div class="file-card p-6 group">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="file-icon w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg transition-transform duration-300">
+                            <i class="fas fa-file-alt text-lg"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <h3 class="file-name" 
+                                :title="item.name"
+                                x-text="getDisplayName(item).length > 30 ? getDisplayName(item).substring(0, 30) + '...' : getDisplayName(item)">File Name</h3>
+                            <div class="file-meta">
+                                <span class="file-badge file-badge-hash" x-text="getFileTypeBadge(getDisplayName(item))">Type</span>
+                                <span x-text="formatFileSize(item.size)">Size</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-3 mb-6">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-fingerprint text-orange-500 mr-3 w-4"></i>
+                        <span class="text-xs">ID: </span>
+                        <code class="file-id" 
+                              :title="item.id"
+                              x-text="getTruncatedId(item)">ID</code>
+                    </div>
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-calendar-plus text-green-500 mr-3 w-4"></i>
+                        <span x-text="formatDate(item.created_at)">Date Added</span>
+                    </div>
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-info-circle text-blue-500 mr-3 w-4"></i>
+                        <span x-text="item.path ? 'Stored' : 'Uploaded'">Status</span>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3">
+                    <button @click="downloadFile(item.id, getDisplayName(item))" class="btn-secondary flex-1 text-sm py-2">
+                        <i class="fas fa-download mr-2"></i>Download
+                    </button>
+                    <button @click="deleteFile(item.id)" class="btn-danger text-sm py-2 px-4">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </template>
+        
+        <div x-show="hashFiles.length === 0" class="col-span-full text-center py-16">
+            <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-file-alt text-3xl text-gray-400"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">No Hash Files</h3>
+            <p class="text-gray-500 mb-6">Upload your first hash file to start creating jobs</p>
+            <button @click="openFileModal()" class="btn-primary">
+                <i class="fas fa-upload mr-2"></i>Upload First File
+            </button>
+        </div>
+    </div>
+</section> 

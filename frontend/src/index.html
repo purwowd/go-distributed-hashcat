@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hashcat Distributed Dashboard</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js - Complete manual control -->
+    <script>
+        // Prevent Alpine from auto-starting completely
+        window.deferLoadingAlpine = function(callback) {
+            window.Alpine = callback;
+            window.alpineReady = true;
+            console.log('🎯 Alpine.js loaded and ready for manual start');
+        }
+        
+        // Flag to track if we've manually started Alpine
+        window.alpineManuallyStarted = false;
+    </script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen">
+    <!-- Components will be loaded dynamically by main.ts -->
+    
+    <!-- Initial loading state -->
+    <div id="initial-loader" class="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div class="text-center">
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-2xl mb-6">
+                <i class="fas fa-shield-alt text-2xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                Hashcat Dashboard
+            </h1>
+            <div class="flex items-center justify-center space-x-2 text-gray-600">
+                <div class="animate-spin rounded-full h-6 w-6 border-4 border-blue-200 border-t-blue-600"></div>
+                <span class="text-sm font-medium">Loading components...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="./main.ts"></script>
+    
+    <script>
+        // Hide initial loader once Alpine is ready
+        document.addEventListener('alpine:init', () => {
+            const loader = document.getElementById('initial-loader');
+            if (loader) {
+                setTimeout(() => {
+                    loader.style.opacity = '0';
+                    loader.style.transition = 'opacity 0.3s ease-out';
+                    setTimeout(() => loader.remove(), 300);
+                }, 500);
+            }
+        });
+    </script>
+</body>
+</html> 

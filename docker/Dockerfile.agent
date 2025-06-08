@@ -1,0 +1,35 @@
+FROM nvidia/cuda:11.8-devel-ubuntu22.04
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    ocl-icd-opencl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install hashcat version 6.1.1
+RUN wget https://hashcat.net/files/hashcat-6.1.1.tar.gz \
+    && tar xzf hashcat-6.1.1.tar.gz \
+    && cd hashcat-6.1.1 \
+    && make && make install \
+    && cd .. && rm -rf hashcat-6.1.1*
+
+# Set working directory
+WORKDIR /app
+
+# Copy agent binary
+COPY bin/agent /app/agent
+
+# Copy wordlists (optional)
+RUN mkdir -p /app/wordlists
+# COPY wordlists/ /app/wordlists/
+
+# Create non-root user
+RUN useradd -m hashcat
+USER hashcat
+
+# Set environment
+ENV PATH="/app:$PATH"
+
+# Default command
+ENTRYPOINT ["/app/agent"] 

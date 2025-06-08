@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dashboard</title>
+    <link rel="stylesheet" href="./styles/main.css">
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen">
+    <div x-data="{ message: 'Dashboard Works!' }" class="container-modern">
+        <div class="card-modern p-8 text-center">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4" x-text="message"></h1>
+            <p class="text-gray-600">If you can see this styled card with gradient background, the CSS is working!</p>
+            <button @click="message = 'Alpine.js is Working!'" class="btn-primary mt-4">Test Alpine.js</button>
+        </div>
+    </div>
+</body>
+</html> 

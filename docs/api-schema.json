@@ -1,0 +1,665 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Distributed Hashcat API",
+    "description": "REST API for distributed password cracking using Hashcat across multiple GPU-enabled machines",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Documentation",
+      "url": "http://localhost:1337/docs"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:1337/api/v1",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check API health status",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "healthy"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/": {
+      "post": {
+        "summary": "Register Agent",
+        "description": "Register a new GPU-enabled agent for cracking jobs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Agent"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List All Agents",
+        "description": "Get all registered agents",
+        "responses": {
+          "200": {
+            "description": "List of agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Agent"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{id}/heartbeat": {
+      "post": {
+        "summary": "Agent Heartbeat",
+        "description": "Send heartbeat to keep agent status active",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Heartbeat received"
+          }
+        }
+      }
+    },
+    "/jobs/": {
+      "post": {
+        "summary": "Create Cracking Job",
+        "description": "Create a new password cracking job",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Job"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List All Jobs",
+        "description": "Get all cracking jobs",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "running", "completed", "failed", "paused"]
+            },
+            "description": "Filter jobs by status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{id}/start": {
+      "post": {
+        "summary": "Start Job",
+        "description": "Start a pending or paused job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job started successfully"
+          }
+        }
+      }
+    },
+    "/jobs/{id}": {
+      "get": {
+        "summary": "Get Job Status",
+        "description": "Get detailed job information and progress",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Job"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Job",
+        "description": "Delete a job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job deleted successfully"
+          }
+        }
+      }
+    },
+    "/hashfiles/upload": {
+      "post": {
+        "summary": "Upload Hash File",
+        "description": "Upload a hash file for cracking (hccapx, hccap, cap, txt)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Hash file uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/HashFile"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hashfiles/": {
+      "get": {
+        "summary": "List Hash Files",
+        "description": "Get all uploaded hash files",
+        "responses": {
+          "200": {
+            "description": "List of hash files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HashFile"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wordlists/upload": {
+      "post": {
+        "summary": "Upload Wordlist",
+        "description": "Upload a wordlist file for dictionary attacks",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Wordlist uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Wordlist"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wordlists/": {
+      "get": {
+        "summary": "List Wordlists",
+        "description": "Get all uploaded wordlists",
+        "responses": {
+          "200": {
+            "description": "List of wordlists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Wordlist"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Agent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "name": {
+            "type": "string",
+            "example": "GPU-Server-01"
+          },
+          "ip_address": {
+            "type": "string",
+            "example": "192.168.1.100"
+          },
+          "port": {
+            "type": "integer",
+            "example": 8080
+          },
+          "status": {
+            "type": "string",
+            "enum": ["online", "offline", "busy"],
+            "example": "online"
+          },
+          "capabilities": {
+            "type": "string",
+            "example": "NVIDIA RTX 4090, 24GB VRAM, CUDA 12.0"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateAgentRequest": {
+        "type": "object",
+        "required": ["name", "ip_address", "port"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "GPU-Server-01"
+          },
+          "ip_address": {
+            "type": "string",
+            "example": "192.168.1.100"
+          },
+          "port": {
+            "type": "integer",
+            "example": 8080
+          },
+          "capabilities": {
+            "type": "string",
+            "example": "NVIDIA RTX 4090, 24GB VRAM"
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "WiFi WPA2 Crack Job"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "completed", "failed", "paused"],
+            "example": "running"
+          },
+          "hash_type": {
+            "type": "integer",
+            "example": 2500,
+            "description": "Hashcat hash type (2500 for WPA/WPA2)"
+          },
+          "attack_mode": {
+            "type": "integer",
+            "example": 0,
+            "description": "Attack mode (0 for dictionary)"
+          },
+          "hash_file": {
+            "type": "string",
+            "example": "wifi_capture.hccapx"
+          },
+          "hash_file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "wordlist": {
+            "type": "string",
+            "example": "rockyou.txt"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "example": 45.5
+          },
+          "speed": {
+            "type": "integer",
+            "example": 1500000,
+            "description": "Hashes per second"
+          },
+          "result": {
+            "type": "string",
+            "example": "Password found: password123"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateJobRequest": {
+        "type": "object",
+        "required": ["name", "hash_type", "attack_mode", "hash_file_id", "wordlist"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "WiFi WPA2 Crack Job"
+          },
+          "hash_type": {
+            "type": "integer",
+            "example": 2500,
+            "description": "Hashcat hash type"
+          },
+          "attack_mode": {
+            "type": "integer",
+            "example": 0,
+            "description": "Attack mode"
+          },
+          "hash_file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "wordlist": {
+            "type": "string",
+            "example": "rockyou.txt"
+          },
+          "wordlist_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional wordlist ID"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional specific agent assignment"
+          },
+          "rules": {
+            "type": "string",
+            "description": "Optional rules file"
+          }
+        }
+      },
+      "HashFile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "wifi_capture.hccapx"
+          },
+          "orig_name": {
+            "type": "string",
+            "example": "original_filename.hccapx"
+          },
+          "path": {
+            "type": "string",
+            "example": "uploads/hashfiles/wifi_capture.hccapx"
+          },
+          "size": {
+            "type": "integer",
+            "example": 393
+          },
+          "type": {
+            "type": "string",
+            "enum": ["hccapx", "hccap", "hash", "cap", "pcap"],
+            "example": "hccapx"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Wordlist": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "rockyou.txt"
+          },
+          "orig_name": {
+            "type": "string",
+            "example": "rockyou.txt"
+          },
+          "path": {
+            "type": "string",
+            "example": "uploads/wordlists/rockyou.txt"
+          },
+          "size": {
+            "type": "integer",
+            "example": 139921507
+          },
+          "word_count": {
+            "type": "integer",
+            "example": 14344391
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Health check endpoints"
+    },
+    {
+      "name": "Agents",
+      "description": "Agent management operations"
+    },
+    {
+      "name": "Jobs",
+      "description": "Cracking job operations"
+    },
+    {
+      "name": "Files",
+      "description": "Hash file and wordlist operations"
+    }
+  ]
+} 

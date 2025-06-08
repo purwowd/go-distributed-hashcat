@@ -1,0 +1,8 @@
+server:
+  port: 1337
+
+database:
+  path: "./data/hashcat.db"
+
+upload:
+  directory: "./uploads" 

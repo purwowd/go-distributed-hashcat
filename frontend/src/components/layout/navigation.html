@@ -1,0 +1,66 @@
+<!-- Modern Navigation Component -->
+<nav class="nav-modern sticky top-0 z-40">
+    <div class="container-modern">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+            <div class="flex items-center py-4 sm:py-0">
+                <div class="flex items-center space-x-3">
+                    <div class="icon-modern icon-primary">
+                        <i class="fas fa-shield-alt text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                            Hashcat Dashboard
+                        </h1>
+                        <p class="text-xs text-gray-500 hidden sm:block">Distributed Cracking System</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-2 pb-4 sm:pb-0">
+                <button @click="switchTab('overview')" 
+                        :class="currentTab === 'overview' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"
+                        class="transition-all duration-300">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    <span class="hidden sm:inline">Overview</span>
+                </button>
+                <button @click="switchTab('agents')" 
+                        :class="currentTab === 'agents' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"
+                        class="transition-all duration-300">
+                    <i class="fas fa-server mr-2"></i>
+                    <span class="hidden sm:inline">Agents</span>
+                </button>
+                <button @click="switchTab('jobs')" 
+                        :class="currentTab === 'jobs' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"
+                        class="transition-all duration-300">
+                    <i class="fas fa-tasks mr-2"></i>
+                    <span class="hidden sm:inline">Jobs</span>
+                </button>
+                <button @click="switchTab('files')" 
+                        :class="currentTab === 'files' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"
+                        class="transition-all duration-300">
+                    <i class="fas fa-file-alt mr-2"></i>
+                    <span class="hidden sm:inline">Files</span>
+                </button>
+                <button @click="switchTab('wordlists')" 
+                        :class="currentTab === 'wordlists' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"
+                        class="transition-all duration-300">
+                    <i class="fas fa-list mr-2"></i>
+                    <span class="hidden sm:inline">Wordlists</span>
+                </button>
+                <button @click="switchTab('docs')" 
+                        :class="currentTab === 'docs' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"
+                        class="transition-all duration-300">
+                    <i class="fas fa-book mr-2"></i>
+                    <span class="hidden sm:inline">API Docs</span>
+                </button>
+            </div>
+            
+            <div class="flex items-center justify-end sm:justify-start">
+                <div x-show="isLoading" class="flex items-center text-sm text-gray-500 bg-white/50 backdrop-blur-sm rounded-xl px-3 py-2">
+                    <i class="fas fa-spinner fa-spin mr-2 text-blue-600"></i>
+                    <span class="hidden sm:inline">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav> 
