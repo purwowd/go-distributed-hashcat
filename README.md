@@ -157,9 +157,9 @@ graph LR
     USECASES -->|Data Access| REPOS
     REPOS <-->|SQL| DB
     
-    HANDLERS -->>|JSON Response| API_SVC
-    API_SVC -->>|Data| STORES
-    STORES -->>|State Updates| UI
+    HANDLERS -.->|JSON Response| API_SVC
+    API_SVC -.->|Data| STORES
+    STORES -.->|State Updates| UI
     
     style UI fill:#e3f2fd
     style STORES fill:#f1f8e9
@@ -168,53 +168,6 @@ graph LR
     style USECASES fill:#f3e5f5
     style REPOS fill:#e8f5e8
     style DB fill:#e0f2f1
-```
-
-### **File Management Workflow**
-
-```mermaid
-flowchart TD
-    subgraph "User Actions"
-        UPLOAD[Upload via Web/API]
-        COPY[Copy to Agent Folder]
-    end
-    
-    subgraph "Server Storage"
-        SERVER_FS[Server Filesystem<br/>uploads/]
-        DB_META[(Database<br/>File Metadata)]
-    end
-    
-    subgraph "Agent Local Storage"
-        AGENT_DIR[/root/uploads/<br/>wordlists/ & hash-files/]
-        SCAN[File Scanner<br/>Every 5 min]
-    end
-    
-    subgraph "Job Execution"
-        JOB_CREATE[Create Job]
-        FILE_CHECK{File Available<br/>Locally?}
-        DOWNLOAD[Download from Server]
-        EXECUTE[Execute Hashcat]
-    end
-    
-    UPLOAD --> SERVER_FS
-    UPLOAD --> DB_META
-    COPY --> AGENT_DIR
-    
-    AGENT_DIR --> SCAN
-    SCAN --> DB_META
-    
-    JOB_CREATE --> FILE_CHECK
-    FILE_CHECK -->|Yes| EXECUTE
-    FILE_CHECK -->|No| DOWNLOAD
-    DOWNLOAD --> EXECUTE
-    
-    SERVER_FS -.->|Sync on demand| AGENT_DIR
-    
-    style UPLOAD fill:#e8f5e8
-    style COPY fill:#e8f5e8
-    style SERVER_FS fill:#fff3e0
-    style AGENT_DIR fill:#fce4ec
-    style EXECUTE fill:#e3f2fd
 ```
 
 ## 🚀 Quick Start
