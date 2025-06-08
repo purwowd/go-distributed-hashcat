@@ -258,6 +258,23 @@ mkdir -p data uploads
 - **Styling**: Tailwind CSS (utility-first)
 - **Icons**: Font Awesome (comprehensive)
 
+## 🔐 Production Deployment
+
+### **WireGuard VPN Setup (Recommended)**
+
+For secure multi-node deployment with VPN tunneling:
+
+📚 **[Complete Documentation](docs/)** | **[WireGuard Deployment Guide](docs/wireguard-deployment.md)**
+- Full 2-node setup with Mini PC + DigitalOcean GPU
+- Secure VPN tunneling (15.15.15.x network)
+- Production-ready configuration
+- Monitoring and maintenance
+
+⚡ **[Quick Start Guide](docs/quick-start-wireguard.md)**
+- 15-minute rapid deployment
+- Essential commands
+- Common troubleshooting
+
 ## 📂 Agent File Management
 
 ### **Local File Structure**
