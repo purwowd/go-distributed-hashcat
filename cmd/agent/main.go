@@ -643,7 +643,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	}
 
 	// Success - password found, now capture the actual password
-	password, err := a.extractPassword(localHashFile, job.HashType)
+	password, err := a.extractPassword(localHashFile)
 	if err != nil {
 		log.Printf("⚠️  Failed to extract password: %v", err)
 		a.completeJob(job.ID, "Password found (extraction failed)")
@@ -747,7 +747,7 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 	return localPath, nil
 }
 
-func (a *Agent) extractPassword(hashFile string, hashType int) (string, error) {
+func (a *Agent) extractPassword(hashFile string) (string, error) {
 	// Read password from outfile created during cracking
 	outfile := filepath.Join(filepath.Dir(hashFile), "cracked.txt")
 
