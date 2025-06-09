@@ -11,12 +11,14 @@ import (
 )
 
 type JobHandler struct {
-	jobUsecase usecase.JobUsecase
+	jobUsecase        usecase.JobUsecase
+	enrichmentService usecase.JobEnrichmentService
 }
 
-func NewJobHandler(jobUsecase usecase.JobUsecase) *JobHandler {
+func NewJobHandler(jobUsecase usecase.JobUsecase, enrichmentService usecase.JobEnrichmentService) *JobHandler {
 	return &JobHandler{
-		jobUsecase: jobUsecase,
+		jobUsecase:        jobUsecase,
+		enrichmentService: enrichmentService,
 	}
 }
 
@@ -70,7 +72,14 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": jobs})
+	// Enrich jobs with readable names using service
+	enrichedJobs, err := h.enrichmentService.EnrichJobs(c.Request.Context(), jobs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": enrichedJobs})
 }
 
 func (h *JobHandler) StartJob(c *gin.Context) {

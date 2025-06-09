@@ -22,6 +22,105 @@ type MockJobUsecase struct {
 	mock.Mock
 }
 
+// MockAgentRepository for testing
+type MockAgentRepository struct {
+	mock.Mock
+}
+
+func (m *MockAgentRepository) Create(ctx context.Context, agent *domain.Agent) error {
+	args := m.Called(ctx, agent)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
+func (m *MockAgentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]domain.Agent), args.Error(1)
+}
+
+func (m *MockAgentRepository) Update(ctx context.Context, agent *domain.Agent) error {
+	args := m.Called(ctx, agent)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
+	args := m.Called(ctx, id, status)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+// MockWordlistRepository for testing
+type MockWordlistRepository struct {
+	mock.Mock
+}
+
+func (m *MockWordlistRepository) Create(ctx context.Context, wordlist *domain.Wordlist) error {
+	args := m.Called(ctx, wordlist)
+	return args.Error(0)
+}
+
+func (m *MockWordlistRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Wordlist), args.Error(1)
+}
+
+func (m *MockWordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]domain.Wordlist), args.Error(1)
+}
+
+func (m *MockWordlistRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+// MockHashFileRepository for testing
+type MockHashFileRepository struct {
+	mock.Mock
+}
+
+func (m *MockHashFileRepository) Create(ctx context.Context, hashFile *domain.HashFile) error {
+	args := m.Called(ctx, hashFile)
+	return args.Error(0)
+}
+
+func (m *MockHashFileRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.HashFile, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.HashFile), args.Error(1)
+}
+
+func (m *MockHashFileRepository) GetAll(ctx context.Context) ([]domain.HashFile, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]domain.HashFile), args.Error(1)
+}
+
+func (m *MockHashFileRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func (m *MockJobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest) (*domain.Job, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -199,7 +298,7 @@ func TestJobHandler_CreateJob(t *testing.T) {
 			mockUsecase := new(MockJobUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewJobHandler(mockUsecase)
+			handler := handler.NewJobHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.POST("/jobs", handler.CreateJob)
 
@@ -292,7 +391,7 @@ func TestJobHandler_GetJob(t *testing.T) {
 			mockUsecase := new(MockJobUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewJobHandler(mockUsecase)
+			handler := handler.NewJobHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.GET("/jobs/:id", handler.GetJob)
 
@@ -380,7 +479,7 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 			mockUsecase := new(MockJobUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewJobHandler(mockUsecase)
+			handler := handler.NewJobHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.GET("/jobs", handler.GetAllJobs)
 
@@ -456,7 +555,7 @@ func TestJobHandler_StartJob(t *testing.T) {
 			mockUsecase := new(MockJobUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewJobHandler(mockUsecase)
+			handler := handler.NewJobHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.POST("/jobs/:id/start", handler.StartJob)
 
@@ -532,7 +631,7 @@ func TestJobHandler_DeleteJob(t *testing.T) {
 			mockUsecase := new(MockJobUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewJobHandler(mockUsecase)
+			handler := handler.NewJobHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.DELETE("/jobs/:id", handler.DeleteJob)
 

@@ -1,6 +1,7 @@
 // Alpine.js is loaded via CDN and available as window.Alpine
 import { componentLoader } from './utils/component-loader'
 import { componentRegistry, perf, getConfig } from './config/build.config'
+import { router } from './utils/router'
 
 // Import all services and stores
 import { apiService } from './services/api.service'
@@ -170,6 +171,7 @@ class DashboardApplication {
             // Load all components in parallel with proper paths
             const componentMap = [
                 { name: 'layout/navigation', path: '/components/layout/navigation.html' },
+                { name: 'ui/breadcrumb', path: '/components/ui/breadcrumb.html' },
                 { name: 'tabs/overview', path: '/components/tabs/overview.html' },
                 { name: 'tabs/agents', path: '/components/tabs/agents.html' },
                 { name: 'tabs/jobs', path: '/components/tabs/jobs.html' },
@@ -235,6 +237,23 @@ class DashboardApplication {
         } else {
             console.error('❌ Failed to find nav element in navigation component')
             console.log('📝 Navigation content preview:', navigation.substring(0, 200) + '...')
+        }
+
+        // Load breadcrumb component
+        console.log('🗂️ Loading breadcrumb component...')
+        const breadcrumb = await componentLoader.loadComponent('ui/breadcrumb')
+        console.log('✅ Breadcrumb loaded:', breadcrumb.length, 'characters')
+        
+        const breadcrumbContainer = document.createElement('div')
+        breadcrumbContainer.innerHTML = breadcrumb
+        
+        // Find the actual nav element for breadcrumb
+        const breadcrumbElement = breadcrumbContainer.querySelector('nav')
+        if (breadcrumbElement) {
+            document.body.insertBefore(breadcrumbElement, mainContainer)
+            console.log('✅ Breadcrumb injected into DOM')
+        } else {
+            console.error('❌ Failed to find nav element in breadcrumb component')
         }
 
         // Load tab content
@@ -353,11 +372,11 @@ class DashboardApplication {
         // Global dashboard data and methods  
         const self = this
         window.Alpine.data('dashboardApp', () => ({
-            // State
-            currentTab: 'overview',
+            currentTab: router.getCurrentRoute(), // Initialize from router
             isLoading: false,
             notifications: [] as Array<{id: number, message: string, type: string, timestamp: Date}>,
             isAlpineInitialized: false,
+            cacheStats: null as any, // Add cache stats property
             
             // Modal states
             showAgentModal: false,
@@ -421,32 +440,27 @@ class DashboardApplication {
 
             // Methods
             async init() {
-                if (this.isAlpineInitialized) return
+                console.log('🔄 Initializing Alpine.js dashboard data...')
                 this.isAlpineInitialized = true
                 
-                console.log('🎯 Initializing Alpine.js dashboard state...')
+                // Setup router listener
+                router.subscribe((route: string) => {
+                    this.currentTab = route
+                })
+                
                 await this.loadInitialData()
                 this.setupPolling()
             },
 
             async loadInitialData() {
-                this.isLoading = true
                 try {
-                    // Load all initial data in parallel with individual error handling
-                    const results = await Promise.allSettled([
+                    this.isLoading = true
+                    await Promise.all([
                         agentStore.actions.fetchAgents(),
                         jobStore.actions.fetchJobs(),
                         fileStore.actions.fetchHashFiles(),
                         wordlistStore.actions.fetchWordlists()
                     ])
-                    
-                    // Log any failures without throwing
-                    results.forEach((result, index) => {
-                        const endpoints = ['agents', 'jobs', 'hash files', 'wordlists']
-                        if (result.status === 'rejected') {
-                            console.warn(`Failed to load ${endpoints[index]}:`, result.reason)
-                        }
-                    })
                 } catch (error) {
                     console.error('Failed to load initial data:', error)
                 } finally {
@@ -454,12 +468,14 @@ class DashboardApplication {
                 }
             },
 
-            // Tab management
+            // Tab management with router integration
             async switchTab(tab: string) {
                 if (this.currentTab === tab) return
                 
                 perf.startTimer(`tab-switch-${tab}`)
-                this.currentTab = tab
+                
+                // Use router to navigate (this will update URL and current tab)
+                router.navigate(tab)
                 
                 // Lazy load tab component if needed
                 if (self.config.features.lazyLoading) {
@@ -470,6 +486,16 @@ class DashboardApplication {
                 }
                 
                 perf.endTimer(`tab-switch-${tab}`)
+            },
+
+            // NEW: Get current route URL for linking
+            getRouteUrl(route: string) {
+                return router.getRouteUrl(route)
+            },
+
+            // NEW: Check if route is current (for active states)
+            isCurrentRoute(route: string) {
+                return router.isCurrentRoute(route)
             },
 
             // Utility methods
@@ -841,6 +867,44 @@ class DashboardApplication {
                     }
                 } catch (error) {
                     this.showNotification('Failed to download wordlist', 'error')
+                }
+            },
+
+            // NEW: Cache Management Methods
+            async refreshCacheStats() {
+                try {
+                    this.cacheStats = await apiService.getCacheStats()
+                    this.showNotification('Cache stats refreshed', 'info')
+                } catch (error) {
+                    this.showNotification('Failed to refresh cache stats', 'error')
+                }
+            },
+
+            async clearCache() {
+                if (confirm('Are you sure you want to clear all cache? This will temporarily reduce performance.')) {
+                    try {
+                        const success = await apiService.clearCache()
+                        if (success) {
+                            this.showNotification('Cache cleared successfully!', 'success')
+                            await this.refreshCacheStats() // Refresh stats after clearing
+                            await this.loadInitialData() // Reload data to repopulate cache
+                        } else {
+                            this.showNotification('Failed to clear cache', 'error')
+                        }
+                    } catch (error) {
+                        this.showNotification('Failed to clear cache', 'error')
+                    }
+                }
+            },
+
+            // NEW: Enhanced job methods for better UX
+            async pauseJob(jobId: string) {
+                // Use existing stopJob method for now since pauseJob doesn't exist in the store
+                const success = await jobStore.actions.stopJob(jobId)
+                if (success) {
+                    this.showNotification('Job paused successfully!', 'success')
+                } else {
+                    this.showNotification('Failed to pause job', 'error')
                 }
             }
         }))

@@ -4,7 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hashcat Distributed Dashboard</title>
+    <meta name="description" content="Distributed password cracking dashboard with agent management, job monitoring, and real-time analytics">
+    <meta name="keywords" content="hashcat, password cracking, security testing, distributed computing, penetration testing">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Hashcat Distributed Dashboard">
+    <meta property="og:description" content="Professional distributed password cracking management system">
+    <meta property="og:url" content="">
+    
+    <!-- PWA Support -->
+    <meta name="theme-color" content="#3B82F6">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -28,6 +42,71 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="./styles/main.css">
+    
+    <!-- Dynamic page title and meta updates -->
+    <script>
+        // Update page title based on route
+        function updatePageMeta(route) {
+            const routes = {
+                'overview': {
+                    title: 'Overview - Hashcat Dashboard',
+                    description: 'System overview with real-time statistics and performance metrics'
+                },
+                'agents': {
+                    title: 'Agents - Hashcat Dashboard', 
+                    description: 'Manage and monitor distributed cracking agents'
+                },
+                'jobs': {
+                    title: 'Jobs - Hashcat Dashboard',
+                    description: 'Create and monitor password cracking jobs'
+                },
+                'files': {
+                    title: 'Hash Files - Hashcat Dashboard',
+                    description: 'Upload and manage hash files for cracking'
+                },
+                'wordlists': {
+                    title: 'Wordlists - Hashcat Dashboard',
+                    description: 'Manage wordlists and dictionaries for attacks'
+                },
+                'docs': {
+                    title: 'API Documentation - Hashcat Dashboard',
+                    description: 'REST API documentation and integration guides'
+                }
+            }
+            
+            const routeInfo = routes[route] || routes['overview']
+            document.title = routeInfo.title
+            
+            // Update meta description
+            let metaDesc = document.querySelector('meta[name="description"]')
+            if (metaDesc) {
+                metaDesc.setAttribute('content', routeInfo.description)
+            }
+            
+            // Update OG tags
+            let ogTitle = document.querySelector('meta[property="og:title"]')
+            if (ogTitle) {
+                ogTitle.setAttribute('content', routeInfo.title)
+            }
+            
+            let ogDesc = document.querySelector('meta[property="og:description"]')
+            if (ogDesc) {
+                ogDesc.setAttribute('content', routeInfo.description)
+            }
+        }
+        
+        // Listen for route changes
+        window.addEventListener('popstate', () => {
+            const route = window.location.hash.slice(1) || 'overview'
+            updatePageMeta(route)
+        })
+        
+        // Update on initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            const route = window.location.hash.slice(1) || 'overview'
+            updatePageMeta(route)
+        })
+    </script>
 </head>
 <body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen">
     <!-- Components will be loaded dynamically by main.ts -->

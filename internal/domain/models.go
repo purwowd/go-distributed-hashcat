@@ -86,6 +86,14 @@ type CreateJobRequest struct {
 	Rules      string `json:"rules,omitempty"`
 }
 
+// EnrichedJob extends Job with readable names for frontend display
+type EnrichedJob struct {
+	Job
+	AgentName    string `json:"agent_name,omitempty"`
+	WordlistName string `json:"wordlist_name,omitempty"`
+	HashFileName string `json:"hash_file_name,omitempty"`
+}
+
 // CreateAgentRequest represents the request to register a new agent
 type CreateAgentRequest struct {
 	Name         string `json:"name" binding:"required"`

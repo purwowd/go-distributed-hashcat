@@ -17,8 +17,8 @@ export interface Agent {
 export interface Job {
     id: string
     name: string
-    hash_file: string
-    wordlist: string
+    hash_file_id?: string    // Changed from hash_file
+    wordlist_id?: string     // Changed from wordlist
     hash_type: number
     attack_mode: number
     status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused'
@@ -31,6 +31,11 @@ export interface Job {
     result?: string
     agent_id?: string
     assigned_agents?: string[]
+    
+    // NEW: Enriched fields from backend
+    agent_name?: string      // Human-readable agent name
+    wordlist_name?: string   // Original wordlist filename
+    hash_file_name?: string  // Original hash file filename
 }
 
 export interface HashFile {
@@ -370,6 +375,17 @@ class ApiService {
         } catch {
             return false
         }
+    }
+
+    // NEW: Cache Management
+    public async getCacheStats(): Promise<any> {
+        const response = await this.get('/api/v1/cache/stats')
+        return response.success ? response.data : null
+    }
+
+    public async clearCache(): Promise<boolean> {
+        const response = await this.delete('/api/v1/cache/clear')
+        return response.success
     }
 
     public getBaseUrl(): string {

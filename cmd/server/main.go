@@ -287,8 +287,11 @@ func startServer() {
 	hashFileUsecase := usecase.NewHashFileUsecase(hashFileRepo, config.Upload.Directory)
 	wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
 
+	// Initialize enrichment service
+	jobEnrichmentService := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)
+
 	// Initialize HTTP router
-	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase)
+	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase, jobEnrichmentService)
 
 	// Create HTTP server
 	server := &http.Server{

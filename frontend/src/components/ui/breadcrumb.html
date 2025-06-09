@@ -1,0 +1,89 @@
+<!-- Breadcrumb Navigation Component -->
+<nav x-show="currentTab !== 'overview'" 
+     x-transition:enter="transition ease-out duration-200"
+     x-transition:enter-start="opacity-0 transform translate-y-1"
+     x-transition:enter-end="opacity-100 transform translate-y-0"
+     class="bg-white/50 backdrop-blur-sm border-b border-gray-200/50 px-6 py-3 mb-6">
+    <div class="container-modern">
+        <ol class="flex items-center space-x-2 text-sm text-gray-600">
+            <li>
+                <a :href="getRouteUrl('overview')" 
+                   @click.prevent="switchTab('overview')"
+                   class="flex items-center hover:text-blue-600 transition-colors duration-200">
+                    <i class="fas fa-home mr-1"></i>
+                    Dashboard
+                </a>
+            </li>
+            <li class="flex items-center">
+                <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                <span class="font-medium text-gray-900 capitalize" x-text="currentTab">Current Tab</span>
+            </li>
+        </ol>
+        
+        <!-- Tab-specific summary info -->
+        <div class="mt-3 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <!-- Dynamic breadcrumb info based on current tab -->
+                <template x-if="currentTab === 'agents'">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-server text-blue-500 mr-2"></i>
+                        <span x-text="`${getArrayLength(agents)} total agents`"></span>
+                        <span class="mx-2">•</span>
+                        <span class="text-green-600 font-medium" x-text="`${getArrayLength(onlineAgents)} online`"></span>
+                    </div>
+                </template>
+                
+                <template x-if="currentTab === 'jobs'">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-tasks text-green-500 mr-2"></i>
+                        <span x-text="`${getArrayLength(jobs)} total jobs`"></span>
+                        <span class="mx-2">•</span>
+                        <span class="text-blue-600 font-medium" x-text="`${getArrayLength(runningJobs)} running`"></span>
+                    </div>
+                </template>
+                
+                <template x-if="currentTab === 'files'">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-file-alt text-purple-500 mr-2"></i>
+                        <span x-text="`${getArrayLength(hashFiles)} hash files`"></span>
+                        <span class="mx-2">•</span>
+                        <span class="text-purple-600 font-medium" x-text="formatFileSize(hashFiles.reduce((total, file) => total + (file.size || 0), 0))"></span>
+                    </div>
+                </template>
+                
+                <template x-if="currentTab === 'wordlists'">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-list text-orange-500 mr-2"></i>
+                        <span x-text="`${getArrayLength(wordlists)} wordlists`"></span>
+                        <span class="mx-2">•</span>
+                        <span class="text-orange-600 font-medium" x-text="formatFileSize(wordlists.reduce((total, wl) => total + (wl.size || 0), 0))"></span>
+                    </div>
+                </template>
+                
+                <template x-if="currentTab === 'docs'">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-book text-indigo-500 mr-2"></i>
+                        <span>API Documentation & Integration Guides</span>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Utility actions (no duplicate buttons) -->
+            <div class="flex items-center space-x-2">
+                <!-- Refresh data button -->
+                <button @click="loadInitialData()" 
+                        class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-all duration-200"
+                        title="Refresh data">
+                    <i class="fas fa-sync-alt text-sm"></i>
+                </button>
+                
+                <!-- Copy current URL button -->
+                <button @click="copyToClipboard(window.location.href)" 
+                        class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-all duration-200" 
+                        title="Copy current URL">
+                    <i class="fas fa-link text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</nav> 

@@ -16,6 +16,7 @@ func NewRouter(
 	jobUsecase usecase.JobUsecase,
 	hashFileUsecase usecase.HashFileUsecase,
 	wordlistUsecase usecase.WordlistUsecase,
+	jobEnrichmentService usecase.JobEnrichmentService,
 ) *gin.Engine {
 	// Set Gin to release mode for production performance
 	gin.SetMode(gin.ReleaseMode)
@@ -43,9 +44,10 @@ func NewRouter(
 
 	// Initialize handlers
 	agentHandler := handler.NewAgentHandler(agentUsecase)
-	jobHandler := handler.NewJobHandler(jobUsecase)
+	jobHandler := handler.NewJobHandler(jobUsecase, jobEnrichmentService)
 	hashFileHandler := handler.NewHashFileHandler(hashFileUsecase)
 	wordlistHandler := handler.NewWordlistHandler(wordlistUsecase)
+	cacheHandler := handler.NewCacheHandler(jobEnrichmentService)
 
 	// Serve modern frontend (production build)
 	router.Static("/assets", "./frontend/dist/assets")
@@ -120,6 +122,13 @@ func NewRouter(
 			wordlists.GET("/:id", wordlistHandler.GetWordlist)
 			wordlists.GET("/:id/download", wordlistHandler.DownloadWordlist)
 			wordlists.DELETE("/:id", wordlistHandler.DeleteWordlist)
+		}
+
+		// Cache management routes
+		cache := v1.Group("/cache")
+		{
+			cache.GET("/stats", cacheHandler.GetCacheStats)
+			cache.DELETE("/clear", cacheHandler.ClearCache)
 		}
 	}
 

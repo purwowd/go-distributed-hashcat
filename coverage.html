@@ -55,46 +55,41 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">go-distributed-hashcat/internal/delivery/http/handler/agent_handler.go (81.2%)</option>
+				<option value="file0">go-distributed-hashcat/internal/delivery/http/handler/agent_handler.go (0.0%)</option>
 				
-				<option value="file1">go-distributed-hashcat/internal/delivery/http/handler/hashfile_handler.go (69.8%)</option>
+				<option value="file1">go-distributed-hashcat/internal/delivery/http/handler/cache_handler.go (0.0%)</option>
 				
-				<option value="file2">go-distributed-hashcat/internal/delivery/http/handler/job_handler.go (43.1%)</option>
+				<option value="file2">go-distributed-hashcat/internal/delivery/http/handler/hashfile_handler.go (0.0%)</option>
 				
-				<option value="file3">go-distributed-hashcat/internal/delivery/http/handler/wordlist_handler.go (69.8%)</option>
+				<option value="file3">go-distributed-hashcat/internal/delivery/http/handler/job_handler.go (0.0%)</option>
 				
-				<option value="file4">go-distributed-hashcat/internal/infrastructure/repository/agent_repository.go (90.4%)</option>
+				<option value="file4">go-distributed-hashcat/internal/delivery/http/handler/wordlist_handler.go (0.0%)</option>
 				
-				<option value="file5">go-distributed-hashcat/internal/infrastructure/repository/hashfile_repository.go (47.4%)</option>
+				<option value="file5">go-distributed-hashcat/internal/infrastructure/repository/agent_repository.go (0.0%)</option>
 				
-				<option value="file6">go-distributed-hashcat/internal/infrastructure/repository/job_repository.go (75.3%)</option>
+				<option value="file6">go-distributed-hashcat/internal/infrastructure/repository/hashfile_repository.go (0.0%)</option>
 				
-				<option value="file7">go-distributed-hashcat/internal/infrastructure/repository/wordlist_repository.go (0.0%)</option>
+				<option value="file7">go-distributed-hashcat/internal/infrastructure/repository/job_repository.go (0.0%)</option>
 				
-				<option value="file8">go-distributed-hashcat/internal/usecase/agent_usecase.go (100.0%)</option>
+				<option value="file8">go-distributed-hashcat/internal/infrastructure/repository/wordlist_repository.go (0.0%)</option>
 				
-				<option value="file9">go-distributed-hashcat/internal/usecase/hashfile_usecase.go (79.5%)</option>
+				<option value="file9">go-distributed-hashcat/internal/usecase/agent_usecase.go (0.0%)</option>
 				
-				<option value="file10">go-distributed-hashcat/internal/usecase/job_usecase.go (71.2%)</option>
+				<option value="file10">go-distributed-hashcat/internal/usecase/hashfile_usecase.go (0.0%)</option>
 				
-				<option value="file11">go-distributed-hashcat/internal/usecase/wordlist_usecase.go (85.7%)</option>
+				<option value="file11">go-distributed-hashcat/internal/usecase/job_enrichment_service.go (0.0%)</option>
+				
+				<option value="file12">go-distributed-hashcat/internal/usecase/job_usecase.go (0.0%)</option>
+				
+				<option value="file13">go-distributed-hashcat/internal/usecase/wordlist_usecase.go (0.0%)</option>
 				
 				</select>
 			</div>
 			<div id="legend">
 				<span>not tracked</span>
 			
-				<span class="cov0">no coverage</span>
-				<span class="cov1">low coverage</span>
-				<span class="cov2">*</span>
-				<span class="cov3">*</span>
-				<span class="cov4">*</span>
-				<span class="cov5">*</span>
-				<span class="cov6">*</span>
-				<span class="cov7">*</span>
-				<span class="cov8">*</span>
-				<span class="cov9">*</span>
-				<span class="cov10">high coverage</span>
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
 			
 			</div>
 		</div>
@@ -116,109 +111,109 @@ type AgentHandler struct {
         agentUsecase usecase.AgentUsecase
 }
 
-func NewAgentHandler(agentUsecase usecase.AgentUsecase) *AgentHandler <span class="cov10" title="26">{
+func NewAgentHandler(agentUsecase usecase.AgentUsecase) *AgentHandler <span class="cov0" title="0">{
         return &amp;AgentHandler{
                 agentUsecase: agentUsecase,
         }
 }</span>
 
-func (h *AgentHandler) RegisterAgent(c *gin.Context) <span class="cov8" title="17">{
+func (h *AgentHandler) RegisterAgent(c *gin.Context) <span class="cov0" title="0">{
         var req domain.CreateAgentRequest
-        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov4" title="4">{
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov8" title="13">agent, err := h.agentUsecase.RegisterAgent(c.Request.Context(), &amp;req)
-        if err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">agent, err := h.agentUsecase.RegisterAgent(c.Request.Context(), &amp;req)
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov7" title="12">c.JSON(http.StatusCreated, gin.H{"data": agent})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusCreated, gin.H{"data": agent})</span>
 }
 
-func (h *AgentHandler) GetAgent(c *gin.Context) <span class="cov7" title="10">{
+func (h *AgentHandler) GetAgent(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov4" title="4">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
                 return
         }</span>
 
-        <span class="cov5" title="6">agent, err := h.agentUsecase.GetAgent(c.Request.Context(), id)
-        if err != nil </span><span class="cov2" title="2">{
+        <span class="cov0" title="0">agent, err := h.agentUsecase.GetAgent(c.Request.Context(), id)
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov4" title="4">c.JSON(http.StatusOK, gin.H{"data": agent})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": agent})</span>
 }
 
-func (h *AgentHandler) GetAllAgents(c *gin.Context) <span class="cov7" title="10">{
+func (h *AgentHandler) GetAllAgents(c *gin.Context) <span class="cov0" title="0">{
         agents, err := h.agentUsecase.GetAllAgents(c.Request.Context())
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov7" title="9">c.JSON(http.StatusOK, gin.H{"data": agents})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": agents})</span>
 }
 
-func (h *AgentHandler) UpdateAgentStatus(c *gin.Context) <span class="cov6" title="7">{
+func (h *AgentHandler) UpdateAgentStatus(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
                 return
         }</span>
 
-        <span class="cov5" title="6">var req struct {
+        <span class="cov0" title="0">var req struct {
                 Status string `json:"status" binding:"required"`
         }
-        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov1" title="1">{
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov5" title="5">if err := h.agentUsecase.UpdateAgentStatus(c.Request.Context(), id, req.Status); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := h.agentUsecase.UpdateAgentStatus(c.Request.Context(), id, req.Status); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov4" title="4">c.JSON(http.StatusOK, gin.H{"message": "Agent status updated successfully"})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Agent status updated successfully"})</span>
 }
 
-func (h *AgentHandler) DeleteAgent(c *gin.Context) <span class="cov4" title="3">{
+func (h *AgentHandler) DeleteAgent(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
                 return
         }</span>
 
-        <span class="cov2" title="2">if err := h.agentUsecase.DeleteAgent(c.Request.Context(), id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := h.agentUsecase.DeleteAgent(c.Request.Context(), id); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusOK, gin.H{"message": "Agent deleted successfully"})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Agent deleted successfully"})</span>
 }
 
-func (h *AgentHandler) Heartbeat(c *gin.Context) <span class="cov5" title="6">{
+func (h *AgentHandler) Heartbeat(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
                 return
         }</span>
 
-        <span class="cov5" title="5">if err := h.agentUsecase.UpdateAgentHeartbeat(c.Request.Context(), id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := h.agentUsecase.UpdateAgentHeartbeat(c.Request.Context(), id); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov4" title="4">c.JSON(http.StatusOK, gin.H{"message": "Heartbeat updated"})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Heartbeat updated"})</span>
 }
 
 func (h *AgentHandler) RegisterAgentFiles(c *gin.Context) <span class="cov0" title="0">{
@@ -268,6 +263,44 @@ type LocalFile struct {
 		<pre class="file" id="file1" style="display: none">package handler
 
 import (
+        "net/http"
+
+        "go-distributed-hashcat/internal/usecase"
+
+        "github.com/gin-gonic/gin"
+)
+
+type CacheHandler struct {
+        enrichmentService usecase.JobEnrichmentService
+}
+
+func NewCacheHandler(enrichmentService usecase.JobEnrichmentService) *CacheHandler <span class="cov0" title="0">{
+        return &amp;CacheHandler{
+                enrichmentService: enrichmentService,
+        }
+}</span>
+
+// GetCacheStats returns cache statistics
+func (h *CacheHandler) GetCacheStats(c *gin.Context) <span class="cov0" title="0">{
+        stats := h.enrichmentService.GetCacheStats()
+        c.JSON(http.StatusOK, gin.H{
+                "data":    stats,
+                "message": "Cache statistics retrieved successfully",
+        })
+}</span>
+
+// ClearCache clears all cached data
+func (h *CacheHandler) ClearCache(c *gin.Context) <span class="cov0" title="0">{
+        h.enrichmentService.ClearCache()
+        c.JSON(http.StatusOK, gin.H{
+                "message": "Cache cleared successfully",
+        })
+}</span>
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package handler
+
+import (
         "fmt"
         "net/http"
 
@@ -281,26 +314,26 @@ type HashFileHandler struct {
         hashFileUsecase usecase.HashFileUsecase
 }
 
-func NewHashFileHandler(hashFileUsecase usecase.HashFileUsecase) *HashFileHandler <span class="cov10" title="12">{
+func NewHashFileHandler(hashFileUsecase usecase.HashFileUsecase) *HashFileHandler <span class="cov0" title="0">{
         return &amp;HashFileHandler{
                 hashFileUsecase: hashFileUsecase,
         }
 }</span>
 
-func (h *HashFileHandler) UploadHashFile(c *gin.Context) <span class="cov4" title="3">{
+func (h *HashFileHandler) UploadHashFile(c *gin.Context) <span class="cov0" title="0">{
         file, err := c.FormFile("file")
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
                 return
         }</span>
 
         // Open the uploaded file
-        <span class="cov3" title="2">src, err := file.Open()
+        <span class="cov0" title="0">src, err := file.Open()
         if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
                 return
         }</span>
-        <span class="cov3" title="2">defer src.Close()
+        <span class="cov0" title="0">defer src.Close()
 
         // Upload the file
         hashFile, err := h.hashFileUsecase.UploadHashFile(
@@ -309,55 +342,55 @@ func (h *HashFileHandler) UploadHashFile(c *gin.Context) <span class="cov4" titl
                 src,
                 file.Size,
         )
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusCreated, gin.H{"data": hashFile})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusCreated, gin.H{"data": hashFile})</span>
 }
 
-func (h *HashFileHandler) GetHashFile(c *gin.Context) <span class="cov4" title="3">{
+func (h *HashFileHandler) GetHashFile(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid hash file ID"})
                 return
         }</span>
 
-        <span class="cov3" title="2">hashFile, err := h.hashFileUsecase.GetHashFile(c.Request.Context(), id)
-        if err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">hashFile, err := h.hashFileUsecase.GetHashFile(c.Request.Context(), id)
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusOK, gin.H{"data": hashFile})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": hashFile})</span>
 }
 
-func (h *HashFileHandler) GetAllHashFiles(c *gin.Context) <span class="cov4" title="3">{
+func (h *HashFileHandler) GetAllHashFiles(c *gin.Context) <span class="cov0" title="0">{
         hashFiles, err := h.hashFileUsecase.GetAllHashFiles(c.Request.Context())
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov3" title="2">c.JSON(http.StatusOK, gin.H{"data": hashFiles})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": hashFiles})</span>
 }
 
-func (h *HashFileHandler) DeleteHashFile(c *gin.Context) <span class="cov4" title="3">{
+func (h *HashFileHandler) DeleteHashFile(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid hash file ID"})
                 return
         }</span>
 
-        <span class="cov3" title="2">if err := h.hashFileUsecase.DeleteHashFile(c.Request.Context(), id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := h.hashFileUsecase.DeleteHashFile(c.Request.Context(), id); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusOK, gin.H{"message": "Hash file deleted successfully"})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Hash file deleted successfully"})</span>
 }
 
 func (h *HashFileHandler) DownloadHashFile(c *gin.Context) <span class="cov0" title="0">{
@@ -385,7 +418,7 @@ func (h *HashFileHandler) DownloadHashFile(c *gin.Context) <span class="cov0" ti
 }
 </pre>
 		
-		<pre class="file" id="file2" style="display: none">package handler
+		<pre class="file" id="file3" style="display: none">package handler
 
 import (
         "net/http"
@@ -398,49 +431,51 @@ import (
 )
 
 type JobHandler struct {
-        jobUsecase usecase.JobUsecase
+        jobUsecase        usecase.JobUsecase
+        enrichmentService usecase.JobEnrichmentService
 }
 
-func NewJobHandler(jobUsecase usecase.JobUsecase) *JobHandler <span class="cov10" title="22">{
+func NewJobHandler(jobUsecase usecase.JobUsecase, enrichmentService usecase.JobEnrichmentService) *JobHandler <span class="cov0" title="0">{
         return &amp;JobHandler{
-                jobUsecase: jobUsecase,
+                jobUsecase:        jobUsecase,
+                enrichmentService: enrichmentService,
         }
 }</span>
 
-func (h *JobHandler) CreateJob(c *gin.Context) <span class="cov7" title="9">{
+func (h *JobHandler) CreateJob(c *gin.Context) <span class="cov0" title="0">{
         var req domain.CreateJobRequest
-        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov3" title="2">{
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov6" title="7">job, err := h.jobUsecase.CreateJob(c.Request.Context(), &amp;req)
-        if err != nil </span><span class="cov3" title="2">{
+        <span class="cov0" title="0">job, err := h.jobUsecase.CreateJob(c.Request.Context(), &amp;req)
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov5" title="5">c.JSON(http.StatusCreated, gin.H{"data": job})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusCreated, gin.H{"data": job})</span>
 }
 
-func (h *JobHandler) GetJob(c *gin.Context) <span class="cov5" title="5">{
+func (h *JobHandler) GetJob(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov3" title="2">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid job ID"})
                 return
         }</span>
 
-        <span class="cov4" title="3">job, err := h.jobUsecase.GetJob(c.Request.Context(), id)
-        if err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">job, err := h.jobUsecase.GetJob(c.Request.Context(), id)
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov3" title="2">c.JSON(http.StatusOK, gin.H{"data": job})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": job})</span>
 }
 
-func (h *JobHandler) GetAllJobs(c *gin.Context) <span class="cov5" title="5">{
+func (h *JobHandler) GetAllJobs(c *gin.Context) <span class="cov0" title="0">{
         status := c.Query("status")
 
         var jobs []domain.Job
@@ -448,32 +483,39 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) <span class="cov5" title="5">{
 
         if status != "" </span><span class="cov0" title="0">{
                 jobs, err = h.jobUsecase.GetJobsByStatus(c.Request.Context(), status)
-        }</span> else<span class="cov5" title="5"> {
+        }</span> else<span class="cov0" title="0"> {
                 jobs, err = h.jobUsecase.GetAllJobs(c.Request.Context())
         }</span>
 
-        <span class="cov5" title="5">if err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov5" title="4">c.JSON(http.StatusOK, gin.H{"data": jobs})</span>
+        // Enrich jobs with readable names using service
+        <span class="cov0" title="0">enrichedJobs, err := h.enrichmentService.EnrichJobs(c.Request.Context(), jobs)
+        if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+                return
+        }</span>
+
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": enrichedJobs})</span>
 }
 
-func (h *JobHandler) StartJob(c *gin.Context) <span class="cov4" title="3">{
+func (h *JobHandler) StartJob(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid job ID"})
                 return
         }</span>
 
-        <span class="cov3" title="2">if err := h.jobUsecase.StartJob(c.Request.Context(), id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := h.jobUsecase.StartJob(c.Request.Context(), id); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusOK, gin.H{"message": "Job started successfully"})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Job started successfully"})</span>
 }
 
 func (h *JobHandler) UpdateJobProgress(c *gin.Context) <span class="cov0" title="0">{
@@ -487,6 +529,7 @@ func (h *JobHandler) UpdateJobProgress(c *gin.Context) <span class="cov0" title=
         <span class="cov0" title="0">var req struct {
                 Progress float64 `json:"progress" binding:"required"`
                 Speed    int64   `json:"speed" binding:"required"`
+                ETA      *string `json:"eta,omitempty"`
         }
         if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -581,20 +624,20 @@ func (h *JobHandler) ResumeJob(c *gin.Context) <span class="cov0" title="0">{
         <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Job resumed successfully"})</span>
 }
 
-func (h *JobHandler) DeleteJob(c *gin.Context) <span class="cov4" title="3">{
+func (h *JobHandler) DeleteJob(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid job ID"})
                 return
         }</span>
 
-        <span class="cov3" title="2">if err := h.jobUsecase.DeleteJob(c.Request.Context(), id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := h.jobUsecase.DeleteJob(c.Request.Context(), id); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusOK, gin.H{"message": "Job deleted successfully"})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Job deleted successfully"})</span>
 }
 
 func (h *JobHandler) AssignJobs(c *gin.Context) <span class="cov0" title="0">{
@@ -605,9 +648,46 @@ func (h *JobHandler) AssignJobs(c *gin.Context) <span class="cov0" title="0">{
 
         <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Jobs assigned to agents successfully"})</span>
 }
+
+// GetJobsByAgentID gets all jobs assigned to a specific agent
+func (h *JobHandler) GetJobsByAgentID(c *gin.Context) <span class="cov0" title="0">{
+        idStr := c.Param("id")
+        id, err := uuid.Parse(idStr)
+        if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
+                return
+        }</span>
+
+        <span class="cov0" title="0">jobs, err := h.jobUsecase.GetJobsByAgentID(c.Request.Context(), id)
+        if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+                return
+        }</span>
+
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": jobs})</span>
+}
+
+// GetAvailableJobForAgent gets the next available job for an agent to execute
+func (h *JobHandler) GetAvailableJobForAgent(c *gin.Context) <span class="cov0" title="0">{
+        idStr := c.Param("id")
+        agentID, err := uuid.Parse(idStr)
+        if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
+                return
+        }</span>
+
+        <span class="cov0" title="0">job, err := h.jobUsecase.GetAvailableJobForAgent(c.Request.Context(), agentID)
+        if err != nil </span><span class="cov0" title="0">{
+                // No available job is not an error
+                c.JSON(http.StatusOK, gin.H{"data": nil, "message": "No available jobs"})
+                return
+        }</span>
+
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": job})</span>
+}
 </pre>
 		
-		<pre class="file" id="file3" style="display: none">package handler
+		<pre class="file" id="file4" style="display: none">package handler
 
 import (
         "fmt"
@@ -623,26 +703,26 @@ type WordlistHandler struct {
         wordlistUsecase usecase.WordlistUsecase
 }
 
-func NewWordlistHandler(wordlistUsecase usecase.WordlistUsecase) *WordlistHandler <span class="cov10" title="12">{
+func NewWordlistHandler(wordlistUsecase usecase.WordlistUsecase) *WordlistHandler <span class="cov0" title="0">{
         return &amp;WordlistHandler{
                 wordlistUsecase: wordlistUsecase,
         }
 }</span>
 
-func (h *WordlistHandler) UploadWordlist(c *gin.Context) <span class="cov4" title="3">{
+func (h *WordlistHandler) UploadWordlist(c *gin.Context) <span class="cov0" title="0">{
         file, err := c.FormFile("file")
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
                 return
         }</span>
 
         // Open the uploaded file
-        <span class="cov3" title="2">src, err := file.Open()
+        <span class="cov0" title="0">src, err := file.Open()
         if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
                 return
         }</span>
-        <span class="cov3" title="2">defer src.Close()
+        <span class="cov0" title="0">defer src.Close()
 
         // Upload the file
         wordlist, err := h.wordlistUsecase.UploadWordlist(
@@ -651,55 +731,55 @@ func (h *WordlistHandler) UploadWordlist(c *gin.Context) <span class="cov4" titl
                 src,
                 file.Size,
         )
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusCreated, gin.H{"data": wordlist})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusCreated, gin.H{"data": wordlist})</span>
 }
 
-func (h *WordlistHandler) GetWordlist(c *gin.Context) <span class="cov4" title="3">{
+func (h *WordlistHandler) GetWordlist(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wordlist ID"})
                 return
         }</span>
 
-        <span class="cov3" title="2">wordlist, err := h.wordlistUsecase.GetWordlist(c.Request.Context(), id)
-        if err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">wordlist, err := h.wordlistUsecase.GetWordlist(c.Request.Context(), id)
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusOK, gin.H{"data": wordlist})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": wordlist})</span>
 }
 
-func (h *WordlistHandler) GetAllWordlists(c *gin.Context) <span class="cov4" title="3">{
+func (h *WordlistHandler) GetAllWordlists(c *gin.Context) <span class="cov0" title="0">{
         wordlists, err := h.wordlistUsecase.GetAllWordlists(c.Request.Context())
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov3" title="2">c.JSON(http.StatusOK, gin.H{"data": wordlists})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"data": wordlists})</span>
 }
 
-func (h *WordlistHandler) DeleteWordlist(c *gin.Context) <span class="cov4" title="3">{
+func (h *WordlistHandler) DeleteWordlist(c *gin.Context) <span class="cov0" title="0">{
         idStr := c.Param("id")
         id, err := uuid.Parse(idStr)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wordlist ID"})
                 return
         }</span>
 
-        <span class="cov3" title="2">if err := h.wordlistUsecase.DeleteWordlist(c.Request.Context(), id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := h.wordlistUsecase.DeleteWordlist(c.Request.Context(), id); err != nil </span><span class="cov0" title="0">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
                 return
         }</span>
 
-        <span class="cov1" title="1">c.JSON(http.StatusOK, gin.H{"message": "Wordlist deleted successfully"})</span>
+        <span class="cov0" title="0">c.JSON(http.StatusOK, gin.H{"message": "Wordlist deleted successfully"})</span>
 }
 
 func (h *WordlistHandler) DownloadWordlist(c *gin.Context) <span class="cov0" title="0">{
@@ -727,7 +807,7 @@ func (h *WordlistHandler) DownloadWordlist(c *gin.Context) <span class="cov0" ti
 }
 </pre>
 		
-		<pre class="file" id="file4" style="display: none">package repository
+		<pre class="file" id="file5" style="display: none">package repository
 
 import (
         "context"
@@ -751,7 +831,7 @@ type agentRepository struct {
         deleteStmt  *sql.Stmt
 }
 
-func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository <span class="cov8" title="13">{
+func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository <span class="cov0" title="0">{
         repo := &amp;agentRepository{
                 db:    db,
                 cache: cache.NewMemoryCache(30 * time.Second), // 30 second cache for agents
@@ -763,7 +843,7 @@ func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository <span clas
         return repo
 }</span>
 
-func (r *agentRepository) prepareStatements() <span class="cov8" title="13">{
+func (r *agentRepository) prepareStatements() <span class="cov0" title="0">{
         var err error
 
         // Prepare optimized queries
@@ -775,7 +855,7 @@ func (r *agentRepository) prepareStatements() <span class="cov8" title="13">{
                 panic(fmt.Sprintf("Failed to prepare getByID statement: %v", err))</span>
         }
 
-        <span class="cov8" title="13">r.getAllStmt, err = r.db.DB().Prepare(`
+        <span class="cov0" title="0">r.getAllStmt, err = r.db.DB().Prepare(`
                 SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
                 FROM agents ORDER BY status DESC, updated_at DESC
         `)
@@ -783,7 +863,7 @@ func (r *agentRepository) prepareStatements() <span class="cov8" title="13">{
                 panic(fmt.Sprintf("Failed to prepare getAll statement: %v", err))</span>
         }
 
-        <span class="cov8" title="13">r.updateStmt, err = r.db.DB().Prepare(`
+        <span class="cov0" title="0">r.updateStmt, err = r.db.DB().Prepare(`
                 UPDATE agents SET 
                 name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, updated_at = ?
                 WHERE id = ?
@@ -792,13 +872,13 @@ func (r *agentRepository) prepareStatements() <span class="cov8" title="13">{
                 panic(fmt.Sprintf("Failed to prepare update statement: %v", err))</span>
         }
 
-        <span class="cov8" title="13">r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM agents WHERE id = ?`)
+        <span class="cov0" title="0">r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM agents WHERE id = ?`)
         if err != nil </span><span class="cov0" title="0">{
                 panic(fmt.Sprintf("Failed to prepare delete statement: %v", err))</span>
         }
 }
 
-func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error <span class="cov10" title="19">{
+func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error <span class="cov0" title="0">{
         query := `
                 INSERT INTO agents (id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -821,27 +901,27 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
                 agent.UpdatedAt,
         )
 
-        if err == nil </span><span class="cov10" title="19">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Cache the new agent
                 r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
                 // Invalidate list cache
                 r.cache.Delete(ctx, "agents:all")
         }</span>
 
-        <span class="cov10" title="19">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) <span class="cov9" title="14">{
+func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) <span class="cov0" title="0">{
         cacheKey := "agent:" + id.String()
 
         // Try cache first
         var agent domain.Agent
-        if found, err := r.cache.Get(ctx, cacheKey, &amp;agent); err == nil &amp;&amp; found </span><span class="cov7" title="9">{
+        if found, err := r.cache.Get(ctx, cacheKey, &amp;agent); err == nil &amp;&amp; found </span><span class="cov0" title="0">{
                 return &amp;agent, nil
         }</span>
 
         // Fallback to database with prepared statement
-        <span class="cov5" title="5">var idStr string
+        <span class="cov0" title="0">var idStr string
 
         err := r.getByIDStmt.QueryRowContext(ctx, id.String()).Scan(
                 &amp;idStr,
@@ -855,14 +935,14 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
                 &amp;agent.UpdatedAt,
         )
 
-        if err != nil </span><span class="cov4" title="3">{
-                if err == sql.ErrNoRows </span><span class="cov4" title="3">{
+        if err != nil </span><span class="cov0" title="0">{
+                if err == sql.ErrNoRows </span><span class="cov0" title="0">{
                         return nil, fmt.Errorf("agent not found")
                 }</span>
                 <span class="cov0" title="0">return nil, err</span>
         }
 
-        <span class="cov3" title="2">agent.ID = uuid.MustParse(idStr)
+        <span class="cov0" title="0">agent.ID = uuid.MustParse(idStr)
 
         // Cache the result
         r.cache.Set(ctx, cacheKey, &amp;agent)
@@ -870,7 +950,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
         return &amp;agent, nil</span>
 }
 
-func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) <span class="cov7" title="9">{
+func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) <span class="cov0" title="0">{
         cacheKey := "agents:all"
 
         // Try cache first
@@ -880,14 +960,14 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) <s
         }</span>
 
         // Fallback to database with prepared statement
-        <span class="cov7" title="9">rows, err := r.getAllStmt.QueryContext(ctx)
+        <span class="cov0" title="0">rows, err := r.getAllStmt.QueryContext(ctx)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
-        <span class="cov7" title="9">defer rows.Close()
+        <span class="cov0" title="0">defer rows.Close()
 
         agents = make([]domain.Agent, 0, 10) // Pre-allocate slice
-        for rows.Next() </span><span class="cov8" title="13">{
+        for rows.Next() </span><span class="cov0" title="0">{
                 var agent domain.Agent
                 var idStr string
 
@@ -906,17 +986,17 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) <s
                         return nil, err
                 }</span>
 
-                <span class="cov8" title="13">agent.ID = uuid.MustParse(idStr)
+                <span class="cov0" title="0">agent.ID = uuid.MustParse(idStr)
                 agents = append(agents, agent)</span>
         }
 
         // Cache the result
-        <span class="cov7" title="9">r.cache.Set(ctx, cacheKey, agents)
+        <span class="cov0" title="0">r.cache.Set(ctx, cacheKey, agents)
 
         return agents, nil</span>
 }
 
-func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error <span class="cov1" title="1">{
+func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error <span class="cov0" title="0">{
         agent.UpdatedAt = time.Now()
 
         _, err := r.updateStmt.ExecContext(ctx,
@@ -929,59 +1009,59 @@ func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error
                 agent.ID.String(),
         )
 
-        if err == nil </span><span class="cov1" title="1">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Update cache
                 r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
                 // Invalidate list cache
                 r.cache.Delete(ctx, "agents:all")
         }</span>
 
-        <span class="cov1" title="1">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) error <span class="cov1" title="1">{
+func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
         _, err := r.deleteStmt.ExecContext(ctx, id.String())
 
-        if err == nil </span><span class="cov1" title="1">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Remove from cache
                 r.cache.Delete(ctx, "agent:"+id.String())
                 // Invalidate list cache
                 r.cache.Delete(ctx, "agents:all")
         }</span>
 
-        <span class="cov1" title="1">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *agentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error <span class="cov5" title="4">{
+func (r *agentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error <span class="cov0" title="0">{
         query := `UPDATE agents SET status = ?, updated_at = ? WHERE id = ?`
         now := time.Now()
         _, err := r.db.DB().ExecContext(ctx, query, status, now, id.String())
 
-        if err == nil </span><span class="cov5" title="4">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Invalidate caches
                 r.cache.Delete(ctx, "agent:"+id.String())
                 r.cache.Delete(ctx, "agents:all")
         }</span>
 
-        <span class="cov5" title="4">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) error <span class="cov5" title="4">{
+func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
         query := `UPDATE agents SET last_seen = ?, updated_at = ? WHERE id = ?`
         now := time.Now()
         _, err := r.db.DB().ExecContext(ctx, query, now, now, id.String())
 
-        if err == nil </span><span class="cov5" title="4">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Invalidate caches
                 r.cache.Delete(ctx, "agent:"+id.String())
                 r.cache.Delete(ctx, "agents:all")
         }</span>
 
-        <span class="cov5" title="4">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 </pre>
 		
-		<pre class="file" id="file5" style="display: none">package repository
+		<pre class="file" id="file6" style="display: none">package repository
 
 import (
         "context"
@@ -1004,7 +1084,7 @@ type hashFileRepository struct {
         deleteStmt  *sql.Stmt
 }
 
-func NewHashFileRepository(db *database.SQLiteDB) domain.HashFileRepository <span class="cov10" title="10">{
+func NewHashFileRepository(db *database.SQLiteDB) domain.HashFileRepository <span class="cov0" title="0">{
         repo := &amp;hashFileRepository{
                 db:    db,
                 cache: cache.NewMemoryCache(60 * time.Second), // 60 second cache for hash files (they change less frequently)
@@ -1016,7 +1096,7 @@ func NewHashFileRepository(db *database.SQLiteDB) domain.HashFileRepository <spa
         return repo
 }</span>
 
-func (r *hashFileRepository) prepareStatements() <span class="cov10" title="10">{
+func (r *hashFileRepository) prepareStatements() <span class="cov0" title="0">{
         var err error
 
         r.getByIDStmt, err = r.db.DB().Prepare(`
@@ -1027,7 +1107,7 @@ func (r *hashFileRepository) prepareStatements() <span class="cov10" title="10">
                 panic(fmt.Sprintf("Failed to prepare getByID statement: %v", err))</span>
         }
 
-        <span class="cov10" title="10">r.getAllStmt, err = r.db.DB().Prepare(`
+        <span class="cov0" title="0">r.getAllStmt, err = r.db.DB().Prepare(`
                 SELECT id, name, orig_name, path, size, type, created_at
                 FROM hash_files ORDER BY created_at DESC LIMIT 50
         `)
@@ -1035,13 +1115,13 @@ func (r *hashFileRepository) prepareStatements() <span class="cov10" title="10">
                 panic(fmt.Sprintf("Failed to prepare getAll statement: %v", err))</span>
         }
 
-        <span class="cov10" title="10">r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM hash_files WHERE id = ?`)
+        <span class="cov0" title="0">r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM hash_files WHERE id = ?`)
         if err != nil </span><span class="cov0" title="0">{
                 panic(fmt.Sprintf("Failed to prepare delete statement: %v", err))</span>
         }
 }
 
-func (r *hashFileRepository) Create(ctx context.Context, hashFile *domain.HashFile) error <span class="cov6" title="4">{
+func (r *hashFileRepository) Create(ctx context.Context, hashFile *domain.HashFile) error <span class="cov0" title="0">{
         query := `
                 INSERT INTO hash_files (id, name, orig_name, path, size, type, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1059,27 +1139,27 @@ func (r *hashFileRepository) Create(ctx context.Context, hashFile *domain.HashFi
                 hashFile.CreatedAt,
         )
 
-        if err == nil </span><span class="cov6" title="4">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Cache the new hash file
                 r.cache.Set(ctx, "hashfile:"+hashFile.ID.String(), hashFile)
                 // Invalidate list cache
                 r.cache.Delete(ctx, "hashfiles:all")
         }</span>
 
-        <span class="cov6" title="4">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *hashFileRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.HashFile, error) <span class="cov7" title="5">{
+func (r *hashFileRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.HashFile, error) <span class="cov0" title="0">{
         cacheKey := "hashfile:" + id.String()
 
         // Try cache first
         var hashFile domain.HashFile
-        if found, err := r.cache.Get(ctx, cacheKey, &amp;hashFile); err == nil &amp;&amp; found </span><span class="cov1" title="1">{
+        if found, err := r.cache.Get(ctx, cacheKey, &amp;hashFile); err == nil &amp;&amp; found </span><span class="cov0" title="0">{
                 return &amp;hashFile, nil
         }</span>
 
         // Fallback to database with prepared statement
-        <span class="cov6" title="4">var idStr string
+        <span class="cov0" title="0">var idStr string
 
         err := r.getByIDStmt.QueryRowContext(ctx, id.String()).Scan(
                 &amp;idStr,
@@ -1098,7 +1178,7 @@ func (r *hashFileRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
                 <span class="cov0" title="0">return nil, err</span>
         }
 
-        <span class="cov6" title="4">hashFile.ID = uuid.MustParse(idStr)
+        <span class="cov0" title="0">hashFile.ID = uuid.MustParse(idStr)
 
         // Cache the result
         r.cache.Set(ctx, cacheKey, &amp;hashFile)
@@ -1164,7 +1244,7 @@ func (r *hashFileRepository) Delete(ctx context.Context, id uuid.UUID) error <sp
 }
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package repository
+		<pre class="file" id="file7" style="display: none">package repository
 
 import (
         "context"
@@ -1192,7 +1272,7 @@ type jobRepository struct {
         updateProgressStmt *sql.Stmt
 }
 
-func NewJobRepository(db *database.SQLiteDB) domain.JobRepository <span class="cov9" title="14">{
+func NewJobRepository(db *database.SQLiteDB) domain.JobRepository <span class="cov0" title="0">{
         repo := &amp;jobRepository{
                 db:    db,
                 cache: cache.NewMemoryCache(15 * time.Second), // 15 second cache for jobs (shorter due to frequent updates)
@@ -1204,7 +1284,7 @@ func NewJobRepository(db *database.SQLiteDB) domain.JobRepository <span class="c
         return repo
 }</span>
 
-func (r *jobRepository) prepareStatements() <span class="cov9" title="14">{
+func (r *jobRepository) prepareStatements() <span class="cov0" title="0">{
         var err error
 
         r.getByIDStmt, err = r.db.DB().Prepare(`
@@ -1216,7 +1296,7 @@ func (r *jobRepository) prepareStatements() <span class="cov9" title="14">{
                 panic(fmt.Sprintf("Failed to prepare getByID statement: %v", err))</span>
         }
 
-        <span class="cov9" title="14">r.getAllStmt, err = r.db.DB().Prepare(`
+        <span class="cov0" title="0">r.getAllStmt, err = r.db.DB().Prepare(`
                 SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules,
                        agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
                 FROM jobs ORDER BY created_at DESC LIMIT 100
@@ -1225,7 +1305,7 @@ func (r *jobRepository) prepareStatements() <span class="cov9" title="14">{
                 panic(fmt.Sprintf("Failed to prepare getAll statement: %v", err))</span>
         }
 
-        <span class="cov9" title="14">r.getByStatusStmt, err = r.db.DB().Prepare(`
+        <span class="cov0" title="0">r.getByStatusStmt, err = r.db.DB().Prepare(`
                 SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules,
                        agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
                 FROM jobs WHERE status = ? ORDER BY created_at DESC LIMIT 50
@@ -1234,7 +1314,7 @@ func (r *jobRepository) prepareStatements() <span class="cov9" title="14">{
                 panic(fmt.Sprintf("Failed to prepare getByStatus statement: %v", err))</span>
         }
 
-        <span class="cov9" title="14">r.getByAgentIDStmt, err = r.db.DB().Prepare(`
+        <span class="cov0" title="0">r.getByAgentIDStmt, err = r.db.DB().Prepare(`
                 SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules,
                        agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
                 FROM jobs WHERE agent_id = ? ORDER BY created_at DESC LIMIT 20
@@ -1243,7 +1323,7 @@ func (r *jobRepository) prepareStatements() <span class="cov9" title="14">{
                 panic(fmt.Sprintf("Failed to prepare getByAgentID statement: %v", err))</span>
         }
 
-        <span class="cov9" title="14">r.updateStmt, err = r.db.DB().Prepare(`
+        <span class="cov0" title="0">r.updateStmt, err = r.db.DB().Prepare(`
                 UPDATE jobs SET 
                 name = ?, status = ?, hash_type = ?, attack_mode = ?, hash_file = ?, hash_file_id = ?, wordlist = ?, rules = ?,
                 agent_id = ?, progress = ?, speed = ?, eta = ?, result = ?, updated_at = ?, started_at = ?, completed_at = ?
@@ -1253,23 +1333,23 @@ func (r *jobRepository) prepareStatements() <span class="cov9" title="14">{
                 panic(fmt.Sprintf("Failed to prepare update statement: %v", err))</span>
         }
 
-        <span class="cov9" title="14">r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM jobs WHERE id = ?`)
+        <span class="cov0" title="0">r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM jobs WHERE id = ?`)
         if err != nil </span><span class="cov0" title="0">{
                 panic(fmt.Sprintf("Failed to prepare delete statement: %v", err))</span>
         }
 
-        <span class="cov9" title="14">r.updateStatusStmt, err = r.db.DB().Prepare(`UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?`)
+        <span class="cov0" title="0">r.updateStatusStmt, err = r.db.DB().Prepare(`UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?`)
         if err != nil </span><span class="cov0" title="0">{
                 panic(fmt.Sprintf("Failed to prepare updateStatus statement: %v", err))</span>
         }
 
-        <span class="cov9" title="14">r.updateProgressStmt, err = r.db.DB().Prepare(`UPDATE jobs SET progress = ?, speed = ?, updated_at = ? WHERE id = ?`)
+        <span class="cov0" title="0">r.updateProgressStmt, err = r.db.DB().Prepare(`UPDATE jobs SET progress = ?, speed = ?, updated_at = ? WHERE id = ?`)
         if err != nil </span><span class="cov0" title="0">{
                 panic(fmt.Sprintf("Failed to prepare updateProgress statement: %v", err))</span>
         }
 }
 
-func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error <span class="cov9" title="16">{
+func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error <span class="cov0" title="0">{
         query := `
                 INSERT INTO jobs (id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules, 
                                   agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at)
@@ -1281,33 +1361,33 @@ func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error <span
         job.UpdatedAt = now
 
         var agentID *string
-        if job.AgentID != nil </span><span class="cov6" title="5">{
+        if job.AgentID != nil </span><span class="cov0" title="0">{
                 agentIDStr := job.AgentID.String()
                 agentID = &amp;agentIDStr
         }</span>
 
-        <span class="cov9" title="16">var hashFileID *string
-        if job.HashFileID != nil </span><span class="cov6" title="5">{
+        <span class="cov0" title="0">var hashFileID *string
+        if job.HashFileID != nil </span><span class="cov0" title="0">{
                 hashFileIDStr := job.HashFileID.String()
                 hashFileID = &amp;hashFileIDStr
         }</span>
 
-        <span class="cov9" title="16">var eta *time.Time
+        <span class="cov0" title="0">var eta *time.Time
         if job.ETA != nil </span><span class="cov0" title="0">{
                 eta = job.ETA
         }</span>
 
-        <span class="cov9" title="16">var startedAt *time.Time
+        <span class="cov0" title="0">var startedAt *time.Time
         if job.StartedAt != nil </span><span class="cov0" title="0">{
                 startedAt = job.StartedAt
         }</span>
 
-        <span class="cov9" title="16">var completedAt *time.Time
+        <span class="cov0" title="0">var completedAt *time.Time
         if job.CompletedAt != nil </span><span class="cov0" title="0">{
                 completedAt = job.CompletedAt
         }</span>
 
-        <span class="cov9" title="16">_, err := r.db.DB().ExecContext(ctx, query,
+        <span class="cov0" title="0">_, err := r.db.DB().ExecContext(ctx, query,
                 job.ID.String(),
                 job.Name,
                 job.Status,
@@ -1328,38 +1408,38 @@ func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error <span
                 completedAt,
         )
 
-        if err == nil </span><span class="cov9" title="16">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Cache the new job
                 r.cache.Set(ctx, "job:"+job.ID.String(), job)
                 // Invalidate list caches
                 r.invalidateListCaches(ctx)
         }</span>
 
-        <span class="cov9" title="16">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *jobRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Job, error) <span class="cov7" title="8">{
+func (r *jobRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Job, error) <span class="cov0" title="0">{
         cacheKey := "job:" + id.String()
 
         // Try cache first
         var job domain.Job
-        if found, err := r.cache.Get(ctx, cacheKey, &amp;job); err == nil &amp;&amp; found </span><span class="cov5" title="4">{
+        if found, err := r.cache.Get(ctx, cacheKey, &amp;job); err == nil &amp;&amp; found </span><span class="cov0" title="0">{
                 return &amp;job, nil
         }</span>
 
         // Fallback to database
-        <span class="cov5" title="4">job, err := r.scanJob(r.getByIDStmt.QueryRowContext(ctx, id.String()))
-        if err != nil </span><span class="cov3" title="2">{
+        <span class="cov0" title="0">job, err := r.scanJob(r.getByIDStmt.QueryRowContext(ctx, id.String()))
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
 
         // Cache the result
-        <span class="cov3" title="2">r.cache.Set(ctx, cacheKey, &amp;job)
+        <span class="cov0" title="0">r.cache.Set(ctx, cacheKey, &amp;job)
 
         return &amp;job, nil</span>
 }
 
-func (r *jobRepository) GetAll(ctx context.Context) ([]domain.Job, error) <span class="cov5" title="4">{
+func (r *jobRepository) GetAll(ctx context.Context) ([]domain.Job, error) <span class="cov0" title="0">{
         cacheKey := "jobs:all"
 
         // Try cache first
@@ -1369,18 +1449,18 @@ func (r *jobRepository) GetAll(ctx context.Context) ([]domain.Job, error) <span 
         }</span>
 
         // Fallback to database
-        <span class="cov5" title="4">jobs, err := r.queryJobs(ctx, r.getAllStmt)
+        <span class="cov0" title="0">jobs, err := r.queryJobs(ctx, r.getAllStmt)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
 
         // Cache the result
-        <span class="cov5" title="4">r.cache.Set(ctx, cacheKey, jobs)
+        <span class="cov0" title="0">r.cache.Set(ctx, cacheKey, jobs)
 
         return jobs, nil</span>
 }
 
-func (r *jobRepository) GetByStatus(ctx context.Context, status string) ([]domain.Job, error) <span class="cov4" title="3">{
+func (r *jobRepository) GetByStatus(ctx context.Context, status string) ([]domain.Job, error) <span class="cov0" title="0">{
         cacheKey := "jobs:status:" + status
 
         // Try cache first
@@ -1390,18 +1470,18 @@ func (r *jobRepository) GetByStatus(ctx context.Context, status string) ([]domai
         }</span>
 
         // Fallback to database
-        <span class="cov4" title="3">jobs, err := r.queryJobsWithArgs(ctx, r.getByStatusStmt, status)
+        <span class="cov0" title="0">jobs, err := r.queryJobsWithArgs(ctx, r.getByStatusStmt, status)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
 
         // Cache the result
-        <span class="cov4" title="3">r.cache.Set(ctx, cacheKey, jobs)
+        <span class="cov0" title="0">r.cache.Set(ctx, cacheKey, jobs)
 
         return jobs, nil</span>
 }
 
-func (r *jobRepository) GetByAgentID(ctx context.Context, agentID uuid.UUID) ([]domain.Job, error) <span class="cov4" title="3">{
+func (r *jobRepository) GetByAgentID(ctx context.Context, agentID uuid.UUID) ([]domain.Job, error) <span class="cov0" title="0">{
         cacheKey := "jobs:agent:" + agentID.String()
 
         // Try cache first
@@ -1411,15 +1491,40 @@ func (r *jobRepository) GetByAgentID(ctx context.Context, agentID uuid.UUID) ([]
         }</span>
 
         // Fallback to database
-        <span class="cov4" title="3">jobs, err := r.queryJobsWithArgs(ctx, r.getByAgentIDStmt, agentID.String())
+        <span class="cov0" title="0">jobs, err := r.queryJobsWithArgs(ctx, r.getByAgentIDStmt, agentID.String())
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
 
         // Cache the result
-        <span class="cov4" title="3">r.cache.Set(ctx, cacheKey, jobs)
+        <span class="cov0" title="0">r.cache.Set(ctx, cacheKey, jobs)
 
         return jobs, nil</span>
+}
+
+// GetAvailableJobForAgent gets the next available job assigned to the agent that is ready to run
+func (r *jobRepository) GetAvailableJobForAgent(ctx context.Context, agentID uuid.UUID) (*domain.Job, error) <span class="cov0" title="0">{
+        // Query for pending jobs assigned to this agent
+        query := `
+                SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, 
+                       wordlist, rules, agent_id, progress, speed, eta, result, 
+                       created_at, updated_at, started_at, completed_at
+                FROM jobs 
+                WHERE agent_id = ? AND status = 'pending'
+                ORDER BY created_at ASC
+                LIMIT 1
+        `
+
+        row := r.db.DB().QueryRowContext(ctx, query, agentID.String())
+        job, err := r.scanJob(row)
+        if err != nil </span><span class="cov0" title="0">{
+                if err.Error() == "job not found" </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("no available jobs for agent")
+                }</span>
+                <span class="cov0" title="0">return nil, err</span>
+        }
+
+        <span class="cov0" title="0">return &amp;job, nil</span>
 }
 
 func (r *jobRepository) Update(ctx context.Context, job *domain.Job) error <span class="cov0" title="0">{
@@ -1467,71 +1572,71 @@ func (r *jobRepository) Update(ctx context.Context, job *domain.Job) error <span
         <span class="cov0" title="0">return err</span>
 }
 
-func (r *jobRepository) Delete(ctx context.Context, id uuid.UUID) error <span class="cov1" title="1">{
+func (r *jobRepository) Delete(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
         _, err := r.deleteStmt.ExecContext(ctx, id.String())
 
-        if err == nil </span><span class="cov1" title="1">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Remove from cache
                 r.cache.Delete(ctx, "job:"+id.String())
                 // Invalidate list caches
                 r.invalidateListCaches(ctx)
         }</span>
 
-        <span class="cov1" title="1">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *jobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error <span class="cov1" title="1">{
+func (r *jobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error <span class="cov0" title="0">{
         _, err := r.updateStatusStmt.ExecContext(ctx, status, time.Now(), id.String())
 
-        if err == nil </span><span class="cov1" title="1">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Invalidate caches
                 r.cache.Delete(ctx, "job:"+id.String())
                 r.invalidateListCaches(ctx)
         }</span>
 
-        <span class="cov1" title="1">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *jobRepository) UpdateProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error <span class="cov1" title="1">{
+func (r *jobRepository) UpdateProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error <span class="cov0" title="0">{
         _, err := r.updateProgressStmt.ExecContext(ctx, progress, speed, time.Now(), id.String())
 
-        if err == nil </span><span class="cov1" title="1">{
+        if err == nil </span><span class="cov0" title="0">{
                 // Invalidate caches (don't cache individual job for progress updates due to frequency)
                 r.cache.Delete(ctx, "job:"+id.String())
         }</span>
 
-        <span class="cov1" title="1">return err</span>
+        <span class="cov0" title="0">return err</span>
 }
 
-func (r *jobRepository) invalidateListCaches(ctx context.Context) <span class="cov10" title="18">{
+func (r *jobRepository) invalidateListCaches(ctx context.Context) <span class="cov0" title="0">{
         // Delete all list-related caches
         r.cache.Delete(ctx, "jobs:all")
         // We can't easily invalidate all status-specific caches, so we clear the entire cache periodically
         // This is acceptable given the 15-second TTL
 }</span>
 
-func (r *jobRepository) queryJobs(ctx context.Context, stmt *sql.Stmt) ([]domain.Job, error) <span class="cov5" title="4">{
+func (r *jobRepository) queryJobs(ctx context.Context, stmt *sql.Stmt) ([]domain.Job, error) <span class="cov0" title="0">{
         rows, err := stmt.QueryContext(ctx)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
-        <span class="cov5" title="4">defer rows.Close()
+        <span class="cov0" title="0">defer rows.Close()
 
         return r.scanJobs(rows)</span>
 }
 
-func (r *jobRepository) queryJobsWithArgs(ctx context.Context, stmt *sql.Stmt, args ...interface{}) ([]domain.Job, error) <span class="cov6" title="6">{
+func (r *jobRepository) queryJobsWithArgs(ctx context.Context, stmt *sql.Stmt, args ...interface{}) ([]domain.Job, error) <span class="cov0" title="0">{
         rows, err := stmt.QueryContext(ctx, args...)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
-        <span class="cov6" title="6">defer rows.Close()
+        <span class="cov0" title="0">defer rows.Close()
 
         return r.scanJobs(rows)</span>
 }
 
 // scanJob optimized for single row scanning
-func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) <span class="cov5" title="4">{
+func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) <span class="cov0" title="0">{
         var job domain.Job
         var idStr string
         var agentIDStr sql.NullString
@@ -1561,44 +1666,44 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) <span class="c
                 &amp;completedAt,
         )
 
-        if err != nil </span><span class="cov3" title="2">{
-                if err == sql.ErrNoRows </span><span class="cov3" title="2">{
+        if err != nil </span><span class="cov0" title="0">{
+                if err == sql.ErrNoRows </span><span class="cov0" title="0">{
                         return job, fmt.Errorf("job not found")
                 }</span>
                 <span class="cov0" title="0">return job, err</span>
         }
 
-        <span class="cov3" title="2">job.ID = uuid.MustParse(idStr)
+        <span class="cov0" title="0">job.ID = uuid.MustParse(idStr)
 
         if agentIDStr.Valid </span><span class="cov0" title="0">{
                 agentID := uuid.MustParse(agentIDStr.String)
                 job.AgentID = &amp;agentID
         }</span>
 
-        <span class="cov3" title="2">if hashFileIDStr.Valid </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if hashFileIDStr.Valid </span><span class="cov0" title="0">{
                 hashFileID := uuid.MustParse(hashFileIDStr.String)
                 job.HashFileID = &amp;hashFileID
         }</span>
 
-        <span class="cov3" title="2">if eta.Valid </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if eta.Valid </span><span class="cov0" title="0">{
                 job.ETA = &amp;eta.Time
         }</span>
 
-        <span class="cov3" title="2">if startedAt.Valid </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if startedAt.Valid </span><span class="cov0" title="0">{
                 job.StartedAt = &amp;startedAt.Time
         }</span>
 
-        <span class="cov3" title="2">if completedAt.Valid </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if completedAt.Valid </span><span class="cov0" title="0">{
                 job.CompletedAt = &amp;completedAt.Time
         }</span>
 
-        <span class="cov3" title="2">return job, nil</span>
+        <span class="cov0" title="0">return job, nil</span>
 }
 
-func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) <span class="cov8" title="10">{
+func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) <span class="cov0" title="0">{
         jobs := make([]domain.Job, 0, 20) // Pre-allocate slice
 
-        for rows.Next() </span><span class="cov7" title="8">{
+        for rows.Next() </span><span class="cov0" title="0">{
                 var job domain.Job
                 var idStr string
                 var agentIDStr sql.NullString
@@ -1631,38 +1736,38 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) <span cla
                         return nil, err
                 }</span>
 
-                <span class="cov7" title="8">job.ID = uuid.MustParse(idStr)
+                <span class="cov0" title="0">job.ID = uuid.MustParse(idStr)
 
-                if agentIDStr.Valid </span><span class="cov4" title="3">{
+                if agentIDStr.Valid </span><span class="cov0" title="0">{
                         agentID := uuid.MustParse(agentIDStr.String)
                         job.AgentID = &amp;agentID
                 }</span>
 
-                <span class="cov7" title="8">if hashFileIDStr.Valid </span><span class="cov3" title="2">{
+                <span class="cov0" title="0">if hashFileIDStr.Valid </span><span class="cov0" title="0">{
                         hashFileID := uuid.MustParse(hashFileIDStr.String)
                         job.HashFileID = &amp;hashFileID
                 }</span>
 
-                <span class="cov7" title="8">if eta.Valid </span><span class="cov0" title="0">{
+                <span class="cov0" title="0">if eta.Valid </span><span class="cov0" title="0">{
                         job.ETA = &amp;eta.Time
                 }</span>
 
-                <span class="cov7" title="8">if startedAt.Valid </span><span class="cov0" title="0">{
+                <span class="cov0" title="0">if startedAt.Valid </span><span class="cov0" title="0">{
                         job.StartedAt = &amp;startedAt.Time
                 }</span>
 
-                <span class="cov7" title="8">if completedAt.Valid </span><span class="cov0" title="0">{
+                <span class="cov0" title="0">if completedAt.Valid </span><span class="cov0" title="0">{
                         job.CompletedAt = &amp;completedAt.Time
                 }</span>
 
-                <span class="cov7" title="8">jobs = append(jobs, job)</span>
+                <span class="cov0" title="0">jobs = append(jobs, job)</span>
         }
 
-        <span class="cov8" title="10">return jobs, nil</span>
+        <span class="cov0" title="0">return jobs, nil</span>
 }
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package repository
+		<pre class="file" id="file8" style="display: none">package repository
 
 import (
         "context"
@@ -1856,7 +1961,7 @@ func (r *wordlistRepository) Delete(ctx context.Context, id uuid.UUID) error <sp
 }
 </pre>
 		
-		<pre class="file" id="file8" style="display: none">package usecase
+		<pre class="file" id="file9" style="display: none">package usecase
 
 import (
         "context"
@@ -1881,13 +1986,13 @@ type agentUsecase struct {
         agentRepo domain.AgentRepository
 }
 
-func NewAgentUsecase(agentRepo domain.AgentRepository) AgentUsecase <span class="cov10" title="22">{
+func NewAgentUsecase(agentRepo domain.AgentRepository) AgentUsecase <span class="cov0" title="0">{
         return &amp;agentUsecase{
                 agentRepo: agentRepo,
         }
 }</span>
 
-func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) <span class="cov8" title="13">{
+func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) <span class="cov0" title="0">{
         agent := &amp;domain.Agent{
                 ID:           uuid.New(),
                 Name:         req.Name,
@@ -1897,67 +2002,67 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
                 Capabilities: req.Capabilities,
         }
 
-        if err := u.agentRepo.Create(ctx, agent); err != nil </span><span class="cov1" title="1">{
+        if err := u.agentRepo.Create(ctx, agent); err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to create agent: %w", err)
         }</span>
 
-        <span class="cov8" title="12">return agent, nil</span>
+        <span class="cov0" title="0">return agent, nil</span>
 }
 
-func (u *agentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) <span class="cov6" title="6">{
+func (u *agentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) <span class="cov0" title="0">{
         agent, err := u.agentRepo.GetByID(ctx, id)
-        if err != nil </span><span class="cov3" title="2">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get agent: %w", err)
         }</span>
-        <span class="cov5" title="4">return agent, nil</span>
+        <span class="cov0" title="0">return agent, nil</span>
 }
 
-func (u *agentUsecase) GetAllAgents(ctx context.Context) ([]domain.Agent, error) <span class="cov7" title="10">{
+func (u *agentUsecase) GetAllAgents(ctx context.Context) ([]domain.Agent, error) <span class="cov0" title="0">{
         agents, err := u.agentRepo.GetAll(ctx)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get agents: %w", err)
         }</span>
-        <span class="cov7" title="9">return agents, nil</span>
+        <span class="cov0" title="0">return agents, nil</span>
 }
 
-func (u *agentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error <span class="cov5" title="5">{
-        if err := u.agentRepo.UpdateStatus(ctx, id, status); err != nil </span><span class="cov1" title="1">{
+func (u *agentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error <span class="cov0" title="0">{
+        if err := u.agentRepo.UpdateStatus(ctx, id, status); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to update agent status: %w", err)
         }</span>
-        <span class="cov5" title="4">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
-func (u *agentUsecase) DeleteAgent(ctx context.Context, id uuid.UUID) error <span class="cov3" title="2">{
-        if err := u.agentRepo.Delete(ctx, id); err != nil </span><span class="cov1" title="1">{
+func (u *agentUsecase) DeleteAgent(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
+        if err := u.agentRepo.Delete(ctx, id); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to delete agent: %w", err)
         }</span>
-        <span class="cov1" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
-func (u *agentUsecase) GetAvailableAgent(ctx context.Context) (*domain.Agent, error) <span class="cov4" title="3">{
+func (u *agentUsecase) GetAvailableAgent(ctx context.Context) (*domain.Agent, error) <span class="cov0" title="0">{
         agents, err := u.agentRepo.GetAll(ctx)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get agents: %w", err)
         }</span>
 
-        <span class="cov3" title="2">for _, agent := range agents </span><span class="cov5" title="4">{
-                if agent.Status == "online" </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">for _, agent := range agents </span><span class="cov0" title="0">{
+                if agent.Status == "online" </span><span class="cov0" title="0">{
                         return &amp;agent, nil
                 }</span>
         }
 
-        <span class="cov1" title="1">return nil, fmt.Errorf("no available agents found")</span>
+        <span class="cov0" title="0">return nil, fmt.Errorf("no available agents found")</span>
 }
 
-func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error <span class="cov5" title="5">{
-        if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil </span><span class="cov1" title="1">{
+func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
+        if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to update agent heartbeat: %w", err)
         }</span>
-        <span class="cov5" title="4">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 </pre>
 		
-		<pre class="file" id="file9" style="display: none">package usecase
+		<pre class="file" id="file10" style="display: none">package usecase
 
 import (
         "context"
@@ -1984,21 +2089,21 @@ type hashFileUsecase struct {
         uploadDir    string
 }
 
-func NewHashFileUsecase(hashFileRepo domain.HashFileRepository, uploadDir string) HashFileUsecase <span class="cov10" title="11">{
+func NewHashFileUsecase(hashFileRepo domain.HashFileRepository, uploadDir string) HashFileUsecase <span class="cov0" title="0">{
         return &amp;hashFileUsecase{
                 hashFileRepo: hashFileRepo,
                 uploadDir:    uploadDir,
         }
 }</span>
 
-func (u *hashFileUsecase) UploadHashFile(ctx context.Context, name string, content io.Reader, size int64) (*domain.HashFile, error) <span class="cov5" title="3">{
+func (u *hashFileUsecase) UploadHashFile(ctx context.Context, name string, content io.Reader, size int64) (*domain.HashFile, error) <span class="cov0" title="0">{
         // Create upload directory if it doesn't exist
         if err := os.MkdirAll(u.uploadDir, 0755); err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to create upload directory: %w", err)
         }</span>
 
         // Generate unique filename
-        <span class="cov5" title="3">fileID := uuid.New()
+        <span class="cov0" title="0">fileID := uuid.New()
         ext := filepath.Ext(name)
         filename := fmt.Sprintf("%s%s", fileID.String(), ext)
         filePath := filepath.Join(u.uploadDir, filename)
@@ -2008,7 +2113,7 @@ func (u *hashFileUsecase) UploadHashFile(ctx context.Context, name string, conte
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to create file: %w", err)
         }</span>
-        <span class="cov5" title="3">defer file.Close()
+        <span class="cov0" title="0">defer file.Close()
 
         // Copy content to file
         written, err := io.Copy(file, content)
@@ -2019,7 +2124,7 @@ func (u *hashFileUsecase) UploadHashFile(ctx context.Context, name string, conte
         }</span>
 
         // Determine file type
-        <span class="cov5" title="3">fileType := u.determineFileType(name)
+        <span class="cov0" title="0">fileType := u.determineFileType(name)
 
         // Create hash file record
         hashFile := &amp;domain.HashFile{
@@ -2031,51 +2136,51 @@ func (u *hashFileUsecase) UploadHashFile(ctx context.Context, name string, conte
                 Type:     fileType,
         }
 
-        if err := u.hashFileRepo.Create(ctx, hashFile); err != nil </span><span class="cov1" title="1">{
+        if err := u.hashFileRepo.Create(ctx, hashFile); err != nil </span><span class="cov0" title="0">{
                 // Clean up on error
                 os.Remove(filePath)
                 return nil, fmt.Errorf("failed to create hash file record: %w", err)
         }</span>
 
-        <span class="cov3" title="2">return hashFile, nil</span>
+        <span class="cov0" title="0">return hashFile, nil</span>
 }
 
-func (u *hashFileUsecase) GetHashFile(ctx context.Context, id uuid.UUID) (*domain.HashFile, error) <span class="cov3" title="2">{
+func (u *hashFileUsecase) GetHashFile(ctx context.Context, id uuid.UUID) (*domain.HashFile, error) <span class="cov0" title="0">{
         hashFile, err := u.hashFileRepo.GetByID(ctx, id)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get hash file: %w", err)
         }</span>
-        <span class="cov1" title="1">return hashFile, nil</span>
+        <span class="cov0" title="0">return hashFile, nil</span>
 }
 
-func (u *hashFileUsecase) GetAllHashFiles(ctx context.Context) ([]domain.HashFile, error) <span class="cov5" title="3">{
+func (u *hashFileUsecase) GetAllHashFiles(ctx context.Context) ([]domain.HashFile, error) <span class="cov0" title="0">{
         hashFiles, err := u.hashFileRepo.GetAll(ctx)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get hash files: %w", err)
         }</span>
-        <span class="cov3" title="2">return hashFiles, nil</span>
+        <span class="cov0" title="0">return hashFiles, nil</span>
 }
 
-func (u *hashFileUsecase) DeleteHashFile(ctx context.Context, id uuid.UUID) error <span class="cov5" title="3">{
+func (u *hashFileUsecase) DeleteHashFile(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
         hashFile, err := u.hashFileRepo.GetByID(ctx, id)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get hash file: %w", err)
         }</span>
 
         // Delete the physical file
-        <span class="cov3" title="2">if err := os.Remove(hashFile.Path); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if err := os.Remove(hashFile.Path); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to delete physical file: %w", err)
         }</span>
 
         // Delete the record
-        <span class="cov3" title="2">if err := u.hashFileRepo.Delete(ctx, id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := u.hashFileRepo.Delete(ctx, id); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to delete hash file record: %w", err)
         }</span>
 
-        <span class="cov1" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
-func (u *hashFileUsecase) determineFileType(filename string) string <span class="cov5" title="3">{
+func (u *hashFileUsecase) determineFileType(filename string) string <span class="cov0" title="0">{
         ext := strings.ToLower(filepath.Ext(filename))
         switch ext </span>{
         case ".hccapx":<span class="cov0" title="0">
@@ -2086,13 +2191,424 @@ func (u *hashFileUsecase) determineFileType(filename string) string <span class=
                 return "cap"</span>
         case ".pcap":<span class="cov0" title="0">
                 return "pcap"</span>
-        default:<span class="cov5" title="3">
+        default:<span class="cov0" title="0">
                 return "hash"</span>
         }
 }
 </pre>
 		
-		<pre class="file" id="file10" style="display: none">package usecase
+		<pre class="file" id="file11" style="display: none">package usecase
+
+import (
+        "context"
+        "strings"
+        "sync"
+        "time"
+
+        "go-distributed-hashcat/internal/domain"
+
+        "github.com/google/uuid"
+)
+
+// JobEnrichmentService handles enriching jobs with readable names
+type JobEnrichmentService interface {
+        EnrichJobs(ctx context.Context, jobs []domain.Job) ([]domain.EnrichedJob, error)
+        ClearCache()
+        GetCacheStats() map[string]int
+}
+
+// Cache entry with TTL
+type cacheEntry struct {
+        data      interface{}
+        timestamp time.Time
+        ttl       time.Duration
+}
+
+func (c *cacheEntry) isExpired() bool <span class="cov0" title="0">{
+        return time.Since(c.timestamp) &gt; c.ttl
+}</span>
+
+// In-memory cache implementation
+type memoryCache struct {
+        agents    sync.Map // uuid.UUID -&gt; domain.Agent
+        wordlists sync.Map // uuid.UUID -&gt; domain.Wordlist
+        hashFiles sync.Map // uuid.UUID -&gt; domain.HashFile
+        ttl       time.Duration
+        mu        sync.RWMutex
+}
+
+func newMemoryCache(ttl time.Duration) *memoryCache <span class="cov0" title="0">{
+        cache := &amp;memoryCache{
+                ttl: ttl,
+        }
+
+        // Start cleanup goroutine
+        go cache.cleanup()
+
+        return cache
+}</span>
+
+func (c *memoryCache) cleanup() <span class="cov0" title="0">{
+        ticker := time.NewTicker(c.ttl / 2) // Cleanup every half TTL
+        defer ticker.Stop()
+
+        for range ticker.C </span><span class="cov0" title="0">{
+                c.cleanupExpired()
+        }</span>
+}
+
+func (c *memoryCache) cleanupExpired() <span class="cov0" title="0">{
+        // Cleanup agents
+        c.agents.Range(func(key, value interface{}) bool </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; entry.isExpired() </span><span class="cov0" title="0">{
+                        c.agents.Delete(key)
+                }</span>
+                <span class="cov0" title="0">return true</span>
+        })
+
+        // Cleanup wordlists
+        <span class="cov0" title="0">c.wordlists.Range(func(key, value interface{}) bool </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; entry.isExpired() </span><span class="cov0" title="0">{
+                        c.wordlists.Delete(key)
+                }</span>
+                <span class="cov0" title="0">return true</span>
+        })
+
+        // Cleanup hash files
+        <span class="cov0" title="0">c.hashFiles.Range(func(key, value interface{}) bool </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; entry.isExpired() </span><span class="cov0" title="0">{
+                        c.hashFiles.Delete(key)
+                }</span>
+                <span class="cov0" title="0">return true</span>
+        })
+}
+
+func (c *memoryCache) getAgent(id uuid.UUID) (*domain.Agent, bool) <span class="cov0" title="0">{
+        if value, ok := c.agents.Load(id); ok </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; !entry.isExpired() </span><span class="cov0" title="0">{
+                        if agent, ok := entry.data.(*domain.Agent); ok </span><span class="cov0" title="0">{
+                                return agent, true
+                        }</span>
+                }
+                // Remove expired entry
+                <span class="cov0" title="0">c.agents.Delete(id)</span>
+        }
+        <span class="cov0" title="0">return nil, false</span>
+}
+
+func (c *memoryCache) setAgent(id uuid.UUID, agent *domain.Agent) <span class="cov0" title="0">{
+        entry := &amp;cacheEntry{
+                data:      agent,
+                timestamp: time.Now(),
+                ttl:       c.ttl,
+        }
+        c.agents.Store(id, entry)
+}</span>
+
+func (c *memoryCache) getWordlist(id uuid.UUID) (*domain.Wordlist, bool) <span class="cov0" title="0">{
+        if value, ok := c.wordlists.Load(id); ok </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; !entry.isExpired() </span><span class="cov0" title="0">{
+                        if wordlist, ok := entry.data.(*domain.Wordlist); ok </span><span class="cov0" title="0">{
+                                return wordlist, true
+                        }</span>
+                }
+                <span class="cov0" title="0">c.wordlists.Delete(id)</span>
+        }
+        <span class="cov0" title="0">return nil, false</span>
+}
+
+func (c *memoryCache) setWordlist(id uuid.UUID, wordlist *domain.Wordlist) <span class="cov0" title="0">{
+        entry := &amp;cacheEntry{
+                data:      wordlist,
+                timestamp: time.Now(),
+                ttl:       c.ttl,
+        }
+        c.wordlists.Store(id, entry)
+}</span>
+
+func (c *memoryCache) getHashFile(id uuid.UUID) (*domain.HashFile, bool) <span class="cov0" title="0">{
+        if value, ok := c.hashFiles.Load(id); ok </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; !entry.isExpired() </span><span class="cov0" title="0">{
+                        if hashFile, ok := entry.data.(*domain.HashFile); ok </span><span class="cov0" title="0">{
+                                return hashFile, true
+                        }</span>
+                }
+                <span class="cov0" title="0">c.hashFiles.Delete(id)</span>
+        }
+        <span class="cov0" title="0">return nil, false</span>
+}
+
+func (c *memoryCache) setHashFile(id uuid.UUID, hashFile *domain.HashFile) <span class="cov0" title="0">{
+        entry := &amp;cacheEntry{
+                data:      hashFile,
+                timestamp: time.Now(),
+                ttl:       c.ttl,
+        }
+        c.hashFiles.Store(id, entry)
+}</span>
+
+func (c *memoryCache) clear() <span class="cov0" title="0">{
+        c.agents = sync.Map{}
+        c.wordlists = sync.Map{}
+        c.hashFiles = sync.Map{}
+}</span>
+
+func (c *memoryCache) getStats() map[string]int <span class="cov0" title="0">{
+        stats := map[string]int{
+                "agents":    0,
+                "wordlists": 0,
+                "hashFiles": 0,
+        }
+
+        c.agents.Range(func(key, value interface{}) bool </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; !entry.isExpired() </span><span class="cov0" title="0">{
+                        stats["agents"]++
+                }</span>
+                <span class="cov0" title="0">return true</span>
+        })
+
+        <span class="cov0" title="0">c.wordlists.Range(func(key, value interface{}) bool </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; !entry.isExpired() </span><span class="cov0" title="0">{
+                        stats["wordlists"]++
+                }</span>
+                <span class="cov0" title="0">return true</span>
+        })
+
+        <span class="cov0" title="0">c.hashFiles.Range(func(key, value interface{}) bool </span><span class="cov0" title="0">{
+                if entry, ok := value.(*cacheEntry); ok &amp;&amp; !entry.isExpired() </span><span class="cov0" title="0">{
+                        stats["hashFiles"]++
+                }</span>
+                <span class="cov0" title="0">return true</span>
+        })
+
+        <span class="cov0" title="0">return stats</span>
+}
+
+// jobEnrichmentService implementation
+type jobEnrichmentService struct {
+        agentRepo    domain.AgentRepository
+        wordlistRepo domain.WordlistRepository
+        hashFileRepo domain.HashFileRepository
+        cache        *memoryCache
+}
+
+// NewJobEnrichmentService creates a new job enrichment service
+func NewJobEnrichmentService(
+        agentRepo domain.AgentRepository,
+        wordlistRepo domain.WordlistRepository,
+        hashFileRepo domain.HashFileRepository,
+) JobEnrichmentService <span class="cov0" title="0">{
+        return &amp;jobEnrichmentService{
+                agentRepo:    agentRepo,
+                wordlistRepo: wordlistRepo,
+                hashFileRepo: hashFileRepo,
+                cache:        newMemoryCache(5 * time.Minute), // 5 minute TTL
+        }
+}</span>
+
+// EnrichJobs enriches jobs with readable names using batch loading and caching
+func (s *jobEnrichmentService) EnrichJobs(ctx context.Context, jobs []domain.Job) ([]domain.EnrichedJob, error) <span class="cov0" title="0">{
+        if len(jobs) == 0 </span><span class="cov0" title="0">{
+                return []domain.EnrichedJob{}, nil
+        }</span>
+
+        // Extract unique IDs that need to be fetched
+        <span class="cov0" title="0">agentIDs := s.extractMissingAgentIDs(jobs)
+        wordlistIDs := s.extractMissingWordlistIDs(jobs)
+        hashFileIDs := s.extractMissingHashFileIDs(jobs)
+
+        // Batch fetch missing entities
+        if err := s.batchLoadAgents(ctx, agentIDs); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">if err := s.batchLoadWordlists(ctx, wordlistIDs); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">if err := s.batchLoadHashFiles(ctx, hashFileIDs); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Enrich jobs using cached data
+        <span class="cov0" title="0">enrichedJobs := make([]domain.EnrichedJob, len(jobs))
+        for i, job := range jobs </span><span class="cov0" title="0">{
+                enrichedJobs[i] = domain.EnrichedJob{
+                        Job:          job,
+                        AgentName:    s.getAgentName(job.AgentID),
+                        WordlistName: s.getWordlistName(job.Wordlist),
+                        HashFileName: s.getHashFileName(job.HashFileID, job.HashFile),
+                }
+        }</span>
+
+        <span class="cov0" title="0">return enrichedJobs, nil</span>
+}
+
+func (s *jobEnrichmentService) extractMissingAgentIDs(jobs []domain.Job) []uuid.UUID <span class="cov0" title="0">{
+        var missingIDs []uuid.UUID
+        seen := make(map[uuid.UUID]bool)
+
+        for _, job := range jobs </span><span class="cov0" title="0">{
+                if job.AgentID != nil &amp;&amp; !seen[*job.AgentID] </span><span class="cov0" title="0">{
+                        seen[*job.AgentID] = true
+                        if _, cached := s.cache.getAgent(*job.AgentID); !cached </span><span class="cov0" title="0">{
+                                missingIDs = append(missingIDs, *job.AgentID)
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">return missingIDs</span>
+}
+
+func (s *jobEnrichmentService) extractMissingWordlistIDs(jobs []domain.Job) []uuid.UUID <span class="cov0" title="0">{
+        var missingIDs []uuid.UUID
+        seen := make(map[uuid.UUID]bool)
+
+        for _, job := range jobs </span><span class="cov0" title="0">{
+                if job.Wordlist != "" </span><span class="cov0" title="0">{
+                        if id, err := uuid.Parse(job.Wordlist); err == nil &amp;&amp; !seen[id] </span><span class="cov0" title="0">{
+                                seen[id] = true
+                                if _, cached := s.cache.getWordlist(id); !cached </span><span class="cov0" title="0">{
+                                        missingIDs = append(missingIDs, id)
+                                }</span>
+                        }
+                }
+        }
+
+        <span class="cov0" title="0">return missingIDs</span>
+}
+
+func (s *jobEnrichmentService) extractMissingHashFileIDs(jobs []domain.Job) []uuid.UUID <span class="cov0" title="0">{
+        var missingIDs []uuid.UUID
+        seen := make(map[uuid.UUID]bool)
+
+        for _, job := range jobs </span><span class="cov0" title="0">{
+                if job.HashFileID != nil &amp;&amp; !seen[*job.HashFileID] </span><span class="cov0" title="0">{
+                        seen[*job.HashFileID] = true
+                        if _, cached := s.cache.getHashFile(*job.HashFileID); !cached </span><span class="cov0" title="0">{
+                                missingIDs = append(missingIDs, *job.HashFileID)
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">return missingIDs</span>
+}
+
+func (s *jobEnrichmentService) batchLoadAgents(ctx context.Context, ids []uuid.UUID) error <span class="cov0" title="0">{
+        if len(ids) == 0 </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        // If repository supports batch loading, use it
+        // For now, we'll load individually but could be optimized
+        <span class="cov0" title="0">for _, id := range ids </span><span class="cov0" title="0">{
+                agent, err := s.agentRepo.GetByID(ctx, id)
+                if err == nil </span><span class="cov0" title="0">{
+                        s.cache.setAgent(id, agent)
+                }</span>
+                // Don't return error for individual failures - use fallback
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (s *jobEnrichmentService) batchLoadWordlists(ctx context.Context, ids []uuid.UUID) error <span class="cov0" title="0">{
+        if len(ids) == 0 </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">for _, id := range ids </span><span class="cov0" title="0">{
+                wordlist, err := s.wordlistRepo.GetByID(ctx, id)
+                if err == nil </span><span class="cov0" title="0">{
+                        s.cache.setWordlist(id, wordlist)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (s *jobEnrichmentService) batchLoadHashFiles(ctx context.Context, ids []uuid.UUID) error <span class="cov0" title="0">{
+        if len(ids) == 0 </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">for _, id := range ids </span><span class="cov0" title="0">{
+                hashFile, err := s.hashFileRepo.GetByID(ctx, id)
+                if err == nil </span><span class="cov0" title="0">{
+                        s.cache.setHashFile(id, hashFile)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (s *jobEnrichmentService) getAgentName(agentID *uuid.UUID) string <span class="cov0" title="0">{
+        if agentID == nil </span><span class="cov0" title="0">{
+                return ""
+        }</span>
+
+        <span class="cov0" title="0">if agent, cached := s.cache.getAgent(*agentID); cached </span><span class="cov0" title="0">{
+                return agent.Name
+        }</span>
+
+        // Fallback for cache miss
+        <span class="cov0" title="0">return agentID.String()[:8] + "..."</span>
+}
+
+func (s *jobEnrichmentService) getWordlistName(wordlist string) string <span class="cov0" title="0">{
+        if wordlist == "" </span><span class="cov0" title="0">{
+                return ""
+        }</span>
+
+        // Try to parse as UUID
+        <span class="cov0" title="0">if id, err := uuid.Parse(wordlist); err == nil </span><span class="cov0" title="0">{
+                if wl, cached := s.cache.getWordlist(id); cached </span><span class="cov0" title="0">{
+                        if wl.OrigName != "" </span><span class="cov0" title="0">{
+                                return wl.OrigName
+                        }</span>
+                        <span class="cov0" title="0">return wl.Name</span>
+                }
+                // Fallback for cache miss
+                <span class="cov0" title="0">return wordlist[:8] + "..."</span>
+        }
+
+        // Direct filename
+        <span class="cov0" title="0">return wordlist</span>
+}
+
+func (s *jobEnrichmentService) getHashFileName(hashFileID *uuid.UUID, hashFilePath string) string <span class="cov0" title="0">{
+        if hashFileID != nil </span><span class="cov0" title="0">{
+                if hashFile, cached := s.cache.getHashFile(*hashFileID); cached </span><span class="cov0" title="0">{
+                        if hashFile.OrigName != "" </span><span class="cov0" title="0">{
+                                return hashFile.OrigName
+                        }</span>
+                        <span class="cov0" title="0">return hashFile.Name</span>
+                }
+                // Fallback for cache miss
+                <span class="cov0" title="0">return hashFileID.String()[:8] + "..."</span>
+        }
+
+        // Fallback to parsing path
+        <span class="cov0" title="0">if hashFilePath != "" </span><span class="cov0" title="0">{
+                parts := strings.Split(hashFilePath, "/")
+                if len(parts) &gt; 0 </span><span class="cov0" title="0">{
+                        return parts[len(parts)-1]
+                }</span>
+        }
+
+        <span class="cov0" title="0">return ""</span>
+}
+
+func (s *jobEnrichmentService) ClearCache() <span class="cov0" title="0">{
+        s.cache.clear()
+}</span>
+
+func (s *jobEnrichmentService) GetCacheStats() map[string]int <span class="cov0" title="0">{
+        return s.cache.getStats()
+}</span>
+</pre>
+		
+		<pre class="file" id="file12" style="display: none">package usecase
 
 import (
         "context"
@@ -2109,6 +2625,8 @@ type JobUsecase interface {
         GetJob(ctx context.Context, id uuid.UUID) (*domain.Job, error)
         GetAllJobs(ctx context.Context) ([]domain.Job, error)
         GetJobsByStatus(ctx context.Context, status string) ([]domain.Job, error)
+        GetJobsByAgentID(ctx context.Context, agentID uuid.UUID) ([]domain.Job, error)
+        GetAvailableJobForAgent(ctx context.Context, agentID uuid.UUID) (*domain.Job, error)
         StartJob(ctx context.Context, id uuid.UUID) error
         UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error
         CompleteJob(ctx context.Context, id uuid.UUID, result string) error
@@ -2125,7 +2643,7 @@ type jobUsecase struct {
         hashFileRepo domain.HashFileRepository
 }
 
-func NewJobUsecase(jobRepo domain.JobRepository, agentRepo domain.AgentRepository, hashFileRepo domain.HashFileRepository) JobUsecase <span class="cov10" title="27">{
+func NewJobUsecase(jobRepo domain.JobRepository, agentRepo domain.AgentRepository, hashFileRepo domain.HashFileRepository) JobUsecase <span class="cov0" title="0">{
         return &amp;jobUsecase{
                 jobRepo:      jobRepo,
                 agentRepo:    agentRepo,
@@ -2133,19 +2651,19 @@ func NewJobUsecase(jobRepo domain.JobRepository, agentRepo domain.AgentRepositor
         }
 }</span>
 
-func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest) (*domain.Job, error) <span class="cov7" title="10">{
+func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest) (*domain.Job, error) <span class="cov0" title="0">{
         // Validate hash file exists
         hashFileID, err := uuid.Parse(req.HashFileID)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("invalid hash file ID: %w", err)
         }</span>
 
-        <span class="cov7" title="9">hashFile, err := u.hashFileRepo.GetByID(ctx, hashFileID)
-        if err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">hashFile, err := u.hashFileRepo.GetByID(ctx, hashFileID)
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("hash file not found: %w", err)
         }</span>
 
-        <span class="cov6" title="8">job := &amp;domain.Job{
+        <span class="cov0" title="0">job := &amp;domain.Job{
                 ID:         uuid.New(),
                 Name:       req.Name,
                 Status:     "pending",
@@ -2160,91 +2678,107 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
         }
 
         // Handle manual agent assignment
-        if req.AgentID != "" </span><span class="cov5" title="5">{
+        if req.AgentID != "" </span><span class="cov0" title="0">{
                 agentID, err := uuid.Parse(req.AgentID)
-                if err != nil </span><span class="cov1" title="1">{
+                if err != nil </span><span class="cov0" title="0">{
                         return nil, fmt.Errorf("invalid agent ID: %w", err)
                 }</span>
 
                 // Verify agent exists and is available
-                <span class="cov4" title="4">agent, err := u.agentRepo.GetByID(ctx, agentID)
-                if err != nil </span><span class="cov1" title="1">{
+                <span class="cov0" title="0">agent, err := u.agentRepo.GetByID(ctx, agentID)
+                if err != nil </span><span class="cov0" title="0">{
                         return nil, fmt.Errorf("agent not found: %w", err)
                 }</span>
 
-                <span class="cov4" title="3">if agent.Status != "online" </span><span class="cov0" title="0">{
+                <span class="cov0" title="0">if agent.Status != "online" </span><span class="cov0" title="0">{
                         return nil, fmt.Errorf("agent %s is not available (status: %s)", agent.Name, agent.Status)
                 }</span>
 
-                <span class="cov4" title="3">job.AgentID = &amp;agentID</span>
+                <span class="cov0" title="0">job.AgentID = &amp;agentID</span>
         }
 
-        <span class="cov5" title="6">if err := u.jobRepo.Create(ctx, job); err != nil </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if err := u.jobRepo.Create(ctx, job); err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to create job: %w", err)
         }</span>
 
-        <span class="cov5" title="6">return job, nil</span>
+        <span class="cov0" title="0">return job, nil</span>
 }
 
-func (u *jobUsecase) GetJob(ctx context.Context, id uuid.UUID) (*domain.Job, error) <span class="cov1" title="1">{
+func (u *jobUsecase) GetJob(ctx context.Context, id uuid.UUID) (*domain.Job, error) <span class="cov0" title="0">{
         job, err := u.jobRepo.GetByID(ctx, id)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get job: %w", err)
         }</span>
-        <span class="cov1" title="1">return job, nil</span>
+        <span class="cov0" title="0">return job, nil</span>
 }
 
-func (u *jobUsecase) GetAllJobs(ctx context.Context) ([]domain.Job, error) <span class="cov2" title="2">{
+func (u *jobUsecase) GetAllJobs(ctx context.Context) ([]domain.Job, error) <span class="cov0" title="0">{
         jobs, err := u.jobRepo.GetAll(ctx)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get jobs: %w", err)
         }</span>
-        <span class="cov2" title="2">return jobs, nil</span>
+        <span class="cov0" title="0">return jobs, nil</span>
 }
 
-func (u *jobUsecase) GetJobsByStatus(ctx context.Context, status string) ([]domain.Job, error) <span class="cov4" title="3">{
+func (u *jobUsecase) GetJobsByStatus(ctx context.Context, status string) ([]domain.Job, error) <span class="cov0" title="0">{
         jobs, err := u.jobRepo.GetByStatus(ctx, status)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get jobs by status: %w", err)
         }</span>
-        <span class="cov2" title="2">return jobs, nil</span>
+        <span class="cov0" title="0">return jobs, nil</span>
 }
 
-func (u *jobUsecase) StartJob(ctx context.Context, id uuid.UUID) error <span class="cov4" title="4">{
+func (u *jobUsecase) GetJobsByAgentID(ctx context.Context, agentID uuid.UUID) ([]domain.Job, error) <span class="cov0" title="0">{
+        jobs, err := u.jobRepo.GetByAgentID(ctx, agentID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get jobs by agent ID: %w", err)
+        }</span>
+        <span class="cov0" title="0">return jobs, nil</span>
+}
+
+func (u *jobUsecase) GetAvailableJobForAgent(ctx context.Context, agentID uuid.UUID) (*domain.Job, error) <span class="cov0" title="0">{
+        job, err := u.jobRepo.GetAvailableJobForAgent(ctx, agentID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get available job for agent: %w", err)
+        }</span>
+        <span class="cov0" title="0">return job, nil</span>
+}
+
+func (u *jobUsecase) StartJob(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
         job, err := u.jobRepo.GetByID(ctx, id)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get job: %w", err)
         }</span>
 
-        <span class="cov4" title="3">if job.Status != "pending" &amp;&amp; job.Status != "paused" </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if job.Status != "pending" &amp;&amp; job.Status != "paused" </span><span class="cov0" title="0">{
                 return fmt.Errorf("job cannot be started from status: %s", job.Status)
         }</span>
 
-        <span class="cov2" title="2">now := time.Now()
+        <span class="cov0" title="0">now := time.Now()
         job.Status = "running"
         job.StartedAt = &amp;now
 
-        if err := u.jobRepo.Update(ctx, job); err != nil </span><span class="cov1" title="1">{
+        if err := u.jobRepo.Update(ctx, job); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to update job: %w", err)
         }</span>
 
-        <span class="cov1" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
-func (u *jobUsecase) UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error <span class="cov2" title="2">{
-        if err := u.jobRepo.UpdateProgress(ctx, id, progress, speed); err != nil </span><span class="cov1" title="1">{
+func (u *jobUsecase) UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error <span class="cov0" title="0">{
+        if err := u.jobRepo.UpdateProgress(ctx, id, progress, speed); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to update job progress: %w", err)
         }</span>
-        <span class="cov1" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
-func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result string) error <span class="cov4" title="3">{
+func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result string) error <span class="cov0" title="0">{
         job, err := u.jobRepo.GetByID(ctx, id)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get job: %w", err)
         }</span>
 
-        <span class="cov2" title="2">now := time.Now()
+        <span class="cov0" title="0">now := time.Now()
         job.Status = "completed"
         job.Result = result
         job.Progress = 100.0
@@ -2255,14 +2789,14 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
         }</span>
 
         // Update agent status to online
-        <span class="cov2" title="2">if job.AgentID != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if job.AgentID != nil </span><span class="cov0" title="0">{
                 if err := u.agentRepo.UpdateStatus(ctx, *job.AgentID, "online"); err != nil </span><span class="cov0" title="0">{
                         // Log error but don't fail the job completion
                         fmt.Printf("Warning: failed to update agent status: %v\n", err)
                 }</span>
         }
 
-        <span class="cov2" title="2">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
 func (u *jobUsecase) FailJob(ctx context.Context, id uuid.UUID, reason string) error <span class="cov0" title="0">{
@@ -2312,49 +2846,49 @@ func (u *jobUsecase) DeleteJob(ctx context.Context, id uuid.UUID) error <span cl
         <span class="cov0" title="0">return nil</span>
 }
 
-func (u *jobUsecase) AssignJobsToAgents(ctx context.Context) error <span class="cov4" title="4">{
+func (u *jobUsecase) AssignJobsToAgents(ctx context.Context) error <span class="cov0" title="0">{
         // Get pending jobs
         pendingJobs, err := u.jobRepo.GetByStatus(ctx, "pending")
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get pending jobs: %w", err)
         }</span>
 
-        <span class="cov4" title="3">if len(pendingJobs) == 0 </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if len(pendingJobs) == 0 </span><span class="cov0" title="0">{
                 return nil // Nothing to assign
         }</span>
 
         // Get available agents
-        <span class="cov2" title="2">agents, err := u.agentRepo.GetAll(ctx)
+        <span class="cov0" title="0">agents, err := u.agentRepo.GetAll(ctx)
         if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get agents: %w", err)
         }</span>
 
-        <span class="cov2" title="2">var availableAgents []domain.Agent
-        for _, agent := range agents </span><span class="cov1" title="1">{
-                if agent.Status == "online" </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">var availableAgents []domain.Agent
+        for _, agent := range agents </span><span class="cov0" title="0">{
+                if agent.Status == "online" </span><span class="cov0" title="0">{
                         availableAgents = append(availableAgents, agent)
                 }</span>
         }
 
-        <span class="cov2" title="2">if len(availableAgents) == 0 </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if len(availableAgents) == 0 </span><span class="cov0" title="0">{
                 return nil // No available agents
         }</span>
 
         // Filter jobs that need assignment (don't have AgentID yet)
-        <span class="cov1" title="1">var jobsNeedingAssignment []domain.Job
-        for _, job := range pendingJobs </span><span class="cov1" title="1">{
-                if job.AgentID == nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">var jobsNeedingAssignment []domain.Job
+        for _, job := range pendingJobs </span><span class="cov0" title="0">{
+                if job.AgentID == nil </span><span class="cov0" title="0">{
                         jobsNeedingAssignment = append(jobsNeedingAssignment, job)
                 }</span>
         }
 
         // Assign jobs to agents (round-robin)
-        <span class="cov1" title="1">for i, job := range jobsNeedingAssignment </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">for i, job := range jobsNeedingAssignment </span><span class="cov0" title="0">{
                 if i &gt;= len(availableAgents) </span><span class="cov0" title="0">{
                         break</span> // More jobs than agents
                 }
 
-                <span class="cov1" title="1">agent := availableAgents[i%len(availableAgents)]
+                <span class="cov0" title="0">agent := availableAgents[i%len(availableAgents)]
                 job.AgentID = &amp;agent.ID
 
                 if err := u.jobRepo.Update(ctx, &amp;job); err != nil </span><span class="cov0" title="0">{
@@ -2362,16 +2896,16 @@ func (u *jobUsecase) AssignJobsToAgents(ctx context.Context) error <span class="
                 }</span>
 
                 // Update agent status to busy
-                <span class="cov1" title="1">if err := u.agentRepo.UpdateStatus(ctx, agent.ID, "busy"); err != nil </span><span class="cov0" title="0">{
+                <span class="cov0" title="0">if err := u.agentRepo.UpdateStatus(ctx, agent.ID, "busy"); err != nil </span><span class="cov0" title="0">{
                         return fmt.Errorf("failed to update agent status: %w", err)
                 }</span>
         }
 
-        <span class="cov1" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 </pre>
 		
-		<pre class="file" id="file11" style="display: none">package usecase
+		<pre class="file" id="file13" style="display: none">package usecase
 
 import (
         "bufio"
@@ -2399,14 +2933,14 @@ type wordlistUsecase struct {
         uploadDir    string
 }
 
-func NewWordlistUsecase(wordlistRepo domain.WordlistRepository, uploadDir string) WordlistUsecase <span class="cov10" title="11">{
+func NewWordlistUsecase(wordlistRepo domain.WordlistRepository, uploadDir string) WordlistUsecase <span class="cov0" title="0">{
         return &amp;wordlistUsecase{
                 wordlistRepo: wordlistRepo,
                 uploadDir:    uploadDir,
         }
 }</span>
 
-func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error) <span class="cov5" title="3">{
+func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error) <span class="cov0" title="0">{
         // Create upload directory if it doesn't exist
         wordlistDir := filepath.Join(u.uploadDir, "wordlists")
         if err := os.MkdirAll(wordlistDir, 0755); err != nil </span><span class="cov0" title="0">{
@@ -2414,12 +2948,12 @@ func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, conte
         }</span>
 
         // Generate unique filename
-        <span class="cov5" title="3">fileID := uuid.New()
+        <span class="cov0" title="0">fileID := uuid.New()
         ext := filepath.Ext(name)
         if ext == "" </span><span class="cov0" title="0">{
                 ext = ".txt" // Default extension for wordlists
         }</span>
-        <span class="cov5" title="3">filename := fmt.Sprintf("%s%s", fileID.String(), ext)
+        <span class="cov0" title="0">filename := fmt.Sprintf("%s%s", fileID.String(), ext)
         filePath := filepath.Join(wordlistDir, filename)
 
         // Create the file
@@ -2427,7 +2961,7 @@ func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, conte
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to create file: %w", err)
         }</span>
-        <span class="cov5" title="3">defer file.Close()
+        <span class="cov0" title="0">defer file.Close()
 
         // Copy content to file and count words
         wordCount, written, err := u.copyAndCountWords(file, content)
@@ -2438,7 +2972,7 @@ func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, conte
         }</span>
 
         // Create wordlist record
-        <span class="cov5" title="3">wordlist := &amp;domain.Wordlist{
+        <span class="cov0" title="0">wordlist := &amp;domain.Wordlist{
                 ID:        fileID,
                 Name:      filename,
                 OrigName:  name,
@@ -2447,51 +2981,51 @@ func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, conte
                 WordCount: &amp;wordCount,
         }
 
-        if err := u.wordlistRepo.Create(ctx, wordlist); err != nil </span><span class="cov1" title="1">{
+        if err := u.wordlistRepo.Create(ctx, wordlist); err != nil </span><span class="cov0" title="0">{
                 // Clean up on error
                 os.Remove(filePath)
                 return nil, fmt.Errorf("failed to create wordlist record: %w", err)
         }</span>
 
-        <span class="cov3" title="2">return wordlist, nil</span>
+        <span class="cov0" title="0">return wordlist, nil</span>
 }
 
-func (u *wordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error) <span class="cov3" title="2">{
+func (u *wordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error) <span class="cov0" title="0">{
         wordlist, err := u.wordlistRepo.GetByID(ctx, id)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get wordlist: %w", err)
         }</span>
-        <span class="cov1" title="1">return wordlist, nil</span>
+        <span class="cov0" title="0">return wordlist, nil</span>
 }
 
-func (u *wordlistUsecase) GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error) <span class="cov5" title="3">{
+func (u *wordlistUsecase) GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error) <span class="cov0" title="0">{
         wordlists, err := u.wordlistRepo.GetAll(ctx)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to get wordlists: %w", err)
         }</span>
-        <span class="cov3" title="2">return wordlists, nil</span>
+        <span class="cov0" title="0">return wordlists, nil</span>
 }
 
-func (u *wordlistUsecase) DeleteWordlist(ctx context.Context, id uuid.UUID) error <span class="cov5" title="3">{
+func (u *wordlistUsecase) DeleteWordlist(ctx context.Context, id uuid.UUID) error <span class="cov0" title="0">{
         wordlist, err := u.wordlistRepo.GetByID(ctx, id)
-        if err != nil </span><span class="cov1" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to get wordlist: %w", err)
         }</span>
 
         // Delete the physical file
-        <span class="cov3" title="2">if err := os.Remove(wordlist.Path); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if err := os.Remove(wordlist.Path); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to delete physical file: %w", err)
         }</span>
 
         // Delete the record
-        <span class="cov3" title="2">if err := u.wordlistRepo.Delete(ctx, id); err != nil </span><span class="cov1" title="1">{
+        <span class="cov0" title="0">if err := u.wordlistRepo.Delete(ctx, id); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to delete wordlist record: %w", err)
         }</span>
 
-        <span class="cov1" title="1">return nil</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
-func (u *wordlistUsecase) copyAndCountWords(dst io.Writer, src io.Reader) (int64, int64, error) <span class="cov5" title="3">{
+func (u *wordlistUsecase) copyAndCountWords(dst io.Writer, src io.Reader) (int64, int64, error) <span class="cov0" title="0">{
         var wordCount int64 = 0
         var bytesWritten int64 = 0
 
@@ -2499,11 +3033,11 @@ func (u *wordlistUsecase) copyAndCountWords(dst io.Writer, src io.Reader) (int64
         writer := bufio.NewWriter(dst)
         defer writer.Flush()
 
-        for scanner.Scan() </span><span class="cov7" title="6">{
+        for scanner.Scan() </span><span class="cov0" title="0">{
                 line := scanner.Text()
                 line = strings.TrimSpace(line)
 
-                if line != "" </span><span class="cov7" title="6">{ // Count non-empty lines as words
+                if line != "" </span><span class="cov0" title="0">{ // Count non-empty lines as words
                         wordCount++
 
                         // Write line to destination
@@ -2511,15 +3045,15 @@ func (u *wordlistUsecase) copyAndCountWords(dst io.Writer, src io.Reader) (int64
                         if err != nil </span><span class="cov0" title="0">{
                                 return 0, 0, err
                         }</span>
-                        <span class="cov7" title="6">bytesWritten += int64(n)</span>
+                        <span class="cov0" title="0">bytesWritten += int64(n)</span>
                 }
         }
 
-        <span class="cov5" title="3">if err := scanner.Err(); err != nil </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if err := scanner.Err(); err != nil </span><span class="cov0" title="0">{
                 return 0, 0, err
         }</span>
 
-        <span class="cov5" title="3">return wordCount, bytesWritten, nil</span>
+        <span class="cov0" title="0">return wordCount, bytesWritten, nil</span>
 }
 </pre>
 		

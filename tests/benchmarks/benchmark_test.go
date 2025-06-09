@@ -99,7 +99,7 @@ func BenchmarkJobCreation(b *testing.B) {
 	}
 
 	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
-	jobHandler := handler.NewJobHandler(jobUsecase)
+	jobHandler := handler.NewJobHandler(jobUsecase, nil)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
