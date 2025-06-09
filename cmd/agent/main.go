@@ -571,9 +571,19 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			localWordlist = localPath
 			log.Printf("📁 Using local wordlist: %s", localWordlist)
 		} else {
-			// If not found locally, try to download or use direct path
-			localWordlist = job.Wordlist
-			log.Printf("⚠️  Wordlist not found locally, using path: %s", localWordlist)
+			// Try to parse as UUID and download
+			if wordlistUUID, err := uuid.Parse(job.Wordlist); err == nil {
+				downloadedPath, err := a.downloadWordlist(wordlistUUID)
+				if err != nil {
+					return fmt.Errorf("failed to download wordlist %s: %w", job.Wordlist, err)
+				}
+				localWordlist = downloadedPath
+				log.Printf("📥 Downloaded wordlist: %s", localWordlist)
+			} else {
+				// If not UUID, use as direct path
+				localWordlist = job.Wordlist
+				log.Printf("⚠️  Using wordlist path directly: %s", localWordlist)
+			}
 		}
 	}
 
@@ -678,6 +688,53 @@ func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
 	}
 
 	log.Printf("Downloaded hash file to: %s", localPath)
+	return localPath, nil
+}
+
+func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
+	// Create temp directory for downloaded files
+	tempDir := filepath.Join(a.UploadDir, "temp")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	// Download file from server
+	url := fmt.Sprintf("%s/api/v1/wordlists/%s/download", a.ServerURL, wordlistID.String())
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to download file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download file: status %d", resp.StatusCode)
+	}
+
+	// Get filename from Content-Disposition header or use UUID
+	filename := wordlistID.String()
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		// Extract filename from Content-Disposition header
+		if parts := regexp.MustCompile(`filename=([^;]+)`).FindStringSubmatch(cd); len(parts) > 1 {
+			filename = parts[1]
+		}
+	}
+
+	// Create local file
+	localPath := filepath.Join(tempDir, filename)
+	file, err := os.Create(localPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create local file: %w", err)
+	}
+	defer file.Close()
+
+	// Copy downloaded content to local file
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		os.Remove(localPath) // Clean up on error
+		return "", fmt.Errorf("failed to write file: %w", err)
+	}
+
+	log.Printf("Downloaded wordlist to: %s", localPath)
 	return localPath, nil
 }
 
