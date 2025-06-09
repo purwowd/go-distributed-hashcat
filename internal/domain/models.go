@@ -29,6 +29,7 @@ type Job struct {
 	HashFile    string     `json:"hash_file" db:"hash_file"`
 	HashFileID  *uuid.UUID `json:"hash_file_id" db:"hash_file_id"`
 	Wordlist    string     `json:"wordlist" db:"wordlist"`
+	WordlistID  *uuid.UUID `json:"wordlist_id" db:"wordlist_id"`
 	Rules       string     `json:"rules" db:"rules"`
 	AgentID     *uuid.UUID `json:"agent_id" db:"agent_id"`
 	Progress    float64    `json:"progress" db:"progress"`

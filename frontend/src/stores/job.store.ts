@@ -87,14 +87,23 @@ class JobStore {
                         jobs: [...this.state.jobs, newJob],
                         loading: false 
                     })
+                    return newJob
+                } else {
+                    // API returned success but null data
+                    this.setState({ 
+                        loading: false, 
+                        error: 'Server returned empty response'
+                    })
+                    return null
                 }
-                return newJob
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to create job'
                 this.setState({ 
                     loading: false, 
-                    error: error instanceof Error ? error.message : 'Failed to create job' 
+                    error: errorMessage
                 })
-                return null
+                // Re-throw the error so it can be caught by the calling code
+                throw error
             }
         },
 

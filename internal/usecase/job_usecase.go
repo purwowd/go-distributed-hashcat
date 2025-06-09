@@ -67,6 +67,15 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		Speed:      0,
 	}
 
+	// Handle wordlist ID if provided
+	if req.WordlistID != "" {
+		wordlistID, err := uuid.Parse(req.WordlistID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid wordlist ID: %w", err)
+		}
+		job.WordlistID = &wordlistID
+	}
+
 	// Handle manual agent assignment
 	if req.AgentID != "" {
 		agentID, err := uuid.Parse(req.AgentID)

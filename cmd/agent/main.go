@@ -566,7 +566,17 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 
 	// Resolve wordlist (local first, download if needed)
 	var localWordlist string
-	if job.Wordlist != "" {
+
+	// Prioritize WordlistID if available
+	if job.WordlistID != nil {
+		downloadedPath, err := a.downloadWordlist(*job.WordlistID)
+		if err != nil {
+			return fmt.Errorf("failed to download wordlist %s: %w", job.WordlistID.String(), err)
+		}
+		localWordlist = downloadedPath
+		log.Printf("📥 Downloaded wordlist from ID: %s", localWordlist)
+	} else if job.Wordlist != "" {
+		// Fallback to wordlist filename resolution
 		if localPath, found := a.findLocalFile(job.Wordlist); found {
 			localWordlist = localPath
 			log.Printf("📁 Using local wordlist: %s", localWordlist)

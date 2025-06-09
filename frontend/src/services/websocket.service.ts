@@ -55,12 +55,12 @@ class WebSocketService {
     public connect(): void {
         try {
             const wsUrl = this.getWebSocketUrl()
-            console.log('🔗 Connecting to WebSocket:', wsUrl)
+            // console.log('🔗 Connecting to WebSocket:', wsUrl)
             
             this.ws = new WebSocket(wsUrl)
             
             this.ws.onopen = () => {
-                console.log('✅ WebSocket connected')
+                // console.log('✅ WebSocket connected')
                 this.isConnected = true
                 this.reconnectAttempts = 0
                 this.emit('connection', { connected: true })
@@ -76,7 +76,7 @@ class WebSocketService {
             }
             
             this.ws.onclose = (event) => {
-                console.log('🔌 WebSocket disconnected:', event.code, event.reason)
+                // console.log('🔌 WebSocket disconnected:', event.code, event.reason)
                 this.isConnected = false
                 this.emit('connection', { connected: false })
                 
@@ -99,7 +99,7 @@ class WebSocketService {
         this.reconnectAttempts++
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
         
-        console.log(`🔄 Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
+        // console.log(`🔄 Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
         
         setTimeout(() => {
             if (this.shouldReconnect) {
@@ -109,7 +109,7 @@ class WebSocketService {
     }
 
     private handleMessage(message: WebSocketMessage): void {
-        console.log('📨 WebSocket message received:', message.type, message.data)
+        // console.log('📨 WebSocket message received:', message.type, message.data)
         
         // Emit to specific type handlers
         this.emit(message.type, message.data)

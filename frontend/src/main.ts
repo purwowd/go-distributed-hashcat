@@ -93,38 +93,38 @@ class DashboardApplication {
     // Initialize the entire application
     public async init(): Promise<void> {
         if (this.isInitialized) {
-            console.log('⚠️ Application already initialized, skipping...')
+            // console.log('⚠️ Application already initialized, skipping...')
             return
         }
 
         try {
-            console.log('🚀 Initializing Dashboard Application...')
-            console.log('📍 Current DOM state:', document.body.innerHTML.length, 'characters')
+            // console.log('🚀 Initializing Dashboard Application...')
+            // console.log('📍 Current DOM state:', document.body.innerHTML.length, 'characters')
             perf.startTimer('app-initialization')
 
             // 1. Wait for Alpine.js CDN to be available
-            console.log('⏳ Waiting for Alpine.js to be available...')
+            // console.log('⏳ Waiting for Alpine.js to be available...')
             await this.waitForAlpine()
-            console.log('✅ Alpine.js CDN is available')
+            // console.log('✅ Alpine.js CDN is available')
 
             // 2. Initialize Alpine.js data BEFORE any DOM changes
             this.initializeAlpine()
-            console.log('✅ Alpine.js data registered')
+            // console.log('✅ Alpine.js data registered')
             
             // 3. Setup body with Alpine data BEFORE starting Alpine
             this.setupAlpineOnBody()
-            console.log('✅ Alpine.js body setup complete')
+            // console.log('✅ Alpine.js body setup complete')
 
             // 4. Start Alpine.js BEFORE component injection
             if (!window.alpineManuallyStarted && window.Alpine && typeof window.Alpine.start === 'function') {
                 try {
                     window.alpineManuallyStarted = true
-                    console.log('🚀 Starting Alpine.js manually...')
+                    // console.log('🚀 Starting Alpine.js manually...')
                     window.Alpine.start()
-                    console.log('✅ Alpine.js started successfully')
+                    // console.log('✅ Alpine.js started successfully')
                 } catch (error) {
                     window.alpineManuallyStarted = false
-                    console.error('❌ Alpine start failed:', error instanceof Error ? error.message : String(error))
+                    // console.error('❌ Alpine start failed:', error instanceof Error ? error.message : String(error))
                     throw error
                 }
             } else {
@@ -142,10 +142,10 @@ class DashboardApplication {
 
             this.isInitialized = true
             perf.endTimer('app-initialization')
-            console.log('✅ Dashboard Application initialized successfully')
-            console.log('📍 Final DOM state:', document.body.innerHTML.length, 'characters')
-            console.log('📊 Body classes:', document.body.className)
-            console.log('🔍 Main containers:', document.querySelectorAll('main').length)
+            // console.log('✅ Dashboard Application initialized successfully')
+            // console.log('📍 Final DOM state:', document.body.innerHTML.length, 'characters')
+            // console.log('📊 Body classes:', document.body.className)
+            // console.log('🔍 Main containers:', document.querySelectorAll('main').length)
 
         } catch (error) {
             console.error('❌ Failed to initialize dashboard:', error)
@@ -177,7 +177,7 @@ class DashboardApplication {
      */
     private async loadComponents(): Promise<void> {
         try {
-            console.log('📦 Loading HTML components...')
+            // console.log('📦 Loading HTML components...')
             perf.startTimer('component-loading')
             
             // Load all components in parallel with proper paths
@@ -208,7 +208,7 @@ class DashboardApplication {
             await this.injectComponents()
             
             perf.endTimer('component-loading')
-            console.log('✅ HTML components loaded successfully')
+            // console.log('✅ HTML components loaded successfully')
         } catch (error) {
             console.error('❌ Failed to load components:', error)
             throw error
@@ -219,12 +219,12 @@ class DashboardApplication {
      * Inject loaded components into the DOM
      */
     private async injectComponents(): Promise<void> {
-        console.log('🔧 Starting component injection...')
+        // console.log('🔧 Starting component injection...')
         
         // Find main container or create it
         let mainContainer = document.querySelector('main.container-modern')
         if (!mainContainer) {
-            console.log('📦 Creating main container...')
+            // console.log('📦 Creating main container...')
             // Create main container if it doesn't exist
             mainContainer = document.createElement('main')
             mainContainer.className = 'container-modern'
@@ -234,9 +234,9 @@ class DashboardApplication {
         }
 
         // Load navigation
-        console.log('🧭 Loading navigation component...')
+        // console.log('🧭 Loading navigation component...')
         const navigation = await componentLoader.loadComponent('layout/navigation')
-        console.log('✅ Navigation loaded:', navigation.length, 'characters')
+        // console.log('✅ Navigation loaded:', navigation.length, 'characters')
         
         const navigationContainer = document.createElement('div')
         navigationContainer.innerHTML = navigation
@@ -245,16 +245,16 @@ class DashboardApplication {
         const navElement = navigationContainer.querySelector('nav')
         if (navElement) {
             document.body.insertBefore(navElement, mainContainer)
-            console.log('✅ Navigation injected into DOM')
+            // console.log('✅ Navigation injected into DOM')
         } else {
             console.error('❌ Failed to find nav element in navigation component')
-            console.log('📝 Navigation content preview:', navigation.substring(0, 200) + '...')
+            // console.log('📝 Navigation content preview:', navigation.substring(0, 200) + '...')
         }
 
         // Load breadcrumb component
-        console.log('🗂️ Loading breadcrumb component...')
+        // console.log('🗂️ Loading breadcrumb component...')
         const breadcrumb = await componentLoader.loadComponent('ui/breadcrumb')
-        console.log('✅ Breadcrumb loaded:', breadcrumb.length, 'characters')
+        // console.log('✅ Breadcrumb loaded:', breadcrumb.length, 'characters')
         
         const breadcrumbContainer = document.createElement('div')
         breadcrumbContainer.innerHTML = breadcrumb
@@ -263,7 +263,7 @@ class DashboardApplication {
         const breadcrumbElement = breadcrumbContainer.querySelector('nav')
         if (breadcrumbElement) {
             document.body.insertBefore(breadcrumbElement, mainContainer)
-            console.log('✅ Breadcrumb injected into DOM')
+            // console.log('✅ Breadcrumb injected into DOM')
         } else {
             console.error('❌ Failed to find nav element in breadcrumb component')
         }
@@ -286,7 +286,7 @@ class DashboardApplication {
             const element = container.querySelector('section, div, article') || container.firstElementChild
             if (element && element.tagName !== 'SCRIPT') {
                 mainContainer.appendChild(element)
-                console.log(`✅ Injected ${component} component`)
+                // console.log(`✅ Injected ${component} component`)
             } else {
                 console.warn(`❌ Failed to inject ${component} component`)
             }
@@ -308,7 +308,7 @@ class DashboardApplication {
             const element = container.querySelector('div[x-data], [x-show]') || container.querySelector('div') || container.firstElementChild
             if (element && element.tagName !== 'SCRIPT') {
                 document.body.appendChild(element)
-                console.log(`✅ Injected ${component} modal`)
+                // console.log(`✅ Injected ${component} modal`)
             } else {
                 console.warn(`❌ Failed to inject ${component} modal`)
             }
@@ -328,7 +328,7 @@ class DashboardApplication {
             const element = container.querySelector('div, section') || container.firstElementChild
             if (element && element.tagName !== 'SCRIPT') {
                 document.body.appendChild(element)
-                console.log(`✅ Injected ${component} UI component`)
+                // console.log(`✅ Injected ${component} UI component`)
             } else {
                 console.warn(`❌ Failed to inject ${component} UI component`)
             }
@@ -454,7 +454,7 @@ class DashboardApplication {
 
             // Methods
             async init() {
-                console.log('🔄 Initializing Alpine.js dashboard data...')
+                // console.log('🔄 Initializing Alpine.js dashboard data...')
                 this.isAlpineInitialized = true
                 
                 // Setup router listener
@@ -470,7 +470,7 @@ class DashboardApplication {
                 
                 try {
                     await this.loadInitialData()
-                    console.log('🎉 Dashboard initialization complete')
+                    // console.log('🎉 Dashboard initialization complete')
                 } catch (error) {
                     console.error('❌ Dashboard initialization failed:', error)
                     this.showNotification('Failed to initialize dashboard', 'error')
@@ -514,7 +514,7 @@ class DashboardApplication {
                     this.reactiveWordlists = state.wordlists || []
                 })
                 
-                console.log('📡 Store subscriptions setup for reactive UI updates')
+                // console.log('📡 Store subscriptions setup for reactive UI updates')
             },
 
             // NEW: Setup WebSocket subscriptions for real-time updates
@@ -534,21 +534,21 @@ class DashboardApplication {
                 
                 // Job progress updates
                 webSocketService.onJobProgress((update) => {
-                    console.log('📊 Real-time job progress:', update)
+                    // console.log('📊 Real-time job progress:', update)
                     // Refresh jobs data to get latest state
                     jobStore.actions.fetchJobs()
                 })
                 
                 // Job status changes (start, stop, complete, etc.)
                 webSocketService.onJobStatus((update) => {
-                    console.log('🎯 Real-time job status:', update)
+                    // console.log('🎯 Real-time job status:', update)
                     // Refresh jobs data
                     jobStore.actions.fetchJobs()
                 })
                 
                 // Agent status updates
                 webSocketService.onAgentStatus((update) => {
-                    console.log('🤖 Real-time agent status:', update)
+                    // console.log('🤖 Real-time agent status:', update)
                     // Refresh agents data to get latest state
                     agentStore.actions.fetchAgents()
                 })
@@ -558,13 +558,13 @@ class DashboardApplication {
                     this.showNotification(notification.message, notification.type || 'info')
                 })
                 
-                console.log('🌐 WebSocket subscriptions setup for real-time updates')
+                // console.log('🌐 WebSocket subscriptions setup for real-time updates')
             },
 
             async loadInitialData() {
                 try {
                     this.isLoading = true
-                    console.log('🔄 Loading initial data...')
+                    // console.log('🔄 Loading initial data...')
                     
                     // Add timeout to prevent infinite loading
                     const timeout = new Promise((_, reject) => 
@@ -604,13 +604,13 @@ class DashboardApplication {
                         console.warn('Failed to load cache stats:', err)
                     })
                     
-                    console.log('✅ Initial data loaded successfully')
+                    // console.log('✅ Initial data loaded successfully')
                 } catch (error) {
                     console.error('❌ Failed to load initial data:', error)
                     this.showNotification('Failed to load data. Please refresh the page.', 'error')
                 } finally {
                     this.isLoading = false
-                    console.log('🏁 Loading state reset to false')
+                    // console.log('🏁 Loading state reset to false')
                 }
             },
 
@@ -746,6 +746,22 @@ class DashboardApplication {
                 }
             },
 
+            // Extract password from job result safely
+            extractPassword(result: string | null | undefined): string {
+                if (!result || typeof result !== 'string') {
+                    return ''
+                }
+                if (result.includes('Password found:')) {
+                    return result.replace('Password found: ', '').trim()
+                }
+                return result
+            },
+
+            // Check if job has found password
+            hasFoundPassword(result: string | null | undefined): boolean {
+                return !!(result && typeof result === 'string' && result.includes('Password found:'))
+            },
+
             showNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
                 const notification = {
                     id: Date.now(),
@@ -843,24 +859,46 @@ class DashboardApplication {
             async createJob(jobData: any) {
                 try {
                     this.isLoading = true
+                    
+                    // Get wordlist name for backend requirement
+                    const selectedWordlist = this.wordlists.find((w: any) => w.id === jobData.wordlist_id)
+                    const wordlistName = selectedWordlist ? (selectedWordlist.orig_name || selectedWordlist.name) : 'unknown.txt'
+                    
                     // Enhanced job creation with agent assignment
                     const jobPayload = {
                         name: jobData.name,
                         hash_type: parseInt(jobData.hash_type),
                         attack_mode: parseInt(jobData.attack_mode),
                         hash_file_id: jobData.hash_file_id,
-                        wordlist_id: jobData.wordlist_id,
-                        agent_id: jobData.agent_id || undefined // Include agent assignment if specified
+                        wordlist: wordlistName,                    // Required field for backend
+                        wordlist_id: jobData.wordlist_id,         // Optional reference ID
+                        agent_id: jobData.agent_id || undefined   // Include agent assignment if specified
                     }
+                    
+                    // Validate required fields before sending
+                    if (!jobPayload.name || !jobPayload.hash_file_id || !jobPayload.wordlist || 
+                        jobPayload.hash_type === undefined || jobPayload.attack_mode === undefined) {
+                        this.showNotification('Please fill in all required fields', 'error')
+                        return
+                    }
+                    
+                    console.log('Creating job with payload:', jobPayload)  // Debug log
                     
                     const result = await jobStore.actions.createJob(jobPayload)
                     if (result) {
                         this.showNotification('Job created successfully!', 'success')
                         this.showJobModal = false
                         this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' }
+                        
+                        // Refresh jobs list to show the new job
+                        await jobStore.actions.fetchJobs()
+                    } else {
+                        this.showNotification('Failed to create job - server returned null', 'error')
                     }
                 } catch (error) {
-                    this.showNotification('Failed to create job', 'error')
+                    console.error('Job creation error:', error)
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+                    this.showNotification(`Failed to create job: ${errorMessage}`, 'error')
                 } finally {
                     this.isLoading = false
                 }
@@ -1132,7 +1170,7 @@ class DashboardApplication {
                     const stats = await apiService.getCacheStats()
                     if (stats) {
                         this.cacheStats = stats
-                        console.log('📊 Cache stats refreshed:', stats)
+                        // console.log('📊 Cache stats refreshed:', stats)
                         this.showNotification('Cache stats refreshed', 'info')
                     } else {
                         console.warn('No cache stats received from API')

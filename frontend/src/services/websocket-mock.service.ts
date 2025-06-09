@@ -11,7 +11,7 @@ class MockWebSocketService {
         if (this.isActive) return
         
         this.isActive = true
-        console.log('🎭 Starting mock WebSocket service for demo...')
+        // console.log('🎭 Starting mock WebSocket service for demo...')
         
         // Simulate connection after short delay
         setTimeout(() => {
@@ -34,7 +34,7 @@ class MockWebSocketService {
             this.intervalId = null
         }
         this.isActive = false
-        console.log('🎭 Stopped mock WebSocket service')
+        // console.log('🎭 Stopped mock WebSocket service')
     }
     
     private startMockJobUpdates(): void {
@@ -120,11 +120,11 @@ export const mockWebSocketService = new MockWebSocketService()
 
 // Auto-start in development mode (DISABLED - using real backend now)
 if (import.meta.env.MODE === 'development' && import.meta.env.VITE_USE_MOCK === 'true') {
-    console.log('🎭 Mock WebSocket service will auto-start in development mode')
+    // console.log('🎭 Mock WebSocket service will auto-start in development mode')
     // Start after a short delay to allow proper initialization
     setTimeout(() => {
         mockWebSocketService.start()
     }, 3000)
 } else {
-    console.log('🎭 Mock WebSocket service disabled - using real backend')
+    // console.log('🎭 Mock WebSocket service disabled - using real backend')
 } 

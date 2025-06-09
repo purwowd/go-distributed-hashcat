@@ -96,7 +96,16 @@ class ApiService {
             })
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+                try {
+                    const errorData = await response.json()
+                    if (errorData.error) {
+                        errorMessage = `${errorMessage} - ${errorData.error}`
+                    }
+                } catch (e) {
+                    // If response isn't JSON, use default message
+                }
+                throw new Error(errorMessage)
             }
 
             const data = await response.json()

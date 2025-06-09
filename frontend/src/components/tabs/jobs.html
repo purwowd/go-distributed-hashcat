@@ -43,13 +43,13 @@
                 </div>
                 
                 <!-- Password Result -->
-                <div x-show="job.result && job.result.includes('Password found:')" class="mb-3 p-2 bg-yellow-50 rounded-lg">
+                <div x-show="hasFoundPassword(job.result)" class="mb-3 p-2 bg-yellow-50 rounded-lg">
                     <div class="flex items-center text-yellow-700 font-medium text-xs mb-1">
                         <i class="fas fa-key text-yellow-500 mr-1"></i>
                         Password Found:
                     </div>
                     <div class="text-gray-800 font-mono text-xs break-all" 
-                         x-text="job.result.replace('Password found: ', '')"></div>
+                         x-text="extractPassword(job.result)"></div>
                 </div>
                 
                 <!-- Progress Bar -->
@@ -148,15 +148,15 @@
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <div x-show="job.result && job.result.includes('Password found:')" class="text-xs">
+                                <div x-show="hasFoundPassword(job.result)" class="text-xs">
                                     <div class="flex items-center text-yellow-700 font-medium mb-1">
                                         <i class="fas fa-key text-yellow-500 mr-1"></i>
                                         Found:
                                     </div>
                                     <div class="text-gray-800 font-mono bg-yellow-50 px-2 py-1 rounded text-xs break-all max-w-32" 
-                                         x-text="job.result.replace('Password found: ', '')"></div>
+                                         x-text="extractPassword(job.result)"></div>
                                 </div>
-                                <div x-show="job.result && !job.result.includes('Password found:')" class="text-xs text-gray-600">
+                                <div x-show="job.result && !hasFoundPassword(job.result)" class="text-xs text-gray-600">
                                     <span x-text="job.result || 'No result yet'">Result</span>
                                 </div>
                                 <div x-show="!job.result" class="text-xs text-gray-400">

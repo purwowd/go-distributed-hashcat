@@ -38,13 +38,13 @@ export class ComponentLoader {
 
         if (path) {
             try {
-                console.log(`🔄 Fetching component ${name} from: ${path}`)
+                // console.log(`🔄 Fetching component ${name} from: ${path}`)
                 const response = await fetch(path)
-                console.log(`📡 Response for ${name}: ${response.status} ${response.statusText}`)
+                // console.log(`📡 Response for ${name}: ${response.status} ${response.statusText}`)
                 
                 if (response.ok) {
                     const html = await response.text()
-                    console.log(`✅ Component ${name} loaded: ${html.length} characters`)
+                    // console.log(`✅ Component ${name} loaded: ${html.length} characters`)
                     this.cacheComponent(name, html)
                     
                     // Dispatch component loaded event
@@ -104,7 +104,7 @@ export class ComponentLoader {
             })
 
             this.isLoaded = true
-            console.log('✅ Dashboard components loaded successfully')
+            // console.log('✅ Dashboard components loaded successfully')
         } catch (error) {
             console.error('Failed to initialize dashboard components:', error)
         }

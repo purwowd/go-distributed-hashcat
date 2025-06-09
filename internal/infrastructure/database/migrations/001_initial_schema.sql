@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     hash_file TEXT NOT NULL,
     hash_file_id TEXT,
     wordlist TEXT NOT NULL,
+    wordlist_id TEXT,
     rules TEXT,
     agent_id TEXT,
     progress REAL DEFAULT 0,
@@ -60,7 +61,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     started_at DATETIME,
     completed_at DATETIME,
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
-    FOREIGN KEY (hash_file_id) REFERENCES hash_files(id) ON DELETE SET NULL
+    FOREIGN KEY (hash_file_id) REFERENCES hash_files(id) ON DELETE SET NULL,
+    FOREIGN KEY (wordlist_id) REFERENCES wordlists(id) ON DELETE SET NULL
 );
 
 -- +migrate Down

@@ -113,7 +113,7 @@ export class ComponentRegistry {
         this.config.components.forEach(component => {
             this.registeredComponents.set(component.name, component)
         })
-        console.log(`📦 Registered ${this.registeredComponents.size} components for ${this.config.mode} mode`)
+        // console.log(`📦 Registered ${this.registeredComponents.size} components for ${this.config.mode} mode`)
     }
 
     public getComponent(name: string): ComponentConfig | undefined {
@@ -139,7 +139,7 @@ export class ComponentRegistry {
     // Dynamic component registration
     public registerComponent(component: ComponentConfig): void {
         this.registeredComponents.set(component.name, component)
-        console.log(`🔧 Dynamically registered component: ${component.name}`)
+        // console.log(`🔧 Dynamically registered component: ${component.name}`)
     }
 
     // Unregister component
@@ -167,7 +167,7 @@ export class PerformanceMonitor {
         this.metrics.delete(name)
         
         if (getConfig().features.performanceMonitoring) {
-            console.log(`⏱️ ${name}: ${duration.toFixed(2)}ms`)
+            // console.log(`⏱️ ${name}: ${duration.toFixed(2)}ms`)
         }
         
         return duration

@@ -42,7 +42,7 @@ func (r *jobRepository) prepareStatements() {
 	var err error
 
 	r.getByIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules,
+		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
 		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
 		FROM jobs WHERE id = ? LIMIT 1
 	`)
@@ -51,7 +51,7 @@ func (r *jobRepository) prepareStatements() {
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules,
+		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
 		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
 		FROM jobs ORDER BY created_at DESC LIMIT 100
 	`)
@@ -60,7 +60,7 @@ func (r *jobRepository) prepareStatements() {
 	}
 
 	r.getByStatusStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules,
+		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
 		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
 		FROM jobs WHERE status = ? ORDER BY created_at DESC LIMIT 50
 	`)
@@ -69,7 +69,7 @@ func (r *jobRepository) prepareStatements() {
 	}
 
 	r.getByAgentIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules,
+		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
 		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
 		FROM jobs WHERE agent_id = ? ORDER BY created_at DESC LIMIT 20
 	`)
@@ -79,7 +79,7 @@ func (r *jobRepository) prepareStatements() {
 
 	r.updateStmt, err = r.db.DB().Prepare(`
 		UPDATE jobs SET 
-		name = ?, status = ?, hash_type = ?, attack_mode = ?, hash_file = ?, hash_file_id = ?, wordlist = ?, rules = ?,
+		name = ?, status = ?, hash_type = ?, attack_mode = ?, hash_file = ?, hash_file_id = ?, wordlist = ?, wordlist_id = ?, rules = ?,
 		agent_id = ?, progress = ?, speed = ?, eta = ?, result = ?, updated_at = ?, started_at = ?, completed_at = ?
 		WHERE id = ?
 	`)
@@ -105,9 +105,9 @@ func (r *jobRepository) prepareStatements() {
 
 func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error {
 	query := `
-		INSERT INTO jobs (id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, rules, 
+		INSERT INTO jobs (id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules, 
 		                  agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	now := time.Now()
@@ -124,6 +124,12 @@ func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error {
 	if job.HashFileID != nil {
 		hashFileIDStr := job.HashFileID.String()
 		hashFileID = &hashFileIDStr
+	}
+
+	var wordlistID *string
+	if job.WordlistID != nil {
+		wordlistIDStr := job.WordlistID.String()
+		wordlistID = &wordlistIDStr
 	}
 
 	var eta *time.Time
@@ -150,6 +156,7 @@ func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error {
 		job.HashFile,
 		hashFileID,
 		job.Wordlist,
+		wordlistID,
 		job.Rules,
 		agentID,
 		job.Progress,
@@ -261,7 +268,7 @@ func (r *jobRepository) GetAvailableJobForAgent(ctx context.Context, agentID uui
 	// Query for pending jobs assigned to this agent
 	query := `
 		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, 
-		       wordlist, rules, agent_id, progress, speed, eta, result, 
+		       wordlist, wordlist_id, rules, agent_id, progress, speed, eta, result, 
 		       created_at, updated_at, started_at, completed_at
 		FROM jobs 
 		WHERE agent_id = ? AND status = 'pending'
@@ -296,6 +303,12 @@ func (r *jobRepository) Update(ctx context.Context, job *domain.Job) error {
 		hashFileID = &hashFileIDStr
 	}
 
+	var wordlistID *string
+	if job.WordlistID != nil {
+		wordlistIDStr := job.WordlistID.String()
+		wordlistID = &wordlistIDStr
+	}
+
 	_, err := r.updateStmt.ExecContext(ctx,
 		job.Name,
 		job.Status,
@@ -304,6 +317,7 @@ func (r *jobRepository) Update(ctx context.Context, job *domain.Job) error {
 		job.HashFile,
 		hashFileID,
 		job.Wordlist,
+		wordlistID,
 		job.Rules,
 		agentID,
 		job.Progress,
@@ -395,6 +409,7 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 	var idStr string
 	var agentIDStr sql.NullString
 	var hashFileIDStr sql.NullString
+	var wordlistIDStr sql.NullString
 	var eta sql.NullTime
 	var startedAt sql.NullTime
 	var completedAt sql.NullTime
@@ -408,6 +423,7 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 		&job.HashFile,
 		&hashFileIDStr,
 		&job.Wordlist,
+		&wordlistIDStr,
 		&job.Rules,
 		&agentIDStr,
 		&job.Progress,
@@ -439,6 +455,11 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 		job.HashFileID = &hashFileID
 	}
 
+	if wordlistIDStr.Valid {
+		wordlistID := uuid.MustParse(wordlistIDStr.String)
+		job.WordlistID = &wordlistID
+	}
+
 	if eta.Valid {
 		job.ETA = &eta.Time
 	}
@@ -462,6 +483,7 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 		var idStr string
 		var agentIDStr sql.NullString
 		var hashFileIDStr sql.NullString
+		var wordlistIDStr sql.NullString
 		var eta sql.NullTime
 		var startedAt sql.NullTime
 		var completedAt sql.NullTime
@@ -475,6 +497,7 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 			&job.HashFile,
 			&hashFileIDStr,
 			&job.Wordlist,
+			&wordlistIDStr,
 			&job.Rules,
 			&agentIDStr,
 			&job.Progress,
@@ -500,6 +523,11 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 		if hashFileIDStr.Valid {
 			hashFileID := uuid.MustParse(hashFileIDStr.String)
 			job.HashFileID = &hashFileID
+		}
+
+		if wordlistIDStr.Valid {
+			wordlistID := uuid.MustParse(wordlistIDStr.String)
+			job.WordlistID = &wordlistID
 		}
 
 		if eta.Valid {
