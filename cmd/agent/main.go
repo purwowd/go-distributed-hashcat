@@ -588,6 +588,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	}
 
 	// Build hashcat command
+	outfile := filepath.Join(filepath.Dir(localHashFile), "cracked.txt")
 	args := []string{
 		"-m", strconv.Itoa(job.HashType),
 		"-a", strconv.Itoa(job.AttackMode),
@@ -597,6 +598,8 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		"--status",
 		"--status-timer=5",
 		"--potfile-disable",
+		"--outfile", outfile,
+		"--outfile-format", "2", // Format: hash:plain
 	}
 
 	if job.Rules != "" {
@@ -745,27 +748,25 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 }
 
 func (a *Agent) extractPassword(hashFile string, hashType int) (string, error) {
-	// Use hashcat --show to extract the cracked password
-	cmd := exec.Command("hashcat", "-m", strconv.Itoa(hashType), hashFile, "--show")
+	// Read password from outfile created during cracking
+	outfile := filepath.Join(filepath.Dir(hashFile), "cracked.txt")
 
-	output, err := cmd.Output()
+	content, err := os.ReadFile(outfile)
 	if err != nil {
-		return "", fmt.Errorf("failed to run hashcat --show: %w", err)
+		return "", fmt.Errorf("failed to read outfile %s: %w", outfile, err)
 	}
 
-	// Parse output format: hash:password
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	// Parse output format: plain password (one per line)
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, ":") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				password := strings.TrimSpace(parts[1])
-				return password, nil
-			}
+		line = strings.TrimSpace(line)
+		if line != "" {
+			// Return first non-empty password found
+			return line, nil
 		}
 	}
 
-	return "", fmt.Errorf("no password found in output")
+	return "", fmt.Errorf("no password found in outfile")
 }
 
 func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
