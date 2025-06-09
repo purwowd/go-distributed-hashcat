@@ -368,9 +368,8 @@ class DashboardApplication {
             // Form data
             agentForm: {
                 name: '',
-                ip_address: '',
-                port: 8080,
-                capabilities: ''
+                endpoint: '',
+                gpu_info: ''
             },
             jobForm: {
                 name: '',
@@ -624,7 +623,7 @@ class DashboardApplication {
             // Modal actions
             async openAgentModal() {
                 this.showAgentModal = true
-                this.agentForm = { name: '', ip_address: '', port: 8080, capabilities: '' }
+                this.agentForm = { name: '', endpoint: '', gpu_info: '' }
             },
             
             closeAgentModal() {
