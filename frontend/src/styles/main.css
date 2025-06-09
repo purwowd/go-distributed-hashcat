@@ -141,6 +141,10 @@
 .animate-stagger-4 { animation-delay: 0.4s; }
 .animate-stagger-5 { animation-delay: 0.5s; }
 
+.animate-slide-in {
+  animation: slide-in-right 0.3s ease-out;
+}
+
 /* Modern button components */
 @layer components {
   .btn-primary {
@@ -321,6 +325,10 @@
 
   .icon-info {
     @apply bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700;
+  }
+
+  .icon-purple {
+    @apply bg-gradient-to-br from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700;
   }
 
   /* Modern modal with blur backdrop */
@@ -1114,19 +1122,207 @@ body {
     overflow-x: auto;
     cursor: pointer;
     transition: all 0.2s ease;
+    white-space: pre-wrap;
+    line-height: 1.2;
+    max-height: 300px;
+    min-height: 120px;
+    overflow-y: auto;
+    border: 1px solid #374151;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
 }
 
 .code-block:hover {
     background: #374151;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    border-color: #4b5563;
+    transform: translateY(-1px);
 }
 
 .code-block.success {
     color: #10b981;
+    border-color: #059669;
+    background: linear-gradient(135deg, #1f2937 0%, #065f46 100%);
 }
 
 .code-block.info {
     color: #06b6d4;
+    border-color: #0891b2;
+    background: linear-gradient(135deg, #1f2937 0%, #164e63 100%);
+}
+
+/* Custom scrollbar for code blocks */
+.code-block::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.code-block::-webkit-scrollbar-track {
+    background: #374151;
+    border-radius: 4px;
+}
+
+.code-block::-webkit-scrollbar-thumb {
+    background: #6b7280;
+    border-radius: 4px;
+}
+
+.code-block::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+.code-block::-webkit-scrollbar-corner {
+    background: #374151;
+}
+
+/* Copy indicator for code blocks */
+.code-block {
+    position: relative;
+}
+
+.code-block::before {
+    content: "📋 Click to copy";
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: rgba(0, 0, 0, 0.7);
+    color: #9ca3af;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+}
+
+.code-block:hover::before {
+    opacity: 1;
+}
+
+.code-block.copied::before {
+    content: "✅ Copied!";
+    color: #10b981;
+    opacity: 1;
+}
+
+/* Language indicator */
+.code-block[data-lang]::after {
+    content: attr(data-lang);
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Basic syntax highlighting for bash */
+.code-block .comment {
+    color: #6b7280;
+    font-style: italic;
+}
+
+.code-block .command {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+.code-block .flag {
+    color: #8b5cf6;
+}
+
+.code-block .string {
+    color: #10b981;
+}
+
+.code-block .variable {
+    color: #06b6d4;
+}
+
+.code-block .operator {
+    color: #f87171;
+}
+
+/* Enhanced code block variants */
+.code-block.bash {
+    border-left: 4px solid #f59e0b;
+}
+
+.code-block.yaml {
+    border-left: 4px solid #8b5cf6;
+}
+
+.code-block.json {
+    border-left: 4px solid #06b6d4;
+}
+
+.code-block.shell {
+    border-left: 4px solid #10b981;
+}
+
+/* Loading state for code blocks */
+.code-block.loading {
+    background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+    background-size: 200% 100%;
+    animation: loading-shimmer 2s infinite;
+    color: transparent;
+}
+
+@keyframes loading-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Code block focus states */
+.code-block:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Enhanced hover animations */
+.code-block {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+.code-block:active {
+    transform: translateY(0);
+    transition: transform 0.1s ease;
+}
+
+/* Success animation after copy */
+@keyframes copy-success {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.code-block.copy-success {
+    animation: copy-success 0.6s ease;
+    border-color: #10b981;
 }
 
 /* API Documentation specific styles */
@@ -1176,6 +1372,26 @@ body {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     color: var(--primary-color);
     font-weight: 600;
+}
+
+.step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin-right: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.step-number:hover {
+    transform: scale(1.1);
 }
 
 /* Animations */
@@ -1277,6 +1493,14 @@ body {
     .btn-danger {
         padding: 0.6rem 1rem;
         font-size: 0.8rem;
+    }
+    
+    .code-block {
+        font-size: 0.75rem;
+        padding: 0.75rem;
+        min-height: 100px;
+        max-height: 250px;
+        line-height: 1.3;
     }
     
     .icon-modern {

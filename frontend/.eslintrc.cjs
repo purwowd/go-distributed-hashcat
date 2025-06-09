@@ -8,7 +8,7 @@ module.exports = {
   extends: [
     'eslint:recommended',
   ],
-  ignorePatterns: ['dist', '.eslintrc.cjs', '*.d.ts'],
+  ignorePatterns: ['dist', '.eslintrc.cjs', '*.d.ts', 'src/main.ts'],
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',

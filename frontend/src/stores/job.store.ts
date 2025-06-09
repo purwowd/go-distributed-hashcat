@@ -162,6 +162,36 @@ class JobStore {
             }
         },
 
+        pauseJob: async (id: string): Promise<boolean> => {
+            try {
+                const success = await apiService.pauseJob(id)
+                if (success) {
+                    await this.actions.fetchJob(id) // Refresh job status
+                }
+                return success
+            } catch (error) {
+                this.setState({ 
+                    error: error instanceof Error ? error.message : 'Failed to pause job' 
+                })
+                return false
+            }
+        },
+
+        resumeJob: async (id: string): Promise<boolean> => {
+            try {
+                const success = await apiService.resumeJob(id)
+                if (success) {
+                    await this.actions.fetchJob(id) // Refresh job status
+                }
+                return success
+            } catch (error) {
+                this.setState({ 
+                    error: error instanceof Error ? error.message : 'Failed to resume job' 
+                })
+                return false
+            }
+        },
+
         clearError: (): void => {
             this.setState({ error: null })
         },
@@ -193,19 +223,24 @@ class JobStore {
             return this.state.jobs.filter(job => job.status === 'failed')
         },
 
+        getPausedJobs: (): Job[] => {
+            return this.state.jobs.filter(job => job.status === 'paused')
+        },
+
         getJobById: (id: string): Job | undefined => {
             return this.state.jobs.find(job => job.id === id)
+        },
+
+        getJobsByAgentId: (agentId: string): Job[] => {
+            return this.state.jobs.filter(job => job.agent_id === agentId)
         },
 
         getTotalCount: (): number => {
             return this.state.jobs.length
         },
 
-        getStatusCounts: (): Record<string, number> => {
-            return this.state.jobs.reduce((counts, job) => {
-                counts[job.status] = (counts[job.status] || 0) + 1
-                return counts
-            }, {} as Record<string, number>)
+        getJobsWithProgress: (): Job[] => {
+            return this.state.jobs.filter(job => job.progress !== undefined && job.progress > 0)
         }
     }
 }

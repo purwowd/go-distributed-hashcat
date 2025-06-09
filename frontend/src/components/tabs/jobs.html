@@ -1,8 +1,8 @@
-<!-- Jobs Tab -->
+<!-- Jobs Tab - Modern & Compact -->
 <section x-show="currentTab === 'jobs'" class="section-modern animate-fade-in">
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div>
-            <h2 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Job Management</h2>
+            <h2 class="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Job Management</h2>
             <p class="text-gray-600">Create and monitor cracking jobs across your distributed agents</p>
         </div>
         <button @click="openJobModal()" class="btn-primary">
@@ -10,81 +10,78 @@
         </button>
     </div>
     
-    <!-- Mobile Jobs View -->
-    <div class="block sm:hidden space-y-4">
+    <!-- Mobile Jobs View - Compact -->
+    <div class="block sm:hidden space-y-3">
         <template x-for="job in jobs" :key="job.id">
-            <div class="card-modern p-6">
-                <div class="flex justify-between items-start mb-4">
+            <div class="card-modern p-4">
+                <div class="flex justify-between items-start mb-3">
                     <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-tasks text-sm"></i>
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white">
+                            <i class="fas fa-tasks text-xs"></i>
                         </div>
                         <div>
-                            <h3 class="font-semibold text-gray-900" x-text="job.name">Job Name</h3>
-                            <p class="text-sm text-gray-500" x-text="job.hash_file_name || 'No file selected'">Hash File</p>
+                            <h3 class="font-semibold text-gray-900 text-sm" x-text="job.name">Job Name</h3>
                         </div>
                     </div>
-                    <span class="status-indicator" 
-                          :class="job.status === 'running' ? 'status-busy' : 
-                                 job.status === 'completed' ? 'status-online' : 
-                                 job.status === 'failed' ? 'status-offline' : 'status-pending'"
+                    <span class="text-xs px-2 py-1 rounded-full" 
+                          :class="job.status === 'running' ? 'bg-green-100 text-green-700' : 
+                                 job.status === 'completed' ? 'bg-blue-100 text-blue-700' : 
+                                 job.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'"
                           x-text="job.status">Status</span>
                 </div>
                 
-                <div class="space-y-3 mb-6">
-                    <div class="flex items-center text-sm text-gray-600">
-                        <i class="fas fa-list text-green-500 mr-3 w-4"></i>
-                        <span x-text="job.wordlist_name || 'No wordlist selected'">Wordlist</span>
+                <!-- Compact Info Grid -->
+                <div class="grid grid-cols-2 gap-2 mb-3 text-xs">
+                    <div class="flex items-center text-gray-600">
+                        <i class="fas fa-list text-green-500 mr-2 w-3"></i>
+                        <span x-text="job.wordlist_name || 'No wordlist'">Wordlist</span>
                     </div>
-                    <div class="flex items-center text-sm text-gray-600">
-                        <i class="fas fa-server text-blue-500 mr-3 w-4"></i>
+                    <div class="flex items-center text-gray-600">
+                        <i class="fas fa-server text-blue-500 mr-2 w-3"></i>
                         <span x-text="job.agent_name || 'Unassigned'">Agent</span>
-                    </div>
-                    <!-- NEW: Password Result -->
-                    <div x-show="job.result && job.result.includes('Password found:')" class="flex items-start text-sm">
-                        <i class="fas fa-key text-yellow-500 mr-3 w-4 mt-0.5"></i>
-                        <div class="flex-1">
-                            <div class="text-yellow-700 font-medium">Password Found:</div>
-                            <div class="text-gray-800 font-mono bg-yellow-50 px-2 py-1 rounded mt-1 break-all" 
-                                 x-text="job.result.replace('Password found: ', '')"></div>
-                        </div>
-                    </div>
-                    <div x-show="job.result && !job.result.includes('Password found:')" class="flex items-center text-sm text-gray-600">
-                        <i class="fas fa-info-circle text-gray-400 mr-3 w-4"></i>
-                        <span x-text="job.result || 'No result yet'">Result</span>
                     </div>
                 </div>
                 
+                <!-- Password Result -->
+                <div x-show="job.result && job.result.includes('Password found:')" class="mb-3 p-2 bg-yellow-50 rounded-lg">
+                    <div class="flex items-center text-yellow-700 font-medium text-xs mb-1">
+                        <i class="fas fa-key text-yellow-500 mr-1"></i>
+                        Password Found:
+                    </div>
+                    <div class="text-gray-800 font-mono text-xs break-all" 
+                         x-text="job.result.replace('Password found: ', '')"></div>
+                </div>
+                
                 <!-- Progress Bar -->
-                <div class="mb-6">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-sm font-medium text-gray-700">Progress</span>
-                        <span class="text-sm font-medium text-gray-700" x-text="`${job.progress || 0}%`">0%</span>
+                <div class="mb-3">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-medium text-gray-700">Progress</span>
+                        <span class="text-xs font-medium text-gray-700" x-text="`${job.progress || 0}%`">0%</span>
                     </div>
-                    <div class="progress-modern">
-                        <div class="progress-bar" :style="`width: ${job.progress || 0}%`"></div>
+                    <div class="progress-modern h-1.5">
+                        <div class="progress-bar h-1.5" :style="`width: ${job.progress || 0}%`"></div>
                     </div>
-                    <!-- NEW: Speed and ETA Info -->
-                    <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex justify-between items-center mt-2 text-xs text-gray-500">
-                        <span x-show="job.speed" x-text="`Speed: ${formatNumber(job.speed || 0)} H/s`"></span>
+                    <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex justify-between items-center mt-1 text-xs text-gray-500">
+                        <span x-show="job.speed" x-text="`${formatNumber(job.speed || 0)} H/s`"></span>
                         <span x-show="job.eta" x-text="`ETA: ${formatDate(job.eta)}`"></span>
                     </div>
                 </div>
                 
-                <div class="flex space-x-3">
+                <!-- Compact Actions -->
+                <div class="flex space-x-2">
                     <button @click="startJob(job.id)" 
                             :disabled="job.status === 'running'"
                             :class="job.status === 'running' ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-success'"
-                            class="flex-1 text-sm py-2">
-                        <i class="fas fa-play mr-2"></i>Start
+                            class="flex-1 text-xs py-2">
+                        <i class="fas fa-play mr-1"></i>Start
                     </button>
                     <button @click="pauseJob(job.id)" 
                             :disabled="job.status !== 'running'"
                             :class="job.status !== 'running' ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-warning'"
-                            class="flex-1 text-sm py-2">
-                        <i class="fas fa-pause mr-2"></i>Pause
+                            class="flex-1 text-xs py-2">
+                        <i class="fas fa-pause mr-1"></i>Pause
                     </button>
-                    <button @click="deleteJob(job.id)" class="btn-danger text-sm py-2 px-4">
+                    <button @click="deleteJob(job.id)" class="btn-danger text-xs py-2 px-3">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -92,109 +89,101 @@
         </template>
     </div>
     
-    <!-- Desktop Jobs Table -->
+    <!-- Desktop Jobs Table - Compact -->
     <div class="hidden sm:block table-modern">
         <div class="overflow-x-auto">
             <table class="min-w-full">
                 <thead class="table-header">
                     <tr>
-                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Job Details</th>
-                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
-                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Progress</th>
-                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Resources</th>
-                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Agent</th>
-                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Result</th>
-                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Actions</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Job Details</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Progress</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Resources</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Result</th>
+                        <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="job in jobs" :key="job.id">
                         <tr class="table-row">
-                            <td class="px-6 py-4">
+                            <td class="px-4 py-3">
                                 <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
-                                        <i class="fas fa-tasks text-sm"></i>
+                                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white">
+                                        <i class="fas fa-tasks text-xs"></i>
                                     </div>
                                     <div>
-                                        <div class="font-semibold text-gray-900" x-text="job.name">Job Name</div>
-                                        <div class="text-sm text-gray-500 flex items-center mt-1">
-                                            <i class="fas fa-file-alt mr-1"></i>
-                                            <span x-text="job.hash_file_name || 'No file'">Hash File</span>
-                                        </div>
+                                        <div class="font-semibold text-gray-900 text-sm" x-text="job.name">Job Name</div>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4">
-                                <span class="status-indicator" 
-                                      :class="job.status === 'running' ? 'status-busy' : 
-                                             job.status === 'completed' ? 'status-online' : 
-                                             job.status === 'failed' ? 'status-offline' : 'status-pending'"
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full" 
+                                      :class="job.status === 'running' ? 'bg-green-100 text-green-700' : 
+                                             job.status === 'completed' ? 'bg-blue-100 text-blue-700' : 
+                                             job.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'"
                                       x-text="job.status">Status</span>
                             </td>
-                            <td class="px-6 py-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="progress-modern w-24">
-                                        <div class="progress-bar" :style="`width: ${job.progress || 0}%`"></div>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center space-x-2">
+                                    <div class="progress-modern w-20 h-1.5">
+                                        <div class="progress-bar h-1.5" :style="`width: ${job.progress || 0}%`"></div>
                                     </div>
-                                    <span class="text-sm font-medium text-gray-700" x-text="`${job.progress || 0}%`">0%</span>
+                                    <span class="text-xs font-medium text-gray-700" x-text="`${job.progress || 0}%`">0%</span>
                                 </div>
-                                <!-- NEW: Speed and ETA for desktop -->
-                                <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex items-center space-x-3 mt-1">
+                                <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex items-center space-x-2 mt-1">
                                     <span x-show="job.speed" class="text-xs text-gray-500" x-text="`${formatNumber(job.speed || 0)} H/s`"></span>
                                     <span x-show="job.eta" class="text-xs text-blue-600" x-text="`ETA: ${formatDate(job.eta)}`"></span>
                                 </div>
                             </td>
-                            <td class="px-6 py-4">
-                                <div class="text-sm text-gray-600 flex items-center">
-                                    <i class="fas fa-list text-green-500 mr-2"></i>
-                                    <span x-text="job.wordlist_name || 'No wordlist'">Wordlist</span>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4">
-                                <div class="text-sm text-gray-600 flex items-center">
-                                    <i class="fas fa-server text-blue-500 mr-2"></i>
-                                    <span x-text="job.agent_name || 'Unassigned'">Agent</span>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4">
-                                <!-- Password Result Column -->
-                                <div x-show="job.result && job.result.includes('Password found:')" class="text-sm">
-                                    <div class="flex items-center text-yellow-700 font-medium mb-1">
-                                        <i class="fas fa-key text-yellow-500 mr-2"></i>
-                                        Password Found:
+                            <td class="px-4 py-3">
+                                <div class="space-y-1">
+                                    <div class="text-xs text-gray-600 flex items-center">
+                                        <i class="fas fa-list text-green-500 mr-1 w-3"></i>
+                                        <span x-text="job.wordlist_name || 'No wordlist'">Wordlist</span>
                                     </div>
-                                    <div class="text-gray-800 font-mono bg-yellow-50 px-2 py-1 rounded text-xs break-all max-w-xs" 
+                                    <div class="text-xs text-gray-600 flex items-center">
+                                        <i class="fas fa-server text-blue-500 mr-1 w-3"></i>
+                                        <span x-text="job.agent_name || 'Unassigned'">Agent</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div x-show="job.result && job.result.includes('Password found:')" class="text-xs">
+                                    <div class="flex items-center text-yellow-700 font-medium mb-1">
+                                        <i class="fas fa-key text-yellow-500 mr-1"></i>
+                                        Found:
+                                    </div>
+                                    <div class="text-gray-800 font-mono bg-yellow-50 px-2 py-1 rounded text-xs break-all max-w-32" 
                                          x-text="job.result.replace('Password found: ', '')"></div>
                                 </div>
-                                <div x-show="job.result && !job.result.includes('Password found:')" class="text-sm text-gray-600 flex items-center">
-                                    <i class="fas fa-info-circle text-gray-400 mr-2"></i>
+                                <div x-show="job.result && !job.result.includes('Password found:')" class="text-xs text-gray-600">
                                     <span x-text="job.result || 'No result yet'">Result</span>
                                 </div>
-                                <div x-show="!job.result" class="text-sm text-gray-400">
-                                    <i class="fas fa-clock mr-2"></i>
+                                <div x-show="!job.result" class="text-xs text-gray-400">
+                                    <i class="fas fa-clock mr-1"></i>
                                     Pending...
                                 </div>
                             </td>
-                            <td class="px-6 py-4">
-                                <div class="flex items-center justify-center space-x-2">
+                            <td class="px-4 py-3">
+                                <div class="flex items-center justify-center space-x-1">
                                     <button @click="startJob(job.id)" 
                                             :disabled="job.status === 'running'"
                                             :class="job.status === 'running' ? 'text-gray-400 cursor-not-allowed' : 'text-green-600 hover:text-green-800'"
-                                            class="p-2 rounded-lg hover:bg-green-50 transition-colors duration-200" 
+                                            class="p-1.5 rounded hover:bg-green-50 transition-colors duration-200" 
                                             title="Start Job">
-                                        <i class="fas fa-play"></i>
+                                        <i class="fas fa-play text-xs"></i>
                                     </button>
                                     <button @click="pauseJob(job.id)" 
                                             :disabled="job.status !== 'running'"
                                             :class="job.status !== 'running' ? 'text-gray-400 cursor-not-allowed' : 'text-amber-600 hover:text-amber-800'"
-                                            class="p-2 rounded-lg hover:bg-amber-50 transition-colors duration-200" 
+                                            class="p-1.5 rounded hover:bg-amber-50 transition-colors duration-200" 
                                             title="Pause Job">
-                                        <i class="fas fa-pause"></i>
+                                        <i class="fas fa-pause text-xs"></i>
                                     </button>
                                     <button @click="deleteJob(job.id)" 
-                                            class="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors duration-200"
+                                            class="text-red-600 hover:text-red-800 p-1.5 rounded hover:bg-red-50 transition-colors duration-200"
                                             title="Delete Job">
-                                        <i class="fas fa-trash"></i>
+                                        <i class="fas fa-trash text-xs"></i>
                                     </button>
                                 </div>
                             </td>
@@ -204,12 +193,13 @@
             </table>
         </div>
         
-        <div x-show="jobs.length === 0" class="text-center py-16">
-            <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-6">
-                <i class="fas fa-tasks text-3xl text-gray-400"></i>
+        <!-- Empty State - Compact -->
+        <div x-show="jobs.length === 0" class="text-center py-12">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-tasks text-2xl text-gray-400"></i>
             </div>
-            <h3 class="text-xl font-semibold text-gray-900 mb-2">No Jobs Yet</h3>
-            <p class="text-gray-500 mb-6">Create your first cracking job to get started</p>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">No Jobs Yet</h3>
+            <p class="text-gray-500 mb-4">Create your first cracking job to get started</p>
             <button @click="openJobModal()" class="btn-primary">
                 <i class="fas fa-plus mr-2"></i>Create First Job
             </button>

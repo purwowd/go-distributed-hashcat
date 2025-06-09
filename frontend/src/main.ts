@@ -5,6 +5,8 @@ import { router } from './utils/router'
 
 // Import all services and stores
 import { apiService } from './services/api.service'
+import { webSocketService } from './services/websocket.service'
+// import './services/websocket-mock.service' // Auto-start mock in development (DISABLED)
 import { agentStore } from './stores/agent.store'
 import { jobStore } from './stores/job.store'
 import { fileStore } from './stores/file.store'
@@ -40,7 +42,7 @@ interface Agent {
 interface Job {
     id: string
     name: string
-    status: 'pending' | 'running' | 'completed' | 'failed'
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'paused' | 'cancelled'
     progress?: number
     hash_file_name?: string
     hash_file_id?: string
@@ -49,6 +51,16 @@ interface Job {
     agent_name?: string
     agent_id?: string
     created_at: string
+    updated_at?: string
+    started_at?: string
+    completed_at?: string
+    // NEW: Missing backend fields
+    hash_type?: number
+    attack_mode?: number
+    rules?: string
+    speed?: number
+    eta?: string
+    result?: string
     command?: string
 }
 
@@ -372,11 +384,11 @@ class DashboardApplication {
         // Global dashboard data and methods  
         const self = this
         window.Alpine.data('dashboardApp', () => ({
-            currentTab: router.getCurrentRoute(), // Initialize from router
+            // Reactive state
+            currentTab: router.getCurrentRoute(),
             isLoading: false,
-            notifications: [] as Array<{id: number, message: string, type: string, timestamp: Date}>,
             isAlpineInitialized: false,
-            cacheStats: null as any, // Add cache stats property
+            notifications: [] as any[],
             
             // Modal states
             showAgentModal: false,
@@ -384,48 +396,46 @@ class DashboardApplication {
             showFileModal: false,
             showWordlistModal: false,
             
-            // Form data
-            agentForm: {
-                name: '',
-                endpoint: '',
-                gpu_info: ''
-            },
-            jobForm: {
-                name: '',
-                hash_file_id: '',
-                wordlist_id: '',
-                hash_type: '',
-                attack_mode: '',
-                agent_id: ''
-            },
-            fileForm: {
-                file: null as File | null
-            },
-            wordlistForm: {
-                file: null as File | null
-            },
+            // Form states
+            agentForm: { name: '', ip_address: '', port: 8080, capabilities: '' },
+            jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' },
+            fileForm: { file: null },
+            wordlistForm: { file: null },
             
-            // Other data
+            // Command template for job creation
             commandTemplate: '',
-            notification: {
-                show: false,
-                type: 'info',
-                message: ''
+            
+            // Manual loading reset (fallback)
+            forceStopLoading() {
+                this.isLoading = false
+                console.log('🛑 Loading force stopped by user')
             },
             
-            // Data from stores with safe defaults
+            // Cache stats (if needed)
+            cacheStats: null as any,
+            
+            // WebSocket connection status
+            wsConnected: false,
+            wsConnectionAttempts: 0,
+            
+            // Reactive data arrays - these will be updated by store subscriptions
+            reactiveAgents: [] as any[],
+            reactiveJobs: [] as any[],
+            reactiveHashFiles: [] as any[],
+            reactiveWordlists: [] as any[],
+
+            // Getters that return reactive data
             get agents() { 
-                return agentStore.getState().agents || []
+                return this.reactiveAgents || []
             },
             get jobs() { 
-                return jobStore.getState().jobs || []
+                return this.reactiveJobs || []
             },
             get hashFiles() { 
-                return fileStore.getState().hashFiles || []
+                return this.reactiveHashFiles || []
             },
             get wordlists() { 
-                const state = wordlistStore.getState()
-                return state.wordlists || []
+                return this.reactiveWordlists || []
             },
             
             // Computed properties with safe checks
@@ -436,6 +446,10 @@ class DashboardApplication {
             get runningJobs() {
                 const jobs = this.jobs
                 return Array.isArray(jobs) ? jobs.filter((job: any) => job.status === 'running') : []
+            },
+            get pendingJobs() {
+                const jobs = this.jobs
+                return Array.isArray(jobs) ? jobs.filter((job: any) => job.status === 'pending') : []
             },
 
             // Methods
@@ -448,23 +462,155 @@ class DashboardApplication {
                     this.currentTab = route
                 })
                 
-                await this.loadInitialData()
+                // Setup store subscriptions for reactivity
+                this.setupStoreSubscriptions()
+                
+                // Setup WebSocket for real-time updates
+                this.setupWebSocketSubscriptions()
+                
+                try {
+                    await this.loadInitialData()
+                    console.log('🎉 Dashboard initialization complete')
+                } catch (error) {
+                    console.error('❌ Dashboard initialization failed:', error)
+                    this.showNotification('Failed to initialize dashboard', 'error')
+                }
+                
                 this.setupPolling()
+                
+                // Safety timeout to prevent infinite loading
+                setTimeout(() => {
+                    if (this.isLoading) {
+                        console.warn('⚠️ Loading timeout reached, forcing stop')
+                        this.forceStopLoading()
+                        this.showNotification('Loading took too long. Data may be incomplete.', 'warning')
+                    }
+                }, 15000) // 15 second safety timeout
+            },
+
+            // NEW: Setup store subscriptions for reactive updates
+            setupStoreSubscriptions() {
+                // Subscribe to agent store changes
+                agentStore.subscribe(() => {
+                    const state = agentStore.getState()
+                    this.reactiveAgents = state.agents || []
+                })
+                
+                // Subscribe to job store changes
+                jobStore.subscribe(() => {
+                    const state = jobStore.getState()
+                    this.reactiveJobs = state.jobs || []
+                })
+                
+                // Subscribe to file store changes
+                fileStore.subscribe(() => {
+                    const state = fileStore.getState()
+                    this.reactiveHashFiles = state.hashFiles || []
+                })
+                
+                // Subscribe to wordlist store changes
+                wordlistStore.subscribe(() => {
+                    const state = wordlistStore.getState()
+                    this.reactiveWordlists = state.wordlists || []
+                })
+                
+                console.log('📡 Store subscriptions setup for reactive UI updates')
+            },
+
+            // NEW: Setup WebSocket subscriptions for real-time updates
+            setupWebSocketSubscriptions() {
+                // Connection status monitoring
+                webSocketService.onConnection((status) => {
+                    this.wsConnected = status.connected
+                    if (status.connected) {
+                        this.showNotification('🔗 Real-time updates connected', 'success')
+                        // Subscribe to all updates when connected
+                        webSocketService.subscribeToJobs()
+                        webSocketService.subscribeToAgents()
+                    } else {
+                        this.showNotification('🔌 Real-time updates disconnected', 'warning')
+                    }
+                })
+                
+                // Job progress updates
+                webSocketService.onJobProgress((update) => {
+                    console.log('📊 Real-time job progress:', update)
+                    // Refresh jobs data to get latest state
+                    jobStore.actions.fetchJobs()
+                })
+                
+                // Job status changes (start, stop, complete, etc.)
+                webSocketService.onJobStatus((update) => {
+                    console.log('🎯 Real-time job status:', update)
+                    // Refresh jobs data
+                    jobStore.actions.fetchJobs()
+                })
+                
+                // Agent status updates
+                webSocketService.onAgentStatus((update) => {
+                    console.log('🤖 Real-time agent status:', update)
+                    // Refresh agents data to get latest state
+                    agentStore.actions.fetchAgents()
+                })
+                
+                // Real-time notifications
+                webSocketService.onNotification((notification) => {
+                    this.showNotification(notification.message, notification.type || 'info')
+                })
+                
+                console.log('🌐 WebSocket subscriptions setup for real-time updates')
             },
 
             async loadInitialData() {
                 try {
                     this.isLoading = true
-                    await Promise.all([
-                        agentStore.actions.fetchAgents(),
-                        jobStore.actions.fetchJobs(),
-                        fileStore.actions.fetchHashFiles(),
-                        wordlistStore.actions.fetchWordlists()
+                    console.log('🔄 Loading initial data...')
+                    
+                    // Add timeout to prevent infinite loading
+                    const timeout = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Loading timeout')), 10000)
+                    )
+                    
+                    // Load with timeout protection
+                    await Promise.race([
+                        timeout,
+                        Promise.all([
+                            agentStore.actions.fetchAgents().catch(err => {
+                                console.warn('Failed to load agents:', err)
+                                return []
+                            }),
+                            fileStore.actions.fetchHashFiles().catch(err => {
+                                console.warn('Failed to load hash files:', err)
+                                return []
+                            }),
+                            wordlistStore.actions.fetchWordlists().catch(err => {
+                                console.warn('Failed to load wordlists:', err)
+                                return []
+                            })
+                        ])
                     ])
+                    
+                    // Load jobs with separate timeout
+                    await Promise.race([
+                        timeout,
+                        jobStore.actions.fetchJobs().catch(err => {
+                            console.warn('Failed to load jobs:', err)
+                            return []
+                        })
+                    ])
+                    
+                    // Load cache stats
+                    await this.refreshCacheStats().catch(err => {
+                        console.warn('Failed to load cache stats:', err)
+                    })
+                    
+                    console.log('✅ Initial data loaded successfully')
                 } catch (error) {
-                    console.error('Failed to load initial data:', error)
+                    console.error('❌ Failed to load initial data:', error)
+                    this.showNotification('Failed to load data. Please refresh the page.', 'error')
                 } finally {
                     this.isLoading = false
+                    console.log('🏁 Loading state reset to false')
                 }
             },
 
@@ -600,7 +746,7 @@ class DashboardApplication {
                 }
             },
 
-            showNotification(message: string, type: 'success' | 'error' | 'info' = 'info') {
+            showNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
                 const notification = {
                     id: Date.now(),
                     message,
@@ -619,11 +765,30 @@ class DashboardApplication {
                 this.notifications = this.notifications.filter((n: any) => n.id !== id)
             },
 
-            copyToClipboard(text: string) {
-                navigator.clipboard.writeText(text).then(() => {
-                    this.showNotification('Copied to clipboard!', 'success')
+            copyToClipboard(text: string, element?: HTMLElement) {
+                // Clean the text - remove language indicators and copy prompts
+                const cleanText = text
+                    .replace(/^📋.*$/gm, '')  // Remove copy indicators
+                    .replace(/^✅.*$/gm, '')  // Remove success indicators  
+                    .replace(/^\s*bash\s*$/gm, '') // Remove language labels
+                    .replace(/^\s*shell\s*$/gm, '')
+                    .replace(/^\s*yaml\s*$/gm, '')
+                    .trim()
+
+                navigator.clipboard.writeText(cleanText).then(() => {
+                    // Enhanced visual feedback
+                    if (element) {
+                        element.classList.add('copied', 'copy-success')
+                        setTimeout(() => {
+                            element.classList.remove('copied')
+                        }, 2000)
+                        setTimeout(() => {
+                            element.classList.remove('copy-success')
+                        }, 600)
+                    }
+                    this.showNotification('Code copied to clipboard!', 'success')
                 }).catch(() => {
-                    this.showNotification('Failed to copy', 'error')
+                    this.showNotification('Failed to copy to clipboard', 'error')
                 })
             },
 
@@ -649,7 +814,7 @@ class DashboardApplication {
             // Modal actions
             async openAgentModal() {
                 this.showAgentModal = true
-                this.agentForm = { name: '', endpoint: '', gpu_info: '' }
+                this.agentForm = { name: '', ip_address: '', port: 8080, capabilities: '' }
             },
             
             closeAgentModal() {
@@ -668,7 +833,7 @@ class DashboardApplication {
 
             async openJobModal() {
                 this.showJobModal = true
-                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', agent_id: '' }
+                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' }
             },
             
             closeJobModal() {
@@ -692,7 +857,7 @@ class DashboardApplication {
                     if (result) {
                         this.showNotification('Job created successfully!', 'success')
                         this.showJobModal = false
-                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', agent_id: '' }
+                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' }
                     }
                 } catch (error) {
                     this.showNotification('Failed to create job', 'error')
@@ -719,6 +884,33 @@ class DashboardApplication {
                 this.showWordlistModal = false
             },
 
+            // Update command template based on form inputs
+            updateCommandTemplate() {
+                if (!this.jobForm.hash_type || !this.jobForm.attack_mode || !this.jobForm.hash_file_id || !this.jobForm.wordlist_id) {
+                    this.commandTemplate = 'hashcat command will appear here...'
+                    return
+                }
+
+                // Get file names for display
+                const hashFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                const wordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                
+                const hashFileName = hashFile ? (hashFile.orig_name || hashFile.name) : 'hashfile'
+                const wordlistName = wordlist ? (wordlist.orig_name || wordlist.name) : 'wordlist'
+
+                // Build hashcat command
+                this.commandTemplate = `hashcat -m ${this.jobForm.hash_type} -a ${this.jobForm.attack_mode} ${hashFileName} ${wordlistName}`
+                
+                // Add common optimizations
+                this.commandTemplate += ' -O --force'
+                
+                // Add session name
+                if (this.jobForm.name) {
+                    const sessionName = this.jobForm.name.toLowerCase().replace(/[^a-z0-9]/g, '_')
+                    this.commandTemplate += ` --session=${sessionName}`
+                }
+            },
+
             async startJob(jobId: string) {
                 const success = await jobStore.actions.startJob(jobId)
                 if (success) {
@@ -737,24 +929,88 @@ class DashboardApplication {
                 }
             },
 
-            // File actions
-            async uploadHashFile(file: File) {
-                const result = await fileStore.actions.uploadHashFile(file)
-                if (result) {
-                    this.showNotification('Hash file uploaded successfully!', 'success')
-                    this.closeFileModal()
+            async pauseJob(jobId: string) {
+                const success = await jobStore.actions.pauseJob(jobId)
+                if (success) {
+                    this.showNotification('Job paused successfully!', 'success')
                 } else {
-                    this.showNotification('Failed to upload hash file', 'error')
+                    this.showNotification('Failed to pause job', 'error')
+                }
+            },
+
+            async resumeJob(jobId: string) {
+                const success = await jobStore.actions.resumeJob(jobId)
+                if (success) {
+                    this.showNotification('Job resumed successfully!', 'success')
+                } else {
+                    this.showNotification('Failed to resume job', 'error')
+                }
+            },
+
+            // File actions with enhanced loading states
+            async uploadHashFile(file: File) {
+                if (!file) {
+                    this.showNotification('Please select a file to upload', 'error')
+                    return
+                }
+                
+                try {
+                    this.isLoading = true
+                    this.showNotification(`Uploading ${file.name}...`, 'info')
+                    
+                    const result = await fileStore.actions.uploadHashFile(file)
+                    if (result) {
+                        // Immediate UI update with uploaded file data
+                        await fileStore.actions.fetchHashFiles()
+                        
+                        this.showNotification('Hash file uploaded successfully!', 'success')
+                        this.closeFileModal()
+                        
+                        // Scroll to Files tab if not already there
+                        if (this.currentTab !== 'files') {
+                            await this.switchTab('files')
+                        }
+                    } else {
+                        this.showNotification('Failed to upload hash file', 'error')
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error)
+                    this.showNotification('Upload failed due to network error', 'error')
+                } finally {
+                    this.isLoading = false
                 }
             },
 
             async uploadWordlist(file: File) {
-                const result = await wordlistStore.actions.uploadWordlist(file)
-                if (result) {
-                    this.showNotification('Wordlist uploaded successfully!', 'success')
-                    this.closeWordlistModal()
-                } else {
-                    this.showNotification('Failed to upload wordlist', 'error')
+                if (!file) {
+                    this.showNotification('Please select a file to upload', 'error')
+                    return
+                }
+                
+                try {
+                    this.isLoading = true
+                    this.showNotification(`Uploading ${file.name}...`, 'info')
+                    
+                    const result = await wordlistStore.actions.uploadWordlist(file)
+                    if (result) {
+                        // Immediate UI update with uploaded file data
+                        await wordlistStore.actions.fetchWordlists()
+                        
+                        this.showNotification('Wordlist uploaded successfully!', 'success')
+                        this.closeWordlistModal()
+                        
+                        // Scroll to Wordlists tab if not already there
+                        if (this.currentTab !== 'wordlists') {
+                            await this.switchTab('wordlists')
+                        }
+                    } else {
+                        this.showNotification('Failed to upload wordlist', 'error')
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error)
+                    this.showNotification('Upload failed due to network error', 'error')
+                } finally {
+                    this.isLoading = false
                 }
             },
 
@@ -873,10 +1129,43 @@ class DashboardApplication {
             // NEW: Cache Management Methods
             async refreshCacheStats() {
                 try {
-                    this.cacheStats = await apiService.getCacheStats()
-                    this.showNotification('Cache stats refreshed', 'info')
+                    const stats = await apiService.getCacheStats()
+                    if (stats) {
+                        this.cacheStats = stats
+                        console.log('📊 Cache stats refreshed:', stats)
+                        this.showNotification('Cache stats refreshed', 'info')
+                    } else {
+                        console.warn('No cache stats received from API')
+                        // Keep existing stats or set defaults if null
+                        if (!this.cacheStats) {
+                            this.cacheStats = {
+                                hitRate: 0,
+                                missRate: 0,
+                                queryReduction: 0,
+                                responseSpeedImprovement: 0,
+                                totalRequests: 0,
+                                agents: 0,
+                                wordlists: 0,
+                                hashFiles: 0
+                            }
+                        }
+                    }
                 } catch (error) {
+                    console.error('Failed to refresh cache stats:', error)
                     this.showNotification('Failed to refresh cache stats', 'error')
+                    // Set default values if stats don't exist
+                    if (!this.cacheStats) {
+                        this.cacheStats = {
+                            hitRate: 0,
+                            missRate: 0,
+                            queryReduction: 0,
+                            responseSpeedImprovement: 0,
+                            totalRequests: 0,
+                            agents: 0,
+                            wordlists: 0,
+                            hashFiles: 0
+                        }
+                    }
                 }
             },
 
@@ -897,16 +1186,7 @@ class DashboardApplication {
                 }
             },
 
-            // NEW: Enhanced job methods for better UX
-            async pauseJob(jobId: string) {
-                // Use existing stopJob method for now since pauseJob doesn't exist in the store
-                const success = await jobStore.actions.stopJob(jobId)
-                if (success) {
-                    this.showNotification('Job paused successfully!', 'success')
-                } else {
-                    this.showNotification('Failed to pause job', 'error')
-                }
-            }
+            // Additional job control methods already defined above
         }))
 
         perf.endTimer('alpine-initialization')

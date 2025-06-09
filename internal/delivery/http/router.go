@@ -48,11 +48,15 @@ func NewRouter(
 	hashFileHandler := handler.NewHashFileHandler(hashFileUsecase)
 	wordlistHandler := handler.NewWordlistHandler(wordlistUsecase)
 	cacheHandler := handler.NewCacheHandler(jobEnrichmentService)
+	wsHandler := handler.NewWebSocketHandler()
 
 	// Serve modern frontend (production build)
 	router.Static("/assets", "./frontend/dist/assets")
 	router.StaticFile("/", "./frontend/dist/index.html")
 	router.StaticFile("/index.html", "./frontend/dist/index.html")
+
+	// WebSocket endpoint
+	router.GET("/ws", wsHandler.HandleWebSocket)
 
 	// Health check (optimized)
 	router.OPTIONS("/health", func(c *gin.Context) {
@@ -100,6 +104,7 @@ func NewRouter(
 			jobs.POST("/:id/fail", jobHandler.FailJob)
 			jobs.POST("/:id/pause", jobHandler.PauseJob)
 			jobs.POST("/:id/resume", jobHandler.ResumeJob)
+			jobs.POST("/:id/stop", jobHandler.StopJob)
 			jobs.DELETE("/:id", jobHandler.DeleteJob)
 			jobs.POST("/assign", jobHandler.AssignJobs)
 		}

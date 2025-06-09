@@ -95,6 +95,9 @@ func (h *JobHandler) StartJob(c *gin.Context) {
 		return
 	}
 
+	// Broadcast job status change
+	Hub.BroadcastJobStatus(id.String(), "running", "")
+
 	c.JSON(http.StatusOK, gin.H{"message": "Job started successfully"})
 }
 
@@ -120,6 +123,13 @@ func (h *JobHandler) UpdateJobProgress(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Broadcast real-time progress update
+	eta := ""
+	if req.ETA != nil {
+		eta = *req.ETA
+	}
+	Hub.BroadcastJobProgress(id.String(), req.Progress, req.Speed, eta, "running")
 
 	c.JSON(http.StatusOK, gin.H{"message": "Job progress updated successfully"})
 }
@@ -202,6 +212,23 @@ func (h *JobHandler) ResumeJob(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Job resumed successfully"})
+}
+
+func (h *JobHandler) StopJob(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid job ID"})
+		return
+	}
+
+	// Stop job by setting status to failed with stopped reason
+	if err := h.jobUsecase.FailJob(c.Request.Context(), id, "Job stopped by user"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Job stopped successfully"})
 }
 
 func (h *JobHandler) DeleteJob(c *gin.Context) {

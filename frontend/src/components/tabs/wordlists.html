@@ -1,74 +1,115 @@
-<!-- Wordlists Tab -->
+<!-- Wordlists Tab - Modern & Compact -->
 <section x-show="currentTab === 'wordlists'" class="section-modern animate-fade-in">
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div>
-            <h2 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Wordlist Collection</h2>
-            <p class="text-gray-600">Manage wordlists for dictionary attacks and password cracking</p>
+            <h2 class="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Wordlists</h2>
+            <p class="text-gray-600">Manage dictionary files for password attacks</p>
         </div>
         <button @click="openWordlistModal()" class="btn-primary">
-            <i class="fas fa-upload mr-2"></i>Upload Wordlist
+            <i class="fas fa-plus mr-2"></i>Add Wordlist
         </button>
     </div>
     
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <template x-for="(item, index) in wordlists" :key="item.id || index">
-            <div class="file-card p-6 group">
-                <div class="flex items-center justify-between mb-4">
+    <!-- Loading Skeletons -->
+    <div x-show="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="card-modern p-4 animate-pulse">
+            <div class="flex items-center space-x-3 mb-3">
+                <div class="w-8 h-8 bg-gray-300 rounded-lg"></div>
+                <div class="flex-1">
+                    <div class="h-3 bg-gray-300 rounded mb-1"></div>
+                    <div class="h-2 bg-gray-200 rounded"></div>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="h-2 bg-gray-200 rounded"></div>
+                <div class="h-2 bg-gray-200 rounded w-3/4"></div>
+            </div>
+            <div class="mt-3 h-8 bg-gray-200 rounded"></div>
+        </div>
+        <div class="card-modern p-4 animate-pulse">
+            <div class="flex items-center space-x-3 mb-3">
+                <div class="w-8 h-8 bg-gray-300 rounded-lg"></div>
+                <div class="flex-1">
+                    <div class="h-3 bg-gray-300 rounded mb-1"></div>
+                    <div class="h-2 bg-gray-200 rounded"></div>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="h-2 bg-gray-200 rounded"></div>
+                <div class="h-2 bg-gray-200 rounded w-3/4"></div>
+            </div>
+            <div class="mt-3 h-8 bg-gray-200 rounded"></div>
+        </div>
+        <div class="card-modern p-4 animate-pulse">
+            <div class="flex items-center space-x-3 mb-3">
+                <div class="w-8 h-8 bg-gray-300 rounded-lg"></div>
+                <div class="flex-1">
+                    <div class="h-3 bg-gray-300 rounded mb-1"></div>
+                    <div class="h-2 bg-gray-200 rounded"></div>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="h-2 bg-gray-200 rounded"></div>
+                <div class="h-2 bg-gray-200 rounded w-3/4"></div>
+            </div>
+            <div class="mt-3 h-8 bg-gray-200 rounded"></div>
+        </div>
+    </div>
+    
+    <!-- Wordlists Grid -->
+    <div x-show="!isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="wordlist in wordlists" :key="wordlist.id">
+            <div class="card-modern p-4 group hover:shadow-lg transition-all duration-200">
+                <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center space-x-3">
-                        <div class="file-icon w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg transition-transform duration-300">
-                            <i class="fas fa-list text-lg"></i>
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white">
+                            <i class="fas fa-list text-xs"></i>
                         </div>
-                        <div class="min-w-0 flex-1">
-                            <h3 class="file-name" 
-                                :title="item.name"
-                                x-text="getDisplayName(item).length > 30 ? getDisplayName(item).substring(0, 30) + '...' : getDisplayName(item)">Wordlist Name</h3>
-                            <div class="file-meta">
-                                <span class="file-badge file-badge-wordlist" x-text="getFileTypeBadge(getDisplayName(item))">wordlist</span>
-                                <span x-text="formatFileSize(item.size)">Size</span>
-                                <span x-show="item.word_count" x-text="formatNumber(item.word_count) + ' words'">Words</span>
-                            </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-gray-900 text-sm truncate" x-text="wordlist.orig_name || wordlist.name">Wordlist Name</h3>
+                            <p class="text-xs text-gray-500" x-text="formatFileSize(wordlist.size)">File Size</p>
                         </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-green-600 font-medium" x-text="formatNumber(wordlist.word_count || 0)">0</div>
+                        <div class="text-xs text-gray-500">words</div>
                     </div>
                 </div>
                 
-                <div class="space-y-3 mb-6">
-                    <div class="flex items-center text-sm text-gray-600">
-                        <i class="fas fa-fingerprint text-orange-500 mr-3 w-4"></i>
-                        <span class="text-xs">ID: </span>
-                        <code class="file-id" 
-                              :title="item.id"
-                              x-text="getTruncatedId(item)">ID</code>
+                <div class="space-y-2 mb-3 text-xs">
+                    <div class="flex items-center text-gray-600">
+                        <i class="fas fa-clock text-gray-400 mr-2 w-3"></i>
+                        <span x-text="formatDate(wordlist.created_at)">Upload Date</span>
                     </div>
-                    <div class="flex items-center text-sm text-gray-600">
-                        <i class="fas fa-calendar-plus text-blue-500 mr-3 w-4"></i>
-                        <span x-text="formatDate(item.created_at)">Date Added</span>
-                    </div>
-                    <div class="flex items-center text-sm text-gray-600" x-show="item.word_count">
-                        <i class="fas fa-hashtag text-green-500 mr-3 w-4"></i>
-                        <span class="font-semibold" x-text="formatNumber(item.word_count) + ' entries'">0</span>
+                    <div class="flex items-center text-gray-600">
+                        <i class="fas fa-tag text-gray-400 mr-2 w-3"></i>
+                        <span x-text="wordlist.type || 'General'">Type</span>
                     </div>
                 </div>
                 
-                <div class="flex space-x-3">
-                    <button @click="downloadWordlist(item.id, getDisplayName(item))" class="btn-secondary flex-1 text-sm py-2">
-                        <i class="fas fa-download mr-2"></i>Download
+                <div class="flex space-x-2">
+                    <button @click="downloadWordlist(wordlist.id, wordlist.orig_name || wordlist.name)" 
+                            class="btn-secondary flex-1 text-xs py-2 flex items-center justify-center space-x-1">
+                        <i class="fas fa-download"></i>
+                        <span>Download</span>
                     </button>
-                    <button @click="deleteWordlist(item.id)" class="btn-danger text-sm py-2 px-4">
+                    <button @click="deleteWordlist(wordlist.id)" 
+                            class="btn-danger text-xs py-2 px-3">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
         </template>
         
-        <div x-show="wordlists.length === 0" class="col-span-full text-center py-16">
-            <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-6">
-                <i class="fas fa-list text-3xl text-gray-400"></i>
+        <!-- Empty State -->
+        <div x-show="wordlists.length === 0" class="col-span-full text-center py-12">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-list text-2xl text-gray-400"></i>
             </div>
-            <h3 class="text-xl font-semibold text-gray-900 mb-2">No Wordlists Yet</h3>
-            <p class="text-gray-500 mb-2">Upload wordlists for dictionary attacks</p>
-            <p class="text-sm text-gray-400 mb-6">Popular choices: rockyou.txt, common-passwords.txt, custom wordlists</p>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">No Wordlists Yet</h3>
+            <p class="text-gray-500 mb-4">Add your first wordlist to start dictionary attacks</p>
             <button @click="openWordlistModal()" class="btn-primary">
-                <i class="fas fa-upload mr-2"></i>Upload First Wordlist
+                <i class="fas fa-plus mr-2"></i>Add First Wordlist
             </button>
         </div>
     </div>
