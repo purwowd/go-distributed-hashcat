@@ -556,7 +556,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			if err != nil {
 				return fmt.Errorf("failed to download hash file: %w", err)
 			}
-			defer os.Remove(localHashFile) // Clean up downloaded file
+			// defer os.Remove(localHashFile) // Keep file for debugging/--show command
 			log.Printf("📥 Downloaded hash file: %s", localHashFile)
 		}
 	} else {
@@ -639,8 +639,14 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		return err
 	}
 
-	// Success - password found
-	a.completeJob(job.ID, "Password found")
+	// Success - password found, now capture the actual password
+	password, err := a.extractPassword(localHashFile, job.HashType)
+	if err != nil {
+		log.Printf("⚠️  Failed to extract password: %v", err)
+		a.completeJob(job.ID, "Password found (extraction failed)")
+	} else {
+		a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
+	}
 	return nil
 }
 
@@ -736,6 +742,30 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 
 	log.Printf("Downloaded wordlist to: %s", localPath)
 	return localPath, nil
+}
+
+func (a *Agent) extractPassword(hashFile string, hashType int) (string, error) {
+	// Use hashcat --show to extract the cracked password
+	cmd := exec.Command("hashcat", "-m", strconv.Itoa(hashType), hashFile, "--show")
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run hashcat --show: %w", err)
+	}
+
+	// Parse output format: hash:password
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				password := strings.TrimSpace(parts[1])
+				return password, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no password found in output")
 }
 
 func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
