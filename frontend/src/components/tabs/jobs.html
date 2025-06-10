@@ -37,8 +37,9 @@
                         <span x-text="job.wordlist_name || 'No wordlist'">Wordlist</span>
                     </div>
                     <div class="flex items-center text-gray-600">
-                        <i class="fas fa-server text-blue-500 mr-2 w-3"></i>
-                        <span x-text="job.agent_name || 'Unassigned'">Agent</span>
+                        <i class="fas fa-server mr-2 w-3" :class="job.agent_name && job.agent_name !== 'Unassigned' ? 'text-blue-500' : 'text-orange-500'"></i>
+                        <span :class="job.agent_name && job.agent_name !== 'Unassigned' ? 'text-gray-600' : 'text-orange-600 font-medium'" x-text="job.agent_name || 'Unassigned'">Agent</span>
+                        <i x-show="!job.agent_name || job.agent_name === 'Unassigned'" class="fas fa-exclamation-triangle text-orange-500 ml-1 text-xs"></i>
                     </div>
                 </div>
                 
@@ -70,10 +71,11 @@
                 <!-- Compact Actions -->
                 <div class="flex space-x-2">
                     <button @click="startJob(job.id)" 
-                            :disabled="job.status === 'running'"
-                            :class="job.status === 'running' ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-success'"
+                            :disabled="!canStartJob(job)"
+                            :class="!canStartJob(job) ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-success'"
+                            :title="getStartButtonTooltip(job)"
                             class="flex-1 text-xs py-2">
-                        <i class="fas fa-play mr-1"></i>Start
+                        <i :class="getStartButtonIcon(job) + ' mr-1'"></i><span x-text="getStartButtonText(job)">Start</span>
                     </button>
                     <button @click="pauseJob(job.id)" 
                             :disabled="job.status !== 'running'"
@@ -142,8 +144,9 @@
                                         <span x-text="job.wordlist_name || 'No wordlist'">Wordlist</span>
                                     </div>
                                     <div class="text-xs text-gray-600 flex items-center">
-                                        <i class="fas fa-server text-blue-500 mr-1 w-3"></i>
-                                        <span x-text="job.agent_name || 'Unassigned'">Agent</span>
+                                        <i class="fas fa-server mr-1 w-3" :class="job.agent_name && job.agent_name !== 'Unassigned' ? 'text-blue-500' : 'text-orange-500'"></i>
+                                        <span :class="job.agent_name && job.agent_name !== 'Unassigned' ? 'text-gray-600' : 'text-orange-600 font-medium'" x-text="job.agent_name || 'Unassigned'">Agent</span>
+                                        <i x-show="!job.agent_name || job.agent_name === 'Unassigned'" class="fas fa-exclamation-triangle text-orange-500 ml-1 text-xs"></i>
                                     </div>
                                 </div>
                             </td>
@@ -167,11 +170,11 @@
                             <td class="px-4 py-3">
                                 <div class="flex items-center justify-center space-x-1">
                                     <button @click="startJob(job.id)" 
-                                            :disabled="job.status === 'running'"
-                                            :class="job.status === 'running' ? 'text-gray-400 cursor-not-allowed' : 'text-green-600 hover:text-green-800'"
+                                            :disabled="!canStartJob(job)"
+                                            :class="!canStartJob(job) ? 'text-gray-400 cursor-not-allowed' : 'text-green-600 hover:text-green-800'"
                                             class="p-1.5 rounded hover:bg-green-50 transition-colors duration-200" 
-                                            title="Start Job">
-                                        <i class="fas fa-play text-xs"></i>
+                                            :title="getStartButtonTooltip(job)">
+                                        <i :class="getStartButtonIcon(job) + ' text-xs'"></i>
                                     </button>
                                     <button @click="pauseJob(job.id)" 
                                             :disabled="job.status !== 'running'"

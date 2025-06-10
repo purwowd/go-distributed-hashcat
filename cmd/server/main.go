@@ -299,6 +299,30 @@ func startServer() {
 		Handler: router,
 	}
 
+	// Initialize health monitoring
+	healthConfig := usecase.HealthConfig{
+		CheckInterval:       1 * time.Minute,
+		AgentTimeout:        3 * time.Minute,
+		HeartbeatGrace:      30 * time.Second,
+		MaxConcurrentChecks: 10,
+	}
+
+	// Get WebSocket hub from handler (assuming it's accessible)
+	var wsHub usecase.WebSocketHub
+
+	healthMonitor := usecase.NewAgentHealthMonitor(
+		agentUsecase,
+		wsHub,
+		healthConfig,
+	)
+
+	// Start health monitor
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	healthMonitor.Start(ctx)
+	defer healthMonitor.Stop()
+
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on port %d", config.Server.Port)
@@ -311,16 +335,19 @@ func startServer() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
 
-	// The context is used to inform the server it has 5 seconds to finish
-	// the request it is currently handling
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	log.Println("🛑 Shutting down server...")
 
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+	// Stop health monitor
+	healthMonitor.Stop()
+
+	// Shutdown server with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("❌ Server forced to shutdown: %v", err)
 	}
 
-	log.Println("Server exited")
+	log.Println("✅ Server exited")
 }

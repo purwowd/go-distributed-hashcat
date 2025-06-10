@@ -787,6 +787,38 @@ class DashboardApplication {
                 return !!(result && typeof result === 'string' && result.includes('Password found:'))
             },
 
+            // Helper function to check if job can be started
+            canStartJob(job: any): boolean {
+                return job.status !== 'running' && 
+                       job.status !== 'completed' && 
+                       job.agent_name && 
+                       job.agent_name !== 'Unassigned'
+            },
+
+            // Get start button tooltip
+            getStartButtonTooltip(job: any): string {
+                if (job.status === 'completed') return 'Job already completed'
+                if (!job.agent_name || job.agent_name === 'Unassigned') return 'No agent assigned'
+                if (job.status === 'running') return 'Job is running'
+                if (job.status === 'paused') return 'Resume Job'
+                if (job.status === 'failed') return 'Retry Job'
+                return 'Start Job'
+            },
+
+            // Get start button text based on job status
+            getStartButtonText(job: any): string {
+                if (job.status === 'paused') return 'Resume'
+                if (job.status === 'failed') return 'Retry'
+                return 'Start'
+            },
+
+            // Get start button icon based on job status
+            getStartButtonIcon(job: any): string {
+                if (job.status === 'paused') return 'fas fa-play'
+                if (job.status === 'failed') return 'fas fa-redo'
+                return 'fas fa-play'
+            },
+
             showNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
                 const notification = {
                     id: Date.now(),
@@ -874,7 +906,7 @@ class DashboardApplication {
 
             async openJobModal() {
                 this.showJobModal = true
-                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' }
+                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
             },
             
             closeJobModal() {
@@ -913,7 +945,7 @@ class DashboardApplication {
                     if (result) {
                         this.showNotification('Job created successfully!', 'success')
                         this.showJobModal = false
-                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' }
+                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
                         
                         // Refresh jobs list to show the new job
                         await jobStore.actions.fetchJobs()
@@ -949,7 +981,15 @@ class DashboardApplication {
 
             // Update command template based on form inputs
             updateCommandTemplate() {
-                if (!this.jobForm.hash_type || !this.jobForm.attack_mode || !this.jobForm.hash_file_id || !this.jobForm.wordlist_id) {
+                // Set default values if not set
+                if (!this.jobForm.hash_type) {
+                    this.jobForm.hash_type = '2500'
+                }
+                if (!this.jobForm.attack_mode) {
+                    this.jobForm.attack_mode = '0'
+                }
+                
+                if (!this.jobForm.hash_file_id || !this.jobForm.wordlist_id) {
                     this.commandTemplate = 'hashcat command will appear here...'
                     return
                 }
@@ -961,20 +1001,46 @@ class DashboardApplication {
                 const hashFileName = hashFile ? (hashFile.orig_name || hashFile.name) : 'hashfile'
                 const wordlistName = wordlist ? (wordlist.orig_name || wordlist.name) : 'wordlist'
 
-                // Build hashcat command
-                this.commandTemplate = `hashcat -m ${this.jobForm.hash_type} -a ${this.jobForm.attack_mode} ${hashFileName} ${wordlistName}`
+                // Build hashcat command for WPA/WPA2 Dictionary Attack
+                this.commandTemplate = `hashcat -m 2500 -a 0 ${hashFileName} ${wordlistName}`
                 
-                // Add common optimizations
-                this.commandTemplate += ' -O --force'
+                // Add WPA/WPA2 specific optimizations
+                this.commandTemplate += ' -O --force --status --status-timer=5'
                 
                 // Add session name
                 if (this.jobForm.name) {
                     const sessionName = this.jobForm.name.toLowerCase().replace(/[^a-z0-9]/g, '_')
                     this.commandTemplate += ` --session=${sessionName}`
                 }
+                
+                // Add outfile for WPA/WPA2
+                this.commandTemplate += ' --outfile=cracked.txt --outfile-format=2'
             },
 
             async startJob(jobId: string) {
+                // Find the job to check conditions
+                const job = this.jobs.find(j => j.id === jobId)
+                if (!job) {
+                    this.showNotification('Job not found', 'error')
+                    return
+                }
+
+                // Check if job can be started
+                if (job.status === 'completed') {
+                    this.showNotification('Cannot start completed job', 'warning')
+                    return
+                }
+
+                if (!job.agent_name || job.agent_name === 'Unassigned') {
+                    this.showNotification('Cannot start job: No agent assigned', 'warning')
+                    return
+                }
+
+                if (job.status === 'running') {
+                    this.showNotification('Job is already running', 'warning')
+                    return
+                }
+
                 const success = await jobStore.actions.startJob(jobId)
                 if (success) {
                     this.showNotification('Job started successfully!', 'success')

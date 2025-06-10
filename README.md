@@ -377,8 +377,6 @@ curl http://localhost:1337/api/v1/wordlists/{id}/download
 curl -X POST -H "Content-Type: application/json" \
   -d '{
     "name": "WiFi Crack Job",
-    "hash_type": 2500,
-    "attack_mode": 0,
     "hash_file_id": "uuid-here",
     "wordlist_id": "wordlist-uuid-here"
   }' \

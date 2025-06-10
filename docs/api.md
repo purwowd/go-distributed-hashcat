@@ -297,11 +297,8 @@ Create a new job.
 ```json
 {
   "name": "WiFi Crack Job",
-  "hash_type": 2500,
-  "attack_mode": 0,
   "hash_file_id": "hashfile-uuid",
-  "wordlist_id": "wordlist-uuid",
-  "rules": ""
+  "wordlist_id": "wordlist-uuid"
 }
 ```
 
@@ -743,8 +740,6 @@ curl -X POST http://localhost:1337/api/v1/jobs/ \
   -H "Content-Type: application/json" \
   -d '{
     "name": "WiFi Crack Job",
-    "hash_type": 2500,
-    "attack_mode": 0,
     "hash_file_id": "hashfile-uuid",
     "wordlist_id": "wordlist-uuid"
   }'

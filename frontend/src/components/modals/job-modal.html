@@ -40,12 +40,12 @@
                     <!-- Hash File & Wordlist Row -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1">Hash File <span class="text-red-500">*</span></label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">WiFi Handshake File <span class="text-red-500">*</span></label>
                             <select x-model="jobForm.hash_file_id" 
                                     @change="updateCommandTemplate()" 
                                     required 
                                     class="select-modern">
-                                <option value="">Select hash file</option>
+                                <option value="">Select handshake file (.hccapx)</option>
                                 <template x-for="file in hashFiles" :key="file.id">
                                     <option :value="file.id" x-text="file.orig_name || file.name"></option>
                                 </template>
@@ -69,37 +69,23 @@
                     <!-- Hash Type & Attack Mode Row -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1">Hash Type <span class="text-red-500">*</span></label>
-                            <select x-model="jobForm.hash_type" 
-                                    @change="updateCommandTemplate()" 
-                                    required 
-                                    class="select-modern">
-                                <option value="">Select hash type</option>
-                                <option value="0">MD5</option>
-                                <option value="100">SHA1</option>
-                                <option value="1000">NTLM</option>
-                                <option value="1400">SHA2-256</option>
-                                <option value="1700">SHA2-512</option>
-                                <option value="2500">WPA/WPA2</option>
-                                <option value="22000">WPA/WPA2/PMKID</option>
-                                <option value="3200">bcrypt</option>
-                                <option value="1800">sha512crypt</option>
-                            </select>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Hash Type</label>
+                            <div class="input-modern bg-gray-50 cursor-not-allowed flex items-center justify-between">
+                                <span class="text-gray-700">WPA/WPA2</span>
+                                <span class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">2500</span>
+                            </div>
+                            <input type="hidden" x-model="jobForm.hash_type" value="2500">
+                            <p class="text-xs text-gray-500 mt-1">This system is specialized for WPA/WPA2 cracking</p>
                         </div>
                         
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-1">Attack Mode <span class="text-red-500">*</span></label>
-                            <select x-model="jobForm.attack_mode" 
-                                    @change="updateCommandTemplate()" 
-                                    required 
-                                    class="select-modern">
-                                <option value="">Select attack mode</option>
-                                <option value="0">Dictionary Attack</option>
-                                <option value="1">Combinator Attack</option>
-                                <option value="3">Brute-force Attack</option>
-                                <option value="6">Hybrid Wordlist + Mask</option>
-                                <option value="7">Hybrid Mask + Wordlist</option>
-                            </select>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Attack Mode</label>
+                            <div class="input-modern bg-gray-50 cursor-not-allowed flex items-center justify-between">
+                                <span class="text-gray-700">Dictionary Attack</span>
+                                <span class="text-xs text-gray-500 bg-green-100 px-2 py-1 rounded">0</span>
+                            </div>
+                            <input type="hidden" x-model="jobForm.attack_mode" value="0">
+                            <p class="text-xs text-gray-500 mt-1">Uses wordlist to attempt password combinations</p>
                         </div>
                     </div>
                     

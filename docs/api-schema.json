@@ -486,7 +486,7 @@
           "attack_mode": {
             "type": "integer",
             "example": 0,
-            "description": "Attack mode (0 for dictionary)"
+            "description": "Attack mode (fixed to 0 for dictionary attack)"
           },
           "hash_file": {
             "type": "string",
@@ -535,7 +535,7 @@
       },
       "CreateJobRequest": {
         "type": "object",
-        "required": ["name", "hash_type", "attack_mode", "hash_file_id", "wordlist"],
+        "required": ["name", "hash_file_id", "wordlist"],
         "properties": {
           "name": {
             "type": "string",
@@ -544,12 +544,12 @@
           "hash_type": {
             "type": "integer",
             "example": 2500,
-            "description": "Hashcat hash type"
+            "description": "Hashcat hash type (fixed to 2500 for WPA/WPA2)"
           },
           "attack_mode": {
             "type": "integer",
             "example": 0,
-            "description": "Attack mode"
+            "description": "Attack mode (fixed to 0 for dictionary attack)"
           },
           "hash_file_id": {
             "type": "string",

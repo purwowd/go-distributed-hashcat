@@ -1,0 +1,84 @@
+# Health Monitoring Configuration
+health:
+  # Agent Health Monitoring
+  agent_monitoring:
+    enabled: ${HEALTH_MONITORING_ENABLED:true}
+    check_interval: ${HEALTH_CHECK_INTERVAL:1m}      # How often to check agent health
+    agent_timeout: ${AGENT_TIMEOUT:3m}               # When to mark agent as offline
+    heartbeat_grace: ${HEARTBEAT_GRACE:30s}          # Grace period for missed heartbeats
+    max_concurrent_checks: ${MAX_CONCURRENT_CHECKS:10} # Max concurrent health checks
+    
+    # Cleanup policies
+    cleanup:
+      enabled: ${AGENT_CLEANUP_ENABLED:true}
+      offline_threshold: ${OFFLINE_CLEANUP_THRESHOLD:24h}  # Remove agents offline > 24h
+      orphaned_jobs_cleanup: ${ORPHANED_JOBS_CLEANUP:true} # Clean up jobs from offline agents
+      notification_before_cleanup: ${CLEANUP_NOTIFICATION:1h} # Notify before cleanup
+
+  # Circuit Breaker Settings
+  circuit_breaker:
+    enabled: ${CIRCUIT_BREAKER_ENABLED:true}
+    max_failures: ${CB_MAX_FAILURES:3}               # Failures before opening circuit
+    timeout: ${CB_TIMEOUT:30s}                       # Time before retry
+    half_open_max_calls: ${CB_HALF_OPEN_CALLS:1}     # Calls allowed in half-open state
+
+  # Retry Configuration
+  retry:
+    max_retries: ${RETRY_MAX_ATTEMPTS:3}
+    base_delay: ${RETRY_BASE_DELAY:1s}
+    max_delay: ${RETRY_MAX_DELAY:30s}
+    backoff_factor: ${RETRY_BACKOFF_FACTOR:2.0}
+    jitter_enabled: ${RETRY_JITTER:true}
+
+  # Metrics & Observability
+  metrics:
+    enabled: ${HEALTH_METRICS_ENABLED:true}
+    collection_interval: ${METRICS_INTERVAL:30s}
+    retention_period: ${METRICS_RETENTION:7d}
+    
+    # Alerting thresholds
+    alerts:
+      agent_offline_threshold: ${ALERT_OFFLINE_THRESHOLD:5}  # Alert if >5 agents offline
+      heartbeat_failure_rate: ${ALERT_HEARTBEAT_FAILURE:0.1} # Alert if >10% heartbeat failures
+      circuit_breaker_open: ${ALERT_CIRCUIT_OPEN:true}       # Alert on circuit breaker open
+
+  # WebSocket Configuration
+  websocket:
+    ping_interval: ${WS_PING_INTERVAL:30s}
+    pong_timeout: ${WS_PONG_TIMEOUT:10s}
+    write_timeout: ${WS_WRITE_TIMEOUT:10s}
+    read_timeout: ${WS_READ_TIMEOUT:60s}
+    max_message_size: ${WS_MAX_MESSAGE:512}
+
+# Environment-specific overrides
+environments:
+  development:
+    health:
+      agent_monitoring:
+        check_interval: 30s
+        agent_timeout: 2m
+      circuit_breaker:
+        max_failures: 2
+        timeout: 15s
+      
+  production:
+    health:
+      agent_monitoring:
+        check_interval: 2m
+        agent_timeout: 5m
+        max_concurrent_checks: 20
+      circuit_breaker:
+        max_failures: 5
+        timeout: 60s
+      retry:
+        max_retries: 5
+        max_delay: 60s
+        
+  testing:
+    health:
+      agent_monitoring:
+        check_interval: 10s
+        agent_timeout: 30s
+      circuit_breaker:
+        max_failures: 1
+        timeout: 5s 

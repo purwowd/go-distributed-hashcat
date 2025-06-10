@@ -904,8 +904,6 @@ curl -X DELETE http://localhost:1337/api/v1/agents/{agent-id}
                     <div class="code-block">
 {
   "name": "WiFi WPA2 Crack Job",
-  "hash_type": 2500,
-  "attack_mode": 0,
   "hash_file_id": "uuid-of-uploaded-hash-file",
   "wordlist": "rockyou.txt"
 }
@@ -913,14 +911,15 @@ curl -X DELETE http://localhost:1337/api/v1/agents/{agent-id}
                 </div>
 
                 <div class="p-4 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg">
-                    <h6 class="font-medium text-blue-800 mb-2">Common Hash Types:</h6>
-                    <div class="grid grid-cols-2 gap-2 text-blue-700 text-sm">
-                        <div><strong>0:</strong> MD5</div>
-                        <div><strong>100:</strong> SHA1</div>
-                        <div><strong>1400:</strong> SHA256</div>
-                        <div><strong>2500:</strong> WPA/WPA2</div>
-                        <div><strong>22000:</strong> WPA-PBKDF2-PMKID+EAPOL</div>
-                        <div><strong>3200:</strong> bcrypt</div>
+                    <h6 class="font-medium text-blue-800 mb-2">Supported Hash Type:</h6>
+                    <div class="text-blue-700 text-sm">
+                        <div class="p-3 bg-blue-100 rounded-lg border border-blue-200">
+                            <div class="flex items-center justify-between">
+                                <span><strong>2500:</strong> WPA/WPA2</span>
+                                <span class="text-xs bg-blue-600 text-white px-2 py-1 rounded">Primary</span>
+                            </div>
+                            <p class="text-xs text-blue-600 mt-1">This system is specialized for WiFi WPA/WPA2 handshake cracking</p>
+                        </div>
                     </div>
                 </div>
                 
@@ -934,8 +933,6 @@ curl -X DELETE http://localhost:1337/api/v1/agents/{agent-id}
 curl -X POST -H "Content-Type: application/json" \
   -d '{
     "name": "WiFi Crack Job",
-    "hash_type": 2500,
-    "attack_mode": 0,
     "hash_file_id": "123e4567-e89b-12d3-a456-426614174000",
     "wordlist": "rockyou.txt"
   }' \
@@ -1362,8 +1359,6 @@ curl -X POST -F "file=@rockyou.txt" \
 curl -X POST -H "Content-Type: application/json" \
   -d '{
     "name": "WiFi Network Crack",
-    "hash_type": 2500,
-    "attack_mode": 0,
     "hash_file_id": "your-hash-file-uuid",
     "wordlist": "rockyou.txt"
   }' \
