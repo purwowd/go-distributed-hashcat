@@ -597,8 +597,10 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		}
 	}
 
-	// Build hashcat command
-	outfile := filepath.Join(filepath.Dir(localHashFile), "cracked.txt")
+	// Build hashcat command with UUID-based outfile
+	tempDir := filepath.Join(a.UploadDir, "temp")
+	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", job.ID.String()))
+	log.Printf("📁 Outfile will be: %s", outfile)
 	args := []string{
 		"-m", strconv.Itoa(job.HashType),
 		"-a", strconv.Itoa(job.AttackMode),
@@ -646,20 +648,26 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			if exitCode == 1 {
 				// Exhausted - not an error
 				a.completeJob(job.ID, "Password not found - exhausted")
+				a.cleanupJobFiles(job.ID)
 				return nil
 			}
 		}
+		// Cleanup on other errors too
+		a.cleanupJobFiles(job.ID)
 		return err
 	}
 
 	// Success - password found, now capture the actual password
-	password, err := a.extractPassword(localHashFile)
+	password, err := a.extractPassword(job.ID)
 	if err != nil {
 		log.Printf("⚠️  Failed to extract password: %v", err)
 		a.completeJob(job.ID, "Password found (extraction failed)")
 	} else {
 		a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
 	}
+
+	// Cleanup outfile after job completion
+	a.cleanupJobFiles(job.ID)
 	return nil
 }
 
@@ -757,9 +765,10 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 	return localPath, nil
 }
 
-func (a *Agent) extractPassword(hashFile string) (string, error) {
+func (a *Agent) extractPassword(jobID uuid.UUID) (string, error) {
 	// Read password from outfile created during cracking
-	outfile := filepath.Join(filepath.Dir(hashFile), "cracked.txt")
+	tempDir := filepath.Join(a.UploadDir, "temp")
+	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", jobID.String()))
 
 	content, err := os.ReadFile(outfile)
 	if err != nil {
@@ -777,6 +786,18 @@ func (a *Agent) extractPassword(hashFile string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no password found in outfile")
+}
+
+func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
+	// Clean up job-specific files after completion
+	tempDir := filepath.Join(a.UploadDir, "temp")
+	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", jobID.String()))
+
+	if err := os.Remove(outfile); err != nil && !os.IsNotExist(err) {
+		log.Printf("⚠️  Failed to cleanup outfile %s: %v", outfile, err)
+	} else {
+		log.Printf("🗑️  Cleaned up outfile: %s", outfile)
+	}
 }
 
 func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {

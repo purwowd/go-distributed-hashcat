@@ -1,4 +1,4 @@
--- Migration: 002_add_wordlist_id.sql
+-- Migration: 003_add_wordlist_id.sql
 -- Description: Add wordlist_id column to jobs table for proper wordlist reference
 -- Author: System
 -- Date: 2025-01-10
