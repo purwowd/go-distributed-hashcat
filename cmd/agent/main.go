@@ -608,7 +608,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		localWordlist,
 		"-w", "4",
 		"--status",
-		"--status-timer=5",
+		"--status-timer=2",
 		"--potfile-disable",
 		"--outfile", outfile,
 		"--outfile-format", "2", // Format: hash:plain
@@ -639,6 +639,11 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 
 	// Monitor output for progress updates
 	go a.monitorHashcatOutput(job, stdout, stderr)
+
+	// Monitor job status for cancellation/pause
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go a.monitorJobStatus(ctx, job.ID, cmd)
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
@@ -850,6 +855,60 @@ func (a *Agent) updateJobProgress(jobID uuid.UUID, progress float64, speed int64
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	a.Client.Do(httpReq)
+}
+
+func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec.Cmd) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Check job status from server
+			status, err := a.checkJobStatus(jobID)
+			if err != nil {
+				log.Printf("⚠️  Failed to check job status: %v", err)
+				continue
+			}
+
+			// Handle status changes
+			switch status {
+			case "paused", "failed", "cancelled":
+				log.Printf("🛑 Job %s status changed to %s, terminating hashcat", jobID, status)
+				if cmd.Process != nil {
+					cmd.Process.Kill()
+				}
+				return
+			}
+		}
+	}
+}
+
+func (a *Agent) checkJobStatus(jobID uuid.UUID) (string, error) {
+	url := fmt.Sprintf("%s/api/v1/jobs/%s", a.ServerURL, jobID.String())
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to get job status: %d", resp.StatusCode)
+	}
+
+	var jobResp struct {
+		Data struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
+		return "", err
+	}
+
+	return jobResp.Data.Status, nil
 }
 
 func (a *Agent) completeJob(jobID uuid.UUID, result string) {

@@ -534,16 +534,16 @@ class DashboardApplication {
                 
                 // Job progress updates
                 webSocketService.onJobProgress((update) => {
-                    // console.log('📊 Real-time job progress:', update)
-                    // Refresh jobs data to get latest state
-                    jobStore.actions.fetchJobs()
+                    console.log('📊 Real-time job progress:', update)
+                    // Update specific job instead of fetching all
+                    this.updateJobProgress(update)
                 })
                 
                 // Job status changes (start, stop, complete, etc.)
                 webSocketService.onJobStatus((update) => {
-                    // console.log('🎯 Real-time job status:', update)
-                    // Refresh jobs data
-                    jobStore.actions.fetchJobs()
+                    console.log('🎯 Real-time job status:', update)
+                    // Update specific job status instead of fetching all
+                    this.updateJobStatus(update)
                 })
                 
                 // Agent status updates
@@ -559,6 +559,31 @@ class DashboardApplication {
                 })
                 
                 // console.log('🌐 WebSocket subscriptions setup for real-time updates')
+            },
+
+            // Real-time job updates
+            updateJobProgress(update: any) {
+                // Update individual job via store action
+                if (update.job_id) {
+                    jobStore.actions.updateJobProgress(update.job_id, update.progress, update.speed, update.eta, update.status)
+                }
+            },
+
+            updateJobStatus(update: any) {
+                // Update individual job via store action
+                if (update.job_id) {
+                    jobStore.actions.updateJobStatus(update.job_id, update.status, update.result)
+                    
+                    // Show notification for important status changes
+                    const job = this.jobs.find(j => j.id === update.job_id)
+                    if (job) {
+                        if (update.status === 'completed') {
+                            this.showNotification(`🎉 Job "${job.name}" completed!`, 'success')
+                        } else if (update.status === 'failed') {
+                            this.showNotification(`❌ Job "${job.name}" failed`, 'error')
+                        }
+                    }
+                }
             },
 
             async loadInitialData() {

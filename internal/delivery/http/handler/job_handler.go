@@ -155,6 +155,9 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 		return
 	}
 
+	// Broadcast job completion with result
+	Hub.BroadcastJobStatus(id.String(), "completed", req.Result)
+
 	c.JSON(http.StatusOK, gin.H{"message": "Job completed successfully"})
 }
 
@@ -195,6 +198,9 @@ func (h *JobHandler) PauseJob(c *gin.Context) {
 		return
 	}
 
+	// Broadcast job status change
+	Hub.BroadcastJobStatus(id.String(), "paused", "")
+
 	c.JSON(http.StatusOK, gin.H{"message": "Job paused successfully"})
 }
 
@@ -210,6 +216,9 @@ func (h *JobHandler) ResumeJob(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Broadcast job status change
+	Hub.BroadcastJobStatus(id.String(), "pending", "")
 
 	c.JSON(http.StatusOK, gin.H{"message": "Job resumed successfully"})
 }
@@ -227,6 +236,9 @@ func (h *JobHandler) StopJob(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Broadcast job status change
+	Hub.BroadcastJobStatus(id.String(), "failed", "Job stopped by user")
 
 	c.JSON(http.StatusOK, gin.H{"message": "Job stopped successfully"})
 }

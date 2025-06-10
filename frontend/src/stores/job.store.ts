@@ -212,6 +212,42 @@ class JobStore {
                 error: null,
                 lastUpdated: null
             })
+        },
+
+        // Real-time update methods
+        updateJobProgress: (jobId: string, progress: number, speed?: number, eta?: string, status?: string): void => {
+            const jobs = this.state.jobs
+            const jobIndex = jobs.findIndex(job => job.id === jobId)
+            if (jobIndex !== -1) {
+                const validStatuses = ['pending', 'running', 'completed', 'failed', 'cancelled', 'paused']
+                const updatedJob = { 
+                    ...jobs[jobIndex], 
+                    progress,
+                    speed: speed || jobs[jobIndex].speed,
+                    eta: eta || jobs[jobIndex].eta,
+                    status: (status && validStatuses.includes(status)) ? status as Job['status'] : jobs[jobIndex].status
+                }
+                const newJobs = [...jobs]
+                newJobs[jobIndex] = updatedJob
+                this.setState({ jobs: newJobs })
+            }
+        },
+
+        updateJobStatus: (jobId: string, status: string, result?: string): void => {
+            const jobs = this.state.jobs
+            const jobIndex = jobs.findIndex(job => job.id === jobId)
+            if (jobIndex !== -1) {
+                const validStatuses = ['pending', 'running', 'completed', 'failed', 'cancelled', 'paused']
+                const updatedJob = { 
+                    ...jobs[jobIndex], 
+                    status: validStatuses.includes(status) ? status as Job['status'] : jobs[jobIndex].status,
+                    result: result || jobs[jobIndex].result,
+                    progress: status === 'completed' ? 100 : jobs[jobIndex].progress
+                }
+                const newJobs = [...jobs]
+                newJobs[jobIndex] = updatedJob
+                this.setState({ jobs: newJobs })
+            }
         }
     }
 
