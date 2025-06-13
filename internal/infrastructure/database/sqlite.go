@@ -97,6 +97,7 @@ func (s *SQLiteDB) migrate() error {
 			hash_file TEXT NOT NULL,
 			hash_file_id TEXT,
 			wordlist TEXT NOT NULL,
+			wordlist_id TEXT,
 			rules TEXT,
 			agent_id TEXT,
 			progress REAL DEFAULT 0,
@@ -107,8 +108,9 @@ func (s *SQLiteDB) migrate() error {
 			updated_at DATETIME NOT NULL,
 			started_at DATETIME,
 			completed_at DATETIME,
-			FOREIGN KEY (agent_id) REFERENCES agents(id),
-			FOREIGN KEY (hash_file_id) REFERENCES hash_files(id)
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
+			FOREIGN KEY (hash_file_id) REFERENCES hash_files(id) ON DELETE SET NULL,
+			FOREIGN KEY (wordlist_id) REFERENCES wordlists(id) ON DELETE SET NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS hash_files (
 			id TEXT PRIMARY KEY,
@@ -148,12 +150,14 @@ func (s *SQLiteDB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_agents_status_updated ON agents(status, updated_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_jobs_agent_status ON jobs(agent_id, status)`,
 		`ALTER TABLE jobs ADD COLUMN hash_file_id TEXT REFERENCES hash_files(id)`,
+		`ALTER TABLE jobs ADD COLUMN wordlist_id TEXT REFERENCES wordlists(id)`,
 	}
 
 	for _, query := range queries {
 		if _, err := s.db.Exec(query); err != nil {
 			// Ignore "duplicate column" errors for ALTER TABLE
-			if err.Error() != "duplicate column name: hash_file_id" {
+			errMsg := err.Error()
+			if errMsg != "duplicate column name: hash_file_id" && errMsg != "duplicate column name: wordlist_id" {
 				return fmt.Errorf("failed to execute migration query: %s, error: %w", query, err)
 			}
 		}
