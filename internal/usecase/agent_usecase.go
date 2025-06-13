@@ -18,6 +18,7 @@ type AgentUsecase interface {
 	DeleteAgent(ctx context.Context, id uuid.UUID) error
 	GetAvailableAgent(ctx context.Context) (*domain.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error
+	SetWebSocketHub(wsHub WebSocketHub) // ✅ Add method to interface
 }
 
 type agentUsecase struct {
@@ -56,6 +57,16 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 				return nil, fmt.Errorf("failed to create agent: %w", err)
 			}
 
+			// ✅ Broadcast new agent registration via WebSocket
+			if u.wsHub != nil {
+				log.Printf("📡 Broadcasting new agent %s registration via WebSocket", agent.Name)
+				u.wsHub.BroadcastAgentStatus(
+					agent.ID.String(),
+					agent.Status,
+					agent.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
+				)
+			}
+
 			return agent, nil
 		}
 		// Other database errors
@@ -73,6 +84,16 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 	// Also update last seen timestamp
 	if err := u.agentRepo.UpdateLastSeen(ctx, existingAgent.ID); err != nil {
 		return nil, fmt.Errorf("failed to update agent last seen: %w", err)
+	}
+
+	// ✅ Broadcast existing agent reconnection via WebSocket
+	if u.wsHub != nil {
+		log.Printf("📡 Broadcasting agent %s reconnection via WebSocket", existingAgent.Name)
+		u.wsHub.BroadcastAgentStatus(
+			existingAgent.ID.String(),
+			existingAgent.Status,
+			existingAgent.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
+		)
 	}
 
 	return existingAgent, nil

@@ -55,15 +55,15 @@ func NewAgentHealthMonitor(
 	wsHub WebSocketHub,
 	config HealthConfig,
 ) AgentHealthMonitor {
-	// Set real-time defaults for better responsiveness
+	// Set ultra-fast real-time defaults for instant responsiveness
 	if config.CheckInterval == 0 {
-		config.CheckInterval = 3 * time.Second // ✅ Even faster health checks
+		config.CheckInterval = 1 * time.Second // ✅ Ultra-fast health checks every 1 second
 	}
 	if config.AgentTimeout == 0 {
-		config.AgentTimeout = 15 * time.Second // ✅ Much faster offline detection
+		config.AgentTimeout = 5 * time.Second // ✅ Ultra-fast offline detection in 5 seconds
 	}
 	if config.HeartbeatGrace == 0 {
-		config.HeartbeatGrace = 5 * time.Second // ✅ Shorter grace period
+		config.HeartbeatGrace = 2 * time.Second // ✅ Very short grace period
 	}
 	if config.MaxConcurrentChecks == 0 {
 		config.MaxConcurrentChecks = 20 // ✅ More concurrent checks

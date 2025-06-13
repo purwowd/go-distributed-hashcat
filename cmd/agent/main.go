@@ -394,8 +394,8 @@ func (a *Agent) registerWithServer(name, ip string, port int, capabilities strin
 }
 
 func (a *Agent) startHeartbeat(ctx context.Context) {
-	// ✅ Real-time heartbeat: every 3 seconds for immediate detection
-	ticker := time.NewTicker(3 * time.Second)
+	// ✅ Ultra-fast real-time heartbeat: every 1 second for instant detection
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	// Send initial heartbeat immediately

@@ -295,12 +295,8 @@ func startServer() {
 	wsHub := handler.GetHub() // Get the singleton hub
 
 	// ✅ Set WebSocket hub to agent usecase for real-time broadcasts
-	if agentUc, ok := agentUsecase.(interface{ SetWebSocketHub(usecase.WebSocketHub) }); ok {
-		agentUc.SetWebSocketHub(wsHub)
-		log.Printf("✅ WebSocket hub connected to agent usecase")
-	} else {
-		log.Printf("⚠️ Failed to set WebSocket hub to agent usecase")
-	}
+	agentUsecase.SetWebSocketHub(wsHub)
+	log.Printf("✅ WebSocket hub connected to agent usecase")
 
 	// Initialize HTTP router
 	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase, jobEnrichmentService)
@@ -311,12 +307,12 @@ func startServer() {
 		Handler: router,
 	}
 
-	// Initialize health monitoring with real-time intervals
+	// Initialize health monitoring with ultra-fast real-time intervals
 	healthConfig := usecase.HealthConfig{
-		CheckInterval:       5 * time.Second,  // ✅ Real-time: check every 5 seconds
-		AgentTimeout:        30 * time.Second, // ✅ Faster timeout detection
-		HeartbeatGrace:      10 * time.Second, // ✅ Shorter grace period
-		MaxConcurrentChecks: 20,               // ✅ More concurrent checks
+		CheckInterval:       1 * time.Second, // ✅ Ultra-fast: check every 1 second
+		AgentTimeout:        5 * time.Second, // ✅ Ultra-fast timeout detection in 5 seconds
+		HeartbeatGrace:      2 * time.Second, // ✅ Very short grace period
+		MaxConcurrentChecks: 20,              // ✅ More concurrent checks
 	}
 
 	healthMonitor := usecase.NewAgentHealthMonitor(

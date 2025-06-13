@@ -11,6 +11,7 @@ import (
 
 	"go-distributed-hashcat/internal/delivery/http/handler"
 	"go-distributed-hashcat/internal/domain"
+	"go-distributed-hashcat/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -65,6 +66,11 @@ func (m *MockAgentUsecase) GetAvailableAgent(ctx context.Context) (*domain.Agent
 func (m *MockAgentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
+}
+
+// SetWebSocketHub implements the interface method (no-op for tests)
+func (m *MockAgentUsecase) SetWebSocketHub(wsHub usecase.WebSocketHub) {
+	// No-op for tests since we don't need to test WebSocket functionality
 }
 
 func setupTestRouter() *gin.Engine {

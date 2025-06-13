@@ -940,6 +940,12 @@ class DashboardApplication {
             },
 
             async openJobModal() {
+                // Check if there are online agents
+                if (this.onlineAgents.length === 0) {
+                    this.showNotification('No online agents available. Please start an agent first before creating jobs.', 'warning')
+                    return
+                }
+                
                 this.showJobModal = true
                 this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
             },
@@ -974,7 +980,25 @@ class DashboardApplication {
                         return
                     }
                     
-                    console.log('Creating job with payload:', jobPayload)  // Debug log
+                    // Validate agent assignment is required
+                    if (!jobPayload.agent_id) {
+                        this.showNotification('Please select an agent to run this job', 'error')
+                        return
+                    }
+                    
+                    // Validate selected agent is online
+                    const selectedAgent = this.agents.find((a: any) => a.id === jobPayload.agent_id)
+                    if (!selectedAgent) {
+                        this.showNotification('Selected agent not found', 'error')
+                        return
+                    }
+                    
+                    if (selectedAgent.status !== 'online') {
+                        this.showNotification(`Cannot create job: Agent "${selectedAgent.name}" is ${selectedAgent.status}`, 'error')
+                        return
+                    }
+                    
+
                     
                     const result = await jobStore.actions.createJob(jobPayload)
                     if (result) {

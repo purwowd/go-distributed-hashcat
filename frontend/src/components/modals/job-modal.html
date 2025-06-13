@@ -92,19 +92,25 @@
                     <!-- Agent Assignment -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">
-                            <i class="fas fa-server text-blue-500 mr-1"></i>Agent Assignment
+                            <i class="fas fa-server text-blue-500 mr-1"></i>Agent Assignment <span class="text-red-500">*</span>
                         </label>
-                        <select x-model="jobForm.agent_id" class="select-modern">
-                            <option value="">Auto-assign to available agent</option>
+                        <select x-model="jobForm.agent_id" required class="select-modern">
+                            <option value="">Select agent</option>
                             <template x-for="agent in onlineAgents" :key="agent.id">
                                 <option :value="agent.id" 
                                         x-text="`${agent.name} (${agent.ip_address}) - ${agent.capabilities || 'Unknown GPU'}`">
                                 </option>
                             </template>
+                            <template x-if="onlineAgents.length === 0">
+                                <option value="" disabled>No online agents available</option>
+                            </template>
                         </select>
                         <p class="text-xs text-gray-500 mt-1">
-                            <span x-show="!jobForm.agent_id" class="text-blue-600">
-                                <i class="fas fa-magic mr-1"></i>Auto-assignment will distribute jobs across available agents
+                            <span x-show="onlineAgents.length === 0" class="text-red-600">
+                                <i class="fas fa-times-circle mr-1"></i>No online agents available. Start an agent first.
+                            </span>
+                            <span x-show="onlineAgents.length > 0 && !jobForm.agent_id" class="text-red-600">
+                                <i class="fas fa-exclamation-circle mr-1"></i>Please select an agent to run this job
                             </span>
                             <span x-show="jobForm.agent_id" class="text-green-600">
                                 <i class="fas fa-thumbtack mr-1"></i>Job will be assigned to the selected agent specifically
@@ -129,7 +135,10 @@
                     <button type="button" @click="closeJobModal()" class="btn-secondary order-2 sm:order-1">
                         <i class="fas fa-times mr-2"></i>Cancel
                     </button>
-                    <button type="submit" class="btn-primary order-1 sm:order-2">
+                    <button type="submit" 
+                            :disabled="!jobForm.agent_id || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0"
+                            :class="(!jobForm.agent_id || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0) ? 'btn-disabled' : 'btn-primary'"
+                            class="order-1 sm:order-2">
                         <i class="fas fa-plus mr-2"></i>Create Job
                     </button>
                 </div>
