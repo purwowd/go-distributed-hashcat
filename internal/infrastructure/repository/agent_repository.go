@@ -14,12 +14,13 @@ import (
 )
 
 type agentRepository struct {
-	db          *database.SQLiteDB
-	cache       cache.Cache
-	getByIDStmt *sql.Stmt
-	getAllStmt  *sql.Stmt
-	updateStmt  *sql.Stmt
-	deleteStmt  *sql.Stmt
+	db              *database.SQLiteDB
+	cache           cache.Cache
+	getByIDStmt     *sql.Stmt
+	getByNameIPStmt *sql.Stmt
+	getAllStmt      *sql.Stmt
+	updateStmt      *sql.Stmt
+	deleteStmt      *sql.Stmt
 }
 
 func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository {
@@ -44,6 +45,14 @@ func (r *agentRepository) prepareStatements() {
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getByID statement: %v", err))
+	}
+
+	r.getByNameIPStmt, err = r.db.DB().Prepare(`
+		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		FROM agents WHERE name = ? AND ip_address = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByNameIP statement: %v", err))
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
@@ -141,6 +150,45 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 	return &agent, nil
 }
 
+func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
+	cacheKey := "agent:name_ip:" + name + ":" + ip
+
+	// Try cache first
+	var agent domain.Agent
+	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		return &agent, nil
+	}
+
+	// Fallback to database with prepared statement
+	var idStr string
+
+	err := r.getByNameIPStmt.QueryRowContext(ctx, name, ip).Scan(
+		&idStr,
+		&agent.Name,
+		&agent.IPAddress,
+		&agent.Port,
+		&agent.Status,
+		&agent.Capabilities,
+		&agent.LastSeen,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("agent not found")
+		}
+		return nil, err
+	}
+
+	agent.ID = uuid.MustParse(idStr)
+
+	// Cache the result
+	r.cache.Set(ctx, cacheKey, &agent)
+
+	return &agent, nil
+}
+
 func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 	cacheKey := "agents:all"
 
@@ -203,6 +251,8 @@ func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error
 	if err == nil {
 		// Update cache
 		r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
+		// Update name+IP cache
+		r.cache.Set(ctx, "agent:name_ip:"+agent.Name+":"+agent.IPAddress, agent)
 		// Invalidate list cache
 		r.cache.Delete(ctx, "agents:all")
 	}

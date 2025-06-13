@@ -40,6 +40,14 @@ func (m *MockAgentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domai
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentRepository) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
+	args := m.Called(ctx, name, ip, port)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
 func (m *MockAgentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]domain.Agent), args.Error(1)
@@ -119,6 +127,25 @@ func (m *MockHashFileRepository) GetAll(ctx context.Context) ([]domain.HashFile,
 func (m *MockHashFileRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
+}
+
+// MockJobEnrichmentService for testing
+type MockJobEnrichmentService struct {
+	mock.Mock
+}
+
+func (m *MockJobEnrichmentService) EnrichJobs(ctx context.Context, jobs []domain.Job) ([]domain.EnrichedJob, error) {
+	args := m.Called(ctx, jobs)
+	return args.Get(0).([]domain.EnrichedJob), args.Error(1)
+}
+
+func (m *MockJobEnrichmentService) GetCacheStats() map[string]interface{} {
+	args := m.Called()
+	return args.Get(0).(map[string]interface{})
+}
+
+func (m *MockJobEnrichmentService) ClearCache() {
+	m.Called()
 }
 
 func (m *MockJobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest) (*domain.Job, error) {
@@ -411,13 +438,13 @@ func TestJobHandler_GetJob(t *testing.T) {
 func TestJobHandler_GetAllJobs(t *testing.T) {
 	tests := []struct {
 		name           string
-		mockSetup      func(*MockJobUsecase)
+		mockSetup      func(*MockJobUsecase, *MockJobEnrichmentService)
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
 			name: "successful jobs retrieval",
-			mockSetup: func(mockUsecase *MockJobUsecase) {
+			mockSetup: func(mockUsecase *MockJobUsecase, mockEnrichment *MockJobEnrichmentService) {
 				jobs := []domain.Job{
 					{
 						ID:     uuid.New(),
@@ -430,7 +457,16 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 						Status: "running",
 					},
 				}
+				enrichedJobs := []domain.EnrichedJob{
+					{
+						Job: jobs[0],
+					},
+					{
+						Job: jobs[1],
+					},
+				}
 				mockUsecase.On("GetAllJobs", mock.Anything).Return(jobs, nil)
+				mockEnrichment.On("EnrichJobs", mock.Anything, jobs).Return(enrichedJobs, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -447,8 +483,11 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 		},
 		{
 			name: "no jobs found",
-			mockSetup: func(mockUsecase *MockJobUsecase) {
-				mockUsecase.On("GetAllJobs", mock.Anything).Return([]domain.Job{}, nil)
+			mockSetup: func(mockUsecase *MockJobUsecase, mockEnrichment *MockJobEnrichmentService) {
+				jobs := []domain.Job{}
+				enrichedJobs := []domain.EnrichedJob{}
+				mockUsecase.On("GetAllJobs", mock.Anything).Return(jobs, nil)
+				mockEnrichment.On("EnrichJobs", mock.Anything, jobs).Return(enrichedJobs, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -461,7 +500,7 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 		},
 		{
 			name: "usecase error",
-			mockSetup: func(mockUsecase *MockJobUsecase) {
+			mockSetup: func(mockUsecase *MockJobUsecase, mockEnrichment *MockJobEnrichmentService) {
 				mockUsecase.On("GetAllJobs", mock.Anything).Return([]domain.Job{}, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -477,9 +516,10 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockUsecase := new(MockJobUsecase)
-			tt.mockSetup(mockUsecase)
+			mockEnrichment := new(MockJobEnrichmentService)
+			tt.mockSetup(mockUsecase, mockEnrichment)
 
-			handler := handler.NewJobHandler(mockUsecase, nil)
+			handler := handler.NewJobHandler(mockUsecase, mockEnrichment)
 			router := setupTestRouter()
 			router.GET("/jobs", handler.GetAllJobs)
 
@@ -492,6 +532,7 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			tt.checkResponse(t, w)
 			mockUsecase.AssertExpectations(t)
+			mockEnrichment.AssertExpectations(t)
 		})
 	}
 }

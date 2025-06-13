@@ -30,20 +30,44 @@ func NewAgentUsecase(agentRepo domain.AgentRepository) AgentUsecase {
 }
 
 func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) {
-	agent := &domain.Agent{
-		ID:           uuid.New(),
-		Name:         req.Name,
-		IPAddress:    req.IPAddress,
-		Port:         req.Port,
-		Status:       "online",
-		Capabilities: req.Capabilities,
+	// First, check if agent with same name and IP already exists
+	existingAgent, err := u.agentRepo.GetByNameAndIP(ctx, req.Name, req.IPAddress, req.Port)
+	if err != nil {
+		// If agent not found, create new one
+		if err.Error() == "agent not found" {
+			agent := &domain.Agent{
+				ID:           uuid.New(),
+				Name:         req.Name,
+				IPAddress:    req.IPAddress,
+				Port:         req.Port,
+				Status:       "online",
+				Capabilities: req.Capabilities,
+			}
+
+			if err := u.agentRepo.Create(ctx, agent); err != nil {
+				return nil, fmt.Errorf("failed to create agent: %w", err)
+			}
+
+			return agent, nil
+		}
+		// Other database errors
+		return nil, fmt.Errorf("failed to check existing agent: %w", err)
 	}
 
-	if err := u.agentRepo.Create(ctx, agent); err != nil {
-		return nil, fmt.Errorf("failed to create agent: %w", err)
+	// Agent exists, update status to online and capabilities
+	existingAgent.Status = "online"
+	existingAgent.Capabilities = req.Capabilities
+
+	if err := u.agentRepo.Update(ctx, existingAgent); err != nil {
+		return nil, fmt.Errorf("failed to update existing agent: %w", err)
 	}
 
-	return agent, nil
+	// Also update last seen timestamp
+	if err := u.agentRepo.UpdateLastSeen(ctx, existingAgent.ID); err != nil {
+		return nil, fmt.Errorf("failed to update agent last seen: %w", err)
+	}
+
+	return existingAgent, nil
 }
 
 func (u *agentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
