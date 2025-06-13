@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"go-distributed-hashcat/internal/domain"
 
@@ -21,12 +22,19 @@ type AgentUsecase interface {
 
 type agentUsecase struct {
 	agentRepo domain.AgentRepository
+	wsHub     WebSocketHub // ✅ Add WebSocket hub (interface defined in health monitor)
 }
 
 func NewAgentUsecase(agentRepo domain.AgentRepository) AgentUsecase {
 	return &agentUsecase{
 		agentRepo: agentRepo,
+		wsHub:     nil, // Will be set later when available
 	}
+}
+
+// ✅ NEW: Set WebSocket hub for real-time broadcasts
+func (u *agentUsecase) SetWebSocketHub(wsHub WebSocketHub) {
+	u.wsHub = wsHub
 }
 
 func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) {
@@ -116,8 +124,23 @@ func (u *agentUsecase) GetAvailableAgent(ctx context.Context) (*domain.Agent, er
 }
 
 func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error {
+	// Update last seen timestamp
 	if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil {
 		return fmt.Errorf("failed to update agent heartbeat: %w", err)
 	}
+
+	// ✅ Get agent info and broadcast status update via WebSocket
+	if u.wsHub != nil {
+		agent, err := u.agentRepo.GetByID(ctx, id)
+		if err == nil {
+			log.Printf("📡 Broadcasting heartbeat for agent %s via WebSocket", agent.Name)
+			u.wsHub.BroadcastAgentStatus(
+				agent.ID.String(),
+				agent.Status,
+				agent.LastSeen.Format("2006-01-02T15:04:05Z07:00"), // RFC3339 format
+			)
+		}
+	}
+
 	return nil
 }

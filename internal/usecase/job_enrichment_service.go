@@ -74,7 +74,6 @@ type memoryCache struct {
 	ttl       time.Duration
 	metrics   *cacheMetrics
 	createdAt time.Time
-	mu        sync.RWMutex
 }
 
 func newMemoryCache(ttl time.Duration) *memoryCache {

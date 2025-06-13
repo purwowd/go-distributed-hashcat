@@ -89,6 +89,7 @@ class DashboardApplication {
     private isInitialized = false
     private alpineDataRegistered = false
     private config = getConfig()
+    private lastAgentStatuses = new Map<string, string>() // Track previous status to prevent duplicate notifications
 
     // Initialize the entire application
     public async init(): Promise<void> {
@@ -418,6 +419,9 @@ class DashboardApplication {
             wsConnected: false,
             wsConnectionAttempts: 0,
             
+            // Track agent status changes to prevent duplicate notifications
+            lastAgentStatuses: new Map(),
+            
             // Reactive data arrays - these will be updated by store subscriptions
             reactiveAgents: [] as any[],
             reactiveJobs: [] as any[],
@@ -493,25 +497,29 @@ class DashboardApplication {
                 // Subscribe to agent store changes
                 agentStore.subscribe(() => {
                     const state = agentStore.getState()
-                    this.reactiveAgents = state.agents || []
+                    // ✅ Force Alpine.js reactivity by creating new array reference
+                    this.reactiveAgents = [...(state.agents || [])]
+                    console.log('🔄 Agent store updated:', this.reactiveAgents.length, 'agents')
                 })
                 
                 // Subscribe to job store changes
                 jobStore.subscribe(() => {
                     const state = jobStore.getState()
-                    this.reactiveJobs = state.jobs || []
+                    // ✅ Force Alpine.js reactivity by creating new array reference
+                    this.reactiveJobs = [...(state.jobs || [])]
+                    console.log('🔄 Job store updated:', this.reactiveJobs.length, 'jobs')
                 })
                 
                 // Subscribe to file store changes
                 fileStore.subscribe(() => {
                     const state = fileStore.getState()
-                    this.reactiveHashFiles = state.hashFiles || []
+                    this.reactiveHashFiles = [...(state.hashFiles || [])]
                 })
                 
                 // Subscribe to wordlist store changes
                 wordlistStore.subscribe(() => {
                     const state = wordlistStore.getState()
-                    this.reactiveWordlists = state.wordlists || []
+                    this.reactiveWordlists = [...(state.wordlists || [])]
                 })
                 
                 // console.log('📡 Store subscriptions setup for reactive UI updates')
@@ -534,23 +542,48 @@ class DashboardApplication {
                 
                 // Job progress updates
                 webSocketService.onJobProgress((update) => {
-                    console.log('📊 Real-time job progress:', update)
                     // Update specific job instead of fetching all
                     this.updateJobProgress(update)
                 })
                 
                 // Job status changes (start, stop, complete, etc.)
                 webSocketService.onJobStatus((update) => {
-                    console.log('🎯 Real-time job status:', update)
                     // Update specific job status instead of fetching all
                     this.updateJobStatus(update)
                 })
                 
-                // Agent status updates
+                // Agent status updates - Real-time without API call
                 webSocketService.onAgentStatus((update) => {
-                    // console.log('🤖 Real-time agent status:', update)
-                    // Refresh agents data to get latest state
-                    agentStore.actions.fetchAgents()
+                    // ✅ Update agent status directly in store (no API call needed!)
+                    if (update.agent_id && update.status) {
+                        // Check if this is actually a status change
+                        const previousStatus = this.lastAgentStatuses.get(update.agent_id)
+                        const isStatusChange = previousStatus && previousStatus !== update.status
+                        
+                        // Update store
+                        agentStore.actions.updateAgentStatus(
+                            update.agent_id, 
+                            update.status, 
+                            update.last_seen
+                        )
+                        
+                        // Update tracking
+                        this.lastAgentStatuses.set(update.agent_id, update.status)
+                        
+                        // Show notification ONLY for actual status changes (not initial load)
+                        if (isStatusChange) {
+                            const agent = this.agents.find(a => a.id === update.agent_id)
+                            const agentName = agent?.name || 'Agent'
+                            
+                            if (update.status === 'online') {
+                                this.showNotification(`🟢 ${agentName} is now online`, 'success')
+                            } else if (update.status === 'offline') {
+                                this.showNotification(`🔴 ${agentName} went offline`, 'warning')
+                            } else if (update.status === 'busy') {
+                                this.showNotification(`🟡 ${agentName} is now busy`, 'info')
+                            }
+                        }
+                    }
                 })
                 
                 // Real-time notifications
@@ -589,7 +622,6 @@ class DashboardApplication {
             async loadInitialData() {
                 try {
                     this.isLoading = true
-                    // console.log('🔄 Loading initial data...')
                     
                     // Add timeout to prevent infinite loading
                     const timeout = new Promise((_, reject) => 
@@ -615,6 +647,11 @@ class DashboardApplication {
                         ])
                     ])
                     
+                    // ✅ Initialize agent status tracking after agents are loaded
+                    this.agents.forEach(agent => {
+                        this.lastAgentStatuses.set(agent.id, agent.status)
+                    })
+                    
                     // Load jobs with separate timeout
                     await Promise.race([
                         timeout,
@@ -629,13 +666,11 @@ class DashboardApplication {
                         console.warn('Failed to load cache stats:', err)
                     })
                     
-                    // console.log('✅ Initial data loaded successfully')
                 } catch (error) {
                     console.error('❌ Failed to load initial data:', error)
                     this.showNotification('Failed to load data. Please refresh the page.', 'error')
                 } finally {
                     this.isLoading = false
-                    // console.log('🏁 Loading state reset to false')
                 }
             },
 
@@ -1315,7 +1350,7 @@ class DashboardApplication {
                 }
             },
 
-            // Additional job control methods already defined above
+
         }))
 
         perf.endTimer('alpine-initialization')

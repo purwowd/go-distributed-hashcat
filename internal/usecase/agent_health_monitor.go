@@ -57,13 +57,13 @@ func NewAgentHealthMonitor(
 ) AgentHealthMonitor {
 	// Set real-time defaults for better responsiveness
 	if config.CheckInterval == 0 {
-		config.CheckInterval = 5 * time.Second // ✅ Real-time default
+		config.CheckInterval = 3 * time.Second // ✅ Even faster health checks
 	}
 	if config.AgentTimeout == 0 {
-		config.AgentTimeout = 30 * time.Second // ✅ Faster timeout default
+		config.AgentTimeout = 15 * time.Second // ✅ Much faster offline detection
 	}
 	if config.HeartbeatGrace == 0 {
-		config.HeartbeatGrace = 10 * time.Second // ✅ Shorter grace default
+		config.HeartbeatGrace = 5 * time.Second // ✅ Shorter grace period
 	}
 	if config.MaxConcurrentChecks == 0 {
 		config.MaxConcurrentChecks = 20 // ✅ More concurrent checks
@@ -200,6 +200,7 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 
 		// Broadcast status change via WebSocket
 		if h.wsHub != nil {
+			log.Printf("📡 Broadcasting agent %s status change to offline via WebSocket", agent.Name)
 			h.wsHub.BroadcastAgentStatus(
 				agent.ID.String(),
 				"offline",
@@ -208,6 +209,28 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 		}
 
 		log.Printf("🔄 Agent %s status updated to offline", agent.Name)
+	} else if !shouldBeOffline && !currentlyOnline {
+		// ✅ NEW: Handle online status change (agent came back online)
+		log.Printf("🟢 Agent %s (%s) came back online - last seen %v ago",
+			agent.Name, agent.ID.String()[:8], timeSinceLastSeen)
+
+		// Update status to online
+		if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "online"); err != nil {
+			log.Printf("❌ Failed to update agent %s status to online: %v", agent.Name, err)
+			return
+		}
+
+		// Broadcast status change via WebSocket
+		if h.wsHub != nil {
+			log.Printf("📡 Broadcasting agent %s status change to online via WebSocket", agent.Name)
+			h.wsHub.BroadcastAgentStatus(
+				agent.ID.String(),
+				"online",
+				agent.LastSeen.Format(time.RFC3339),
+			)
+		}
+
+		log.Printf("🔄 Agent %s status updated to online", agent.Name)
 	}
 
 	// Optional: Auto-cleanup very old offline agents

@@ -148,6 +148,45 @@ class AgentStore {
             this.setState({ error: null })
         },
 
+        // ✅ Real-time agent status update (without API call)
+        updateAgentStatus: (agentId: string, status: string, lastSeen?: string): void => {
+            const updatedAgents = this.state.agents.map(agent => {
+                if (agent.id === agentId) {
+                    return {
+                        ...agent,
+                        status: status as Agent['status'],
+                        last_seen: lastSeen || agent.last_seen,
+                        updated_at: new Date().toISOString()
+                    }
+                }
+                return agent
+            })
+            
+            this.setState({ 
+                agents: updatedAgents,
+                lastUpdated: new Date()
+            })
+        },
+
+        // ✅ Real-time agent update (general properties)
+        updateAgentRealtime: (agentId: string, updates: Partial<Agent>): void => {
+            const updatedAgents = this.state.agents.map(agent => {
+                if (agent.id === agentId) {
+                    return {
+                        ...agent,
+                        ...updates,
+                        updated_at: new Date().toISOString()
+                    }
+                }
+                return agent
+            })
+            
+            this.setState({ 
+                agents: updatedAgents,
+                lastUpdated: new Date()
+            })
+        },
+
         // Reset store
         reset: (): void => {
             this.setState({

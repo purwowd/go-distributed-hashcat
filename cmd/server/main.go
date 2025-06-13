@@ -291,6 +291,17 @@ func startServer() {
 	// Initialize enrichment service
 	jobEnrichmentService := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)
 
+	// ✅ Get WebSocket hub early for dependency injection
+	wsHub := handler.GetHub() // Get the singleton hub
+
+	// ✅ Set WebSocket hub to agent usecase for real-time broadcasts
+	if agentUc, ok := agentUsecase.(interface{ SetWebSocketHub(usecase.WebSocketHub) }); ok {
+		agentUc.SetWebSocketHub(wsHub)
+		log.Printf("✅ WebSocket hub connected to agent usecase")
+	} else {
+		log.Printf("⚠️ Failed to set WebSocket hub to agent usecase")
+	}
+
 	// Initialize HTTP router
 	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase, jobEnrichmentService)
 
@@ -307,9 +318,6 @@ func startServer() {
 		HeartbeatGrace:      10 * time.Second, // ✅ Shorter grace period
 		MaxConcurrentChecks: 20,               // ✅ More concurrent checks
 	}
-
-	// ✅ Connect WebSocket hub for real-time updates
-	wsHub := handler.GetHub() // Get the singleton hub
 
 	healthMonitor := usecase.NewAgentHealthMonitor(
 		agentUsecase,
