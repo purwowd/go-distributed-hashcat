@@ -236,6 +236,11 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
 	go client.readPump()
 }
 
+// GetHub returns the global WebSocket hub instance
+func GetHub() *WebSocketHub {
+	return Hub
+}
+
 // Initialize the WebSocket hub
 func init() {
 	go Hub.Run()

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	httpDelivery "go-distributed-hashcat/internal/delivery/http"
+	"go-distributed-hashcat/internal/delivery/http/handler"
 	"go-distributed-hashcat/internal/infrastructure/database"
 	"go-distributed-hashcat/internal/infrastructure/repository"
 	"go-distributed-hashcat/internal/usecase"
@@ -299,16 +300,16 @@ func startServer() {
 		Handler: router,
 	}
 
-	// Initialize health monitoring
+	// Initialize health monitoring with real-time intervals
 	healthConfig := usecase.HealthConfig{
-		CheckInterval:       1 * time.Minute,
-		AgentTimeout:        3 * time.Minute,
-		HeartbeatGrace:      30 * time.Second,
-		MaxConcurrentChecks: 10,
+		CheckInterval:       5 * time.Second,  // ✅ Real-time: check every 5 seconds
+		AgentTimeout:        30 * time.Second, // ✅ Faster timeout detection
+		HeartbeatGrace:      10 * time.Second, // ✅ Shorter grace period
+		MaxConcurrentChecks: 20,               // ✅ More concurrent checks
 	}
 
-	// Get WebSocket hub from handler (assuming it's accessible)
-	var wsHub usecase.WebSocketHub
+	// ✅ Connect WebSocket hub for real-time updates
+	wsHub := handler.GetHub() // Get the singleton hub
 
 	healthMonitor := usecase.NewAgentHealthMonitor(
 		agentUsecase,

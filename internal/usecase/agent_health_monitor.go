@@ -55,17 +55,18 @@ func NewAgentHealthMonitor(
 	wsHub WebSocketHub,
 	config HealthConfig,
 ) AgentHealthMonitor {
+	// Set real-time defaults for better responsiveness
 	if config.CheckInterval == 0 {
-		config.CheckInterval = 1 * time.Minute
+		config.CheckInterval = 5 * time.Second // ✅ Real-time default
 	}
 	if config.AgentTimeout == 0 {
-		config.AgentTimeout = 3 * time.Minute
+		config.AgentTimeout = 30 * time.Second // ✅ Faster timeout default
 	}
 	if config.HeartbeatGrace == 0 {
-		config.HeartbeatGrace = 30 * time.Second
+		config.HeartbeatGrace = 10 * time.Second // ✅ Shorter grace default
 	}
 	if config.MaxConcurrentChecks == 0 {
-		config.MaxConcurrentChecks = 10
+		config.MaxConcurrentChecks = 20 // ✅ More concurrent checks
 	}
 
 	return &agentHealthMonitor{
