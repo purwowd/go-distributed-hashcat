@@ -12,9 +12,10 @@ type Agent struct {
 	Name         string    `json:"name" db:"name"`
 	IPAddress    string    `json:"ip_address" db:"ip_address"`
 	Port         int       `json:"port" db:"port"`
-	Status       string    `json:"status" db:"status"` // online, offline, busy
+	Status       string    `json:"status" db:"status"` // online, offline, busy, banned, key_only
 	Capabilities string    `json:"capabilities" db:"capabilities"`
 	LastSeen     time.Time `json:"last_seen" db:"last_seen"`
+	AgentKey     string    `json:"agent_key,omitempty" db:"agent_key"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -101,4 +102,93 @@ type CreateAgentRequest struct {
 	IPAddress    string `json:"ip_address" binding:"required"`
 	Port         int    `json:"port" binding:"required"`
 	Capabilities string `json:"capabilities,omitempty"`
+}
+
+// User represents a system user
+type User struct {
+	ID        uuid.UUID  `json:"id" db:"id"`
+	Username  string     `json:"username" db:"username"`
+	Email     string     `json:"email" db:"email"`
+	Password  string     `json:"-" db:"password"` // Hidden in JSON responses
+	Role      string     `json:"role" db:"role"`  // admin, user
+	IsActive  bool       `json:"is_active" db:"is_active"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	LastLogin *time.Time `json:"last_login" db:"last_login"`
+}
+
+// LoginRequest represents login credentials
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+// LoginResponse represents login response
+type LoginResponse struct {
+	Token     string    `json:"token"`
+	User      User      `json:"user"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// CreateUserRequest represents the request to create a new user
+type CreateUserRequest struct {
+	Username string `json:"username" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
+	Role     string `json:"role" binding:"oneof=admin user"`
+}
+
+// UpdateUserRequest represents the request to update user
+type UpdateUserRequest struct {
+	Username string `json:"username,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Role     string `json:"role,omitempty"`
+	IsActive *bool  `json:"is_active,omitempty"`
+}
+
+// ChangePasswordRequest represents password change request
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}
+
+// GenerateAgentKeyRequest represents request to generate new agent key
+type GenerateAgentKeyRequest struct {
+	Name        string     `json:"name" binding:"required"`
+	Description string     `json:"description,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+// GenerateAgentKeyResponse represents response with new agent key
+type GenerateAgentKeyResponse struct {
+	AgentKey    string     `json:"agent_key"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+// AgentKey represents an agent authentication key (separate from agents)
+type AgentKey struct {
+	ID          uuid.UUID  `json:"id" db:"id"`
+	AgentKey    string     `json:"agent_key" db:"agent_key"`
+	Name        string     `json:"name" db:"name"`
+	Description string     `json:"description,omitempty" db:"description"`
+	Status      string     `json:"status" db:"status"` // active, expired, revoked
+	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty" db:"last_used_at"`
+	AgentID     *uuid.UUID `json:"agent_id,omitempty" db:"agent_id"` // Reference to agent when key is used
+}
+
+// AgentKeyInfo represents agent key information for listing
+type AgentKeyInfo struct {
+	AgentKey    string     `json:"agent_key"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Status      string     `json:"status"` // active, expired, revoked
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	LastUsed    *time.Time `json:"last_used,omitempty"`
+	AgentID     *uuid.UUID `json:"agent_id,omitempty"` // If key is already used by an agent
 }

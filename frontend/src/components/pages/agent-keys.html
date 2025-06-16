@@ -1,0 +1,298 @@
+<!-- Keys Management Page -->
+<div class="space-y-6" x-init="loadAgentKeys()">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Agent Keys</h1>
+            <p class="text-gray-600 mt-1">Manage authentication keys for distributed agents</p>
+        </div>
+        <button @click="showGenerateModal = true" 
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors">
+            <i class="fas fa-plus"></i>
+            <span>Generate Key</span>
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-green-100 rounded-lg">
+                    <i class="fas fa-key text-green-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Active Keys</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="agentKeys.filter(k => k.status === 'active').length"></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-yellow-100 rounded-lg">
+                    <i class="fas fa-clock text-yellow-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Expired Keys</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="agentKeys.filter(k => k.status === 'expired').length"></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-red-100 rounded-lg">
+                    <i class="fas fa-ban text-red-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Revoked Keys</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="agentKeys.filter(k => k.status === 'revoked').length"></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="p-3 bg-blue-100 rounded-lg">
+                    <i class="fas fa-server text-blue-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Connected Agents</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="agentKeys.filter(k => k.agent_id).length"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keys Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="key in agentKeys" :key="key.agent_key">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900" x-text="key.name"></div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center space-x-2">
+                                    <code class="text-xs bg-gray-100 px-2 py-1 rounded font-mono" 
+                                          x-text="key.agent_key.substring(0, 16) + '...'"></code>
+                                    <button @click="copyToClipboard(key.agent_key)" 
+                                            class="text-gray-400 hover:text-gray-600 transition-colors">
+                                        <i class="fas fa-copy text-xs"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span :class="{
+                                    'bg-green-100 text-green-800': key.status === 'active',
+                                    'bg-yellow-100 text-yellow-800': key.status === 'expired',
+                                    'bg-red-100 text-red-800': key.status === 'revoked'
+                                }" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
+                                    <i :class="{
+                                        'fas fa-check-circle': key.status === 'active',
+                                        'fas fa-clock': key.status === 'expired',
+                                        'fas fa-ban': key.status === 'revoked'
+                                    }" class="mr-1"></i>
+                                    <span x-text="key.status.charAt(0).toUpperCase() + key.status.slice(1)"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <span x-show="key.agent_id">
+                                    <span class="text-green-600 font-medium" x-text="getAgentNameByKey(key)"></span>
+                                </span>
+                                <span x-show="!key.agent_id" class="text-gray-400">Not connected</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span x-text="formatDate(key.created_at)"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span x-show="key.last_used" x-text="formatDate(key.last_used)"></span>
+                                <span x-show="!key.last_used" class="text-gray-400">Never</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div class="flex items-center space-x-2">
+                                    <!-- First action slot - revoke button (only for active keys) -->
+                                    <div class="w-5 flex justify-center">
+                                        <button x-show="key.status === 'active'" 
+                                                @click="revokeKey(key.agent_key)" 
+                                                class="text-yellow-600 hover:text-yellow-900 transition-colors"
+                                                title="Revoke (disable but keep for audit)">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                        <!-- Empty space for non-active keys to maintain layout -->
+                                        <span x-show="key.status !== 'active'" class="text-transparent">
+                                            <i class="fas fa-ban"></i>
+                                        </span>
+                                    </div>
+                                    <!-- Second action slot - delete button always present -->
+                                    <div class="w-5 flex justify-center">
+                                        <button @click="deleteKey(key.agent_key)" 
+                                                class="text-red-600 hover:text-red-900 transition-colors"
+                                                title="Delete permanently">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    
+                    <!-- Empty state -->
+                    <tr x-show="agentKeys.length === 0">
+                        <td colspan="7" class="px-6 py-12 text-center">
+                            <div class="text-gray-400">
+                                <i class="fas fa-key text-4xl mb-4"></i>
+                                <p class="text-lg font-medium">No keys found</p>
+                                <p class="text-sm">Generate your first key to get started</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Generate Key Modal -->
+    <div x-show="showGenerateModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+         @click.self="showGenerateModal = false">
+        
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95">
+            
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Generate Key</h3>
+            </div>
+            
+            <form @submit.prevent="generateKey()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Key Name</label>
+                    <input type="text" 
+                           x-model="generateForm.name"
+                           placeholder="e.g., Production Agent 1"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description (Optional)</label>
+                    <textarea x-model="generateForm.description"
+                              placeholder="Brief description of this key"
+                              rows="3"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" 
+                            @click="showGenerateModal = false"
+                            class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            :disabled="isGenerating"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                        <span x-show="!isGenerating">Generate Key</span>
+                        <span x-show="isGenerating" class="flex items-center">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                            Generating...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Generated Key Modal -->
+    <div x-show="showKeyModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        
+        <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95">
+            
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Key Generated</h3>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div class="flex">
+                        <i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5 mr-3"></i>
+                        <div>
+                            <h4 class="text-sm font-medium text-yellow-800">Important!</h4>
+                            <p class="text-sm text-yellow-700 mt-1">
+                                Copy this key now. You won't be able to see it again for security reasons.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Key</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" 
+                               :value="generatedKey?.agent_key"
+                               readonly
+                               class="flex-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg font-mono text-sm">
+                        <button @click="copyToClipboard(generatedKey?.agent_key)" 
+                                class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-900 mb-2">Usage Instructions</h4>
+                    <ol class="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+                        <li>Copy the key above</li>
+                        <li>Configure your agent with this key</li>
+                        <li>Set the X-Agent-Key header in all agent requests</li>
+                        <li>The agent will be able to register and communicate with the server</li>
+                    </ol>
+                </div>
+                
+                <div class="flex justify-end pt-4">
+                    <button @click="showKeyModal = false; loadAgentKeys()" 
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 

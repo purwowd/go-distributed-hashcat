@@ -41,9 +41,9 @@ func (m *MockWordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*d
 	return args.Get(0).(*domain.Wordlist), args.Error(1)
 }
 
-func (m *MockWordlistUsecase) GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error) {
+func (m *MockWordlistUsecase) GetAllWordlists(ctx context.Context) ([]*domain.Wordlist, error) {
 	args := m.Called(ctx)
-	return args.Get(0).([]domain.Wordlist), args.Error(1)
+	return args.Get(0).([]*domain.Wordlist), args.Error(1)
 }
 
 func (m *MockWordlistUsecase) DeleteWordlist(ctx context.Context, id uuid.UUID) error {
@@ -266,7 +266,7 @@ func TestWordlistHandler_GetAllWordlists(t *testing.T) {
 		{
 			name: "successful wordlists retrieval",
 			mockSetup: func(mockUsecase *MockWordlistUsecase) {
-				wordlists := []domain.Wordlist{
+				wordlists := []*domain.Wordlist{
 					{
 						ID:       uuid.New(),
 						Name:     "rockyou.txt",
@@ -294,7 +294,7 @@ func TestWordlistHandler_GetAllWordlists(t *testing.T) {
 		{
 			name: "no wordlists found",
 			mockSetup: func(mockUsecase *MockWordlistUsecase) {
-				mockUsecase.On("GetAllWordlists", mock.Anything).Return([]domain.Wordlist{}, nil)
+				mockUsecase.On("GetAllWordlists", mock.Anything).Return([]*domain.Wordlist{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -308,7 +308,7 @@ func TestWordlistHandler_GetAllWordlists(t *testing.T) {
 		{
 			name: "usecase error",
 			mockSetup: func(mockUsecase *MockWordlistUsecase) {
-				mockUsecase.On("GetAllWordlists", mock.Anything).Return([]domain.Wordlist{}, errors.New("database error"))
+				mockUsecase.On("GetAllWordlists", mock.Anything).Return([]*domain.Wordlist{}, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {

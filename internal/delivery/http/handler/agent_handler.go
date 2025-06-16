@@ -27,7 +27,17 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		return
 	}
 
-	agent, err := h.agentUsecase.RegisterAgent(c.Request.Context(), &req)
+	// Get agent from middleware (already validated)
+	agentFromKey, exists := c.Get("agent")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Agent key validation failed"})
+		return
+	}
+
+	keyAgent := agentFromKey.(*domain.Agent)
+
+	// Register agent with the validated key
+	agent, err := h.agentUsecase.RegisterAgentWithKey(c.Request.Context(), keyAgent.AgentKey, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

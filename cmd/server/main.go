@@ -278,15 +278,19 @@ func startServer() {
 
 	// Initialize repositories
 	agentRepo := repository.NewAgentRepository(db)
+	agentKeyRepo := repository.NewAgentKeyRepository(db)
 	jobRepo := repository.NewJobRepository(db)
 	hashFileRepo := repository.NewHashFileRepository(db)
 	wordlistRepo := repository.NewWordlistRepository(db)
+	userRepo := repository.NewUserRepository(db.DB())
 
 	// Initialize use cases
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentKeyRepo)
 	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
 	hashFileUsecase := usecase.NewHashFileUsecase(hashFileRepo, config.Upload.Directory)
 	wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
+	authUsecase := usecase.NewAuthUsecase(userRepo)
+	agentKeyUsecase := usecase.NewAgentKeyUsecase(agentKeyRepo, agentRepo)
 
 	// Initialize enrichment service
 	jobEnrichmentService := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)
@@ -299,7 +303,7 @@ func startServer() {
 	log.Printf("✅ WebSocket hub connected to agent usecase")
 
 	// Initialize HTTP router
-	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase, jobEnrichmentService)
+	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase, jobEnrichmentService, authUsecase, agentKeyUsecase)
 
 	// Create HTTP server
 	server := &http.Server{

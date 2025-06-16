@@ -73,6 +73,24 @@ func (m *MockAgentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) 
 	return args.Error(0)
 }
 
+func (m *MockAgentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
+	args := m.Called(ctx, agentKey)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
+func (m *MockAgentRepository) UpdateAgentKey(ctx context.Context, id uuid.UUID, agentKey string) error {
+	args := m.Called(ctx, id, agentKey)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) RevokeAgentKey(ctx context.Context, agentKey string) error {
+	args := m.Called(ctx, agentKey)
+	return args.Error(0)
+}
+
 // MockWordlistRepository for testing
 type MockWordlistRepository struct {
 	mock.Mock
@@ -91,9 +109,14 @@ func (m *MockWordlistRepository) GetByID(ctx context.Context, id uuid.UUID) (*do
 	return args.Get(0).(*domain.Wordlist), args.Error(1)
 }
 
-func (m *MockWordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, error) {
+func (m *MockWordlistRepository) GetAll(ctx context.Context) ([]*domain.Wordlist, error) {
 	args := m.Called(ctx)
-	return args.Get(0).([]domain.Wordlist), args.Error(1)
+	return args.Get(0).([]*domain.Wordlist), args.Error(1)
+}
+
+func (m *MockWordlistRepository) GetByName(ctx context.Context, name string) (*domain.Wordlist, error) {
+	args := m.Called(ctx, name)
+	return args.Get(0).(*domain.Wordlist), args.Error(1)
 }
 
 func (m *MockWordlistRepository) Delete(ctx context.Context, id uuid.UUID) error {

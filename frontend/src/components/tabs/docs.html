@@ -1,446 +1,304 @@
 <!-- API Documentation Tab -->
-<section x-show="currentTab === 'docs'" class="section-modern animate-fade-in">
+<section x-show="currentTab === 'docs'" class="section-modern animate-fade-in" x-data="{ activeSection: 'overview' }">
     <!-- Hero Section -->
     <div class="mb-8">
         <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-2xl mb-6">
-                <i class="fas fa-book text-2xl"></i>
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-xl mb-4">
+                <i class="fas fa-book text-xl"></i>
             </div>
-            <h2 class="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+            <h2 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
                 API Documentation
             </h2>
-            <p class="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
-                Complete REST API documentation for distributed password cracking
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto mb-6">
+                Complete REST API reference for distributed hashcat operations. Build powerful integrations with our comprehensive endpoints for agents, jobs, files, and real-time monitoring.
             </p>
-            <div class="flex flex-wrap justify-center gap-4">
-                <div class="bg-blue-50 px-4 py-2 rounded-full text-blue-700 text-sm font-medium">
-                    <i class="fas fa-server mr-2"></i>Base URL: localhost:1337
-                </div>
-                <div class="bg-purple-50 px-4 py-2 rounded-full text-purple-700 text-sm font-medium">
-                    <i class="fas fa-code mr-2"></i>API Version: v1
-                </div>
-                <div class="bg-green-50 px-4 py-2 rounded-full text-green-700 text-sm font-medium">
-                    <i class="fas fa-file-code mr-2"></i>Format: JSON
-                </div>
-                <div class="bg-orange-50 px-4 py-2 rounded-full text-orange-700 text-sm font-medium">
-                    <i class="fas fa-bolt mr-2"></i>WebSocket: /ws
-                </div>
+            <div class="flex flex-wrap justify-center gap-3 text-sm">
+                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">REST API</span>
+                <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">WebSocket</span>
+                <span class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full font-medium">JSON</span>
+                <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-medium">Real-time</span>
             </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex flex-wrap justify-center gap-2 mb-8">
+            <button @click="activeSection = 'overview'" 
+                    :class="activeSection === 'overview' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border border-gray-200">
+                <i class="fas fa-home mr-2"></i>Overview
+            </button>
+            <button @click="activeSection = 'authentication'" 
+                    :class="activeSection === 'authentication' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border border-gray-200">
+                <i class="fas fa-key mr-2"></i>Authentication
+            </button>
+            <button @click="activeSection = 'endpoints'" 
+                    :class="activeSection === 'endpoints' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border border-gray-200">
+                <i class="fas fa-code mr-2"></i>API Endpoints
+            </button>
+            <button @click="activeSection = 'examples'" 
+                    :class="activeSection === 'examples' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    class="px-4 py-2 rounded-lg font-medium transition-all duration-200 border border-gray-200">
+                <i class="fas fa-play mr-2"></i>Examples
+            </button>
         </div>
     </div>
 
-    <!-- Quick Navigation Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
-        <button @click="document.getElementById('setup-docs').scrollIntoView({ behavior: 'smooth' })" 
-                class="card-modern p-6 text-center group hover:scale-105 transition-all duration-300">
-            <div class="icon-modern icon-purple mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                <i class="fas fa-rocket text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-gray-900 mb-2">Setup Agent</h3>
-            <p class="text-sm text-gray-600">Complete agent deployment guide</p>
-        </button>
-
-        <button @click="document.getElementById('health-docs').scrollIntoView({ behavior: 'smooth' })" 
-                class="card-modern p-6 text-center group hover:scale-105 transition-all duration-300">
-            <div class="icon-modern icon-success mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                <i class="fas fa-heartbeat text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-gray-900 mb-2">Health Check</h3>
-            <p class="text-sm text-gray-600">API status monitoring</p>
-        </button>
-        
-        <button @click="document.getElementById('agents-docs').scrollIntoView({ behavior: 'smooth' })" 
-                class="card-modern p-6 text-center group hover:scale-105 transition-all duration-300">
-            <div class="icon-modern icon-primary mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                <i class="fas fa-server text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-gray-900 mb-2">Agent Management</h3>
-            <p class="text-sm text-gray-600">Register & manage agents</p>
-        </button>
-        
-        <button @click="document.getElementById('jobs-docs').scrollIntoView({ behavior: 'smooth' })" 
-                class="card-modern p-6 text-center group hover:scale-105 transition-all duration-300">
-            <div class="icon-modern icon-warning mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                <i class="fas fa-tasks text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-gray-900 mb-2">Job Management</h3>
-            <p class="text-sm text-gray-600">Create & control jobs</p>
-        </button>
-        
-        <button @click="document.getElementById('files-docs').scrollIntoView({ behavior: 'smooth' })" 
-                class="card-modern p-6 text-center group hover:scale-105 transition-all duration-300">
-            <div class="icon-modern icon-info mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                <i class="fas fa-file-upload text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-gray-900 mb-2">File Management</h3>
-            <p class="text-sm text-gray-600">Upload hash files & wordlists</p>
-        </button>
-
-        <button @click="document.getElementById('cache-docs').scrollIntoView({ behavior: 'smooth' })" 
-                class="card-modern p-6 text-center group hover:scale-105 transition-all duration-300">
-            <div class="icon-modern icon-danger mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                <i class="fas fa-tachometer-alt text-xl"></i>
-            </div>
-            <h3 class="font-semibold text-gray-900 mb-2">Cache & Performance</h3>
-            <p class="text-sm text-gray-600">Cache statistics & management</p>
-        </button>
-    </div>
-
-    <!-- Setup Agent Documentation -->
-    <div id="setup-docs" class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-purple mr-4">
-                <i class="fas fa-rocket text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">Setup Agent</h3>
-        </div>
-
-        <!-- Overview -->
-        <div class="mb-8 p-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200">
-            <h4 class="text-lg font-semibold text-purple-900 mb-3 flex items-center">
-                <i class="fas fa-info-circle mr-2"></i>Overview
-            </h4>
-            <p class="text-purple-800 leading-relaxed">
-                This guide covers complete agent deployment for distributed hashcat processing. 
-                Agents can run on GPU-enabled servers, local machines, or cloud instances to provide 
-                computational power for password cracking jobs.
-            </p>
-        </div>
-
-        <!-- Prerequisites -->
-        <div class="mb-8">
-            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <i class="fas fa-clipboard-check text-blue-600 mr-2"></i>Prerequisites
-            </h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="space-y-3">
-                    <h5 class="font-medium text-gray-800">System Requirements:</h5>
-                    <ul class="space-y-2 text-sm text-gray-700">
-                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Linux/Windows/macOS</li>
-                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Go 1.21+ or agent binary</li>
-                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Hashcat 6.1.1+</li>
-                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Network access to server</li>
-                    </ul>
+    <!-- Overview Section -->
+    <div x-show="activeSection === 'overview'" x-transition class="space-y-6">
+        <!-- Base URL Info -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Base Information</h3>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-semibold text-gray-800 mb-2">Base URL</h4>
+                        <div class="bg-gray-100 p-3 rounded-lg font-mono text-sm">
+                            http://localhost:1337/api/v1
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-gray-800 mb-2">Content Type</h4>
+                        <div class="bg-gray-100 p-3 rounded-lg font-mono text-sm">
+                            application/json
+                        </div>
+                    </div>
                 </div>
-                <div class="space-y-3">
-                    <h5 class="font-medium text-gray-800">Recommended:</h5>
-                    <ul class="space-y-2 text-sm text-gray-700">
-                        <li class="flex items-center"><i class="fas fa-star text-yellow-500 mr-2"></i>GPU with CUDA/OpenCL</li>
-                        <li class="flex items-center"><i class="fas fa-star text-yellow-500 mr-2"></i>8GB+ RAM</li>
-                        <li class="flex items-center"><i class="fas fa-star text-yellow-500 mr-2"></i>SSD storage</li>
-                        <li class="flex items-center"><i class="fas fa-star text-yellow-500 mr-2"></i>Stable internet connection</li>
-                    </ul>
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-semibold text-gray-800 mb-2">WebSocket URL</h4>
+                        <div class="bg-gray-100 p-3 rounded-lg font-mono text-sm">
+                            ws://localhost:1337/ws
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-gray-800 mb-2">API Version</h4>
+                        <div class="bg-gray-100 p-3 rounded-lg font-mono text-sm">
+                            v1
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Quick Setup -->
-        <div class="mb-8 p-6 bg-gradient-to-r from-green-50 to-teal-50 rounded-xl border border-green-200">
-            <h4 class="text-lg font-semibold text-green-900 mb-4 flex items-center">
-                <i class="fas fa-bolt mr-2"></i>Quick Setup (5 minutes)
-            </h4>
+        <!-- Features Grid -->
+        <div class="grid md:grid-cols-3 gap-6">
+            <div class="card-modern p-6 text-center">
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-server text-blue-600 text-xl"></i>
+                </div>
+                <h3 class="font-bold text-gray-900 mb-2">Agent Management</h3>
+                <p class="text-gray-600 text-sm">Register, monitor, and manage distributed hashcat agents across your network infrastructure.</p>
+            </div>
+            <div class="card-modern p-6 text-center">
+                <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-tasks text-green-600 text-xl"></i>
+                </div>
+                <h3 class="font-bold text-gray-900 mb-2">Job Control</h3>
+                <p class="text-gray-600 text-sm">Create, start, pause, and monitor hashcat jobs with real-time progress tracking.</p>
+            </div>
+            <div class="card-modern p-6 text-center">
+                <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-file-upload text-purple-600 text-xl"></i>
+                </div>
+                <h3 class="font-bold text-gray-900 mb-2">File Management</h3>
+                <p class="text-gray-600 text-sm">Upload hash files, wordlists, and manage file distribution across agents.</p>
+            </div>
+        </div>
+
+        <!-- Quick Start -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Quick Start Guide</h3>
             <div class="space-y-4">
-                <div class="code-block success bash" 
-                     @click="copyToClipboard($el.textContent.trim(), $el)"
-                     data-lang="bash"
-                     title="Click to copy"
-                     tabindex="0">
-# 1. Download agent binary
-curl -L https://github.com/your-repo/releases/latest/download/agent-linux -o agent
-chmod +x agent
-
-# 2. Create directories
-mkdir -p /root/uploads/{wordlists,hash-files,temp}
-
-# 3. Start agent
-./agent --server http://your-server:1337 --name my-gpu-agent
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">1</span>
+                    <div>
+                        <h4 class="font-semibold text-gray-800 mb-1">Check API Health</h4>
+                        <p class="text-gray-600 text-sm mb-2">Verify the API is running and accessible</p>
+                        <div class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg font-mono">
+                            curl http://localhost:1337/health
+                        </div>
+                    </div>
                 </div>
-                <p class="text-green-800 text-sm">
-                    <i class="fas fa-lightbulb mr-2"></i>
-                    That's it! Your agent is now connected and ready to process jobs.
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">2</span>
+                    <div>
+                        <h4 class="font-semibold text-gray-800 mb-1">Register an Agent</h4>
+                        <p class="text-gray-600 text-sm mb-2">Connect your first hashcat agent to the system</p>
+                        <div class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg font-mono">
+                            curl -X POST -H "Content-Type: application/json" \<br/>
+                            &nbsp;&nbsp;-d '{"name":"agent1","ip":"192.168.1.100"}' \<br/>
+                            &nbsp;&nbsp;http://localhost:1337/api/v1/agents/register
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">3</span>
+                    <div>
+                        <h4 class="font-semibold text-gray-800 mb-1">Upload Files & Create Jobs</h4>
+                        <p class="text-gray-600 text-sm">Upload hash files, wordlists, and start cracking jobs</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Section -->
+    <div x-show="activeSection === 'authentication'" x-transition class="space-y-6">
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Authentication</h3>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div class="flex items-center">
+                    <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                    <span class="text-blue-800 font-medium">Current Version: No Authentication Required</span>
+                </div>
+                <p class="text-blue-700 text-sm mt-2">
+                    The current API version does not require authentication. All endpoints are publicly accessible. 
+                    Future versions will include API key authentication for enhanced security.
                 </p>
             </div>
+
+            <h4 class="font-semibold text-gray-800 mb-3">Planned Authentication (Future)</h4>
+            <div class="space-y-4">
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h5 class="font-medium text-gray-800 mb-2">API Key Authentication</h5>
+                    <p class="text-gray-600 text-sm mb-3">Future versions will require API key in headers:</p>
+                    <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+                        curl -H "X-API-Key: your-api-key" \<br/>
+                        &nbsp;&nbsp;http://localhost:1337/api/v1/agents
+                    </div>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h5 class="font-medium text-gray-800 mb-2">Agent Key Authentication</h5>
+                    <p class="text-gray-600 text-sm mb-3">Agents will authenticate using pre-shared keys:</p>
+                    <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+                        curl -H "Authorization: Bearer agent-key" \<br/>
+                        &nbsp;&nbsp;http://localhost:1337/api/v1/agents/register
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Endpoints Section -->
+    <div x-show="activeSection === 'endpoints'" x-transition class="space-y-6">
+        <!-- Health Check -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">System Health</h3>
+            <div class="space-y-4">
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-green-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-green-800 font-mono text-sm">/health</code>
+                        </div>
+                        <button @click="copyToClipboard('curl http://localhost:1337/health')" 
+                                class="text-green-600 hover:text-green-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Check API server health and status</p>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <h5 class="font-medium text-gray-800 mb-2">Response (200 OK)</h5>
+                            <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+{<br/>
+&nbsp;&nbsp;"status": "ok",<br/>
+&nbsp;&nbsp;"timestamp": "2024-01-15T10:30:00Z",<br/>
+&nbsp;&nbsp;"version": "1.0.0"<br/>
+}
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-gray-800 mb-2">Response Fields</h5>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <code class="text-blue-600">status</code>
+                                    <span class="text-gray-600">Server status</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <code class="text-blue-600">timestamp</code>
+                                    <span class="text-gray-600">Current server time</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <code class="text-blue-600">version</code>
+                                    <span class="text-gray-600">API version</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Manual Installation -->
-        <div class="mb-8">
-            <h4 class="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-                <i class="fas fa-cog text-blue-600 mr-2"></i>Manual Installation
-            </h4>
-
+        <!-- Agents API -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Agents Management</h3>
             <div class="space-y-6">
-                <!-- Step 1: Install Dependencies -->
-                <div class="api-endpoint">
-                    <h5 class="font-semibold text-md mb-4 flex items-center">
-                        <span class="step-number">1</span>Install Dependencies
-                    </h5>
-                    
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Ubuntu/Debian:</h6>
-                            <div class="code-block bash" 
-                                 @click="copyToClipboard($el.textContent.trim(), $el)"
-                                 data-lang="bash"
-                                 title="Click to copy"
-                                 tabindex="0">
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install dependencies
-sudo apt install -y curl git build-essential
-
-# Install hashcat
-sudo apt install -y hashcat
-
-# Install NVIDIA drivers (if GPU)
-sudo ubuntu-drivers autoinstall
-sudo reboot
-                            </div>
+                <!-- List Agents -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/agents</code>
                         </div>
-                        
-                        <div>
-                            <h6 class="font-medium mb-3 text-gray-700">CentOS/RHEL:</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# Update system
-sudo yum update -y
-
-# Install dependencies
-sudo yum install -y curl git gcc
-
-# Install hashcat from EPEL
-sudo yum install -y epel-release
-sudo yum install -y hashcat
-
-# Install NVIDIA drivers
-sudo yum install -y nvidia-driver
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Windows:</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# 1. Download hashcat from:
-# https://hashcat.net/hashcat/
-
-# 2. Install NVIDIA/AMD drivers
-
-# 3. Download agent.exe from releases
-
-# 4. Run in PowerShell:
-.\agent.exe --server http://server:1337
-                            </div>
-                        </div>
+                        <button @click="copyToClipboard('curl http://localhost:1337/api/v1/agents')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Retrieve list of all registered agents with their current status</p>
+                    <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+[<br/>
+&nbsp;&nbsp;{<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"id": "uuid",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"name": "agent1",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"ip": "192.168.1.100",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"status": "online",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"last_seen": "2024-01-15T10:30:00Z",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"capabilities": ["hashcat", "gpu"]<br/>
+&nbsp;&nbsp;}<br/>
+]
                     </div>
                 </div>
 
-                <!-- Step 2: Setup Directories -->
-                <div class="api-endpoint">
-                    <h5 class="font-semibold text-md mb-4 flex items-center">
-                        <span class="step-number">2</span>Setup Directories
-                    </h5>
-                    
-                    <div class="code-block" 
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-# Create upload structure
-sudo mkdir -p /root/uploads/{wordlists,hash-files,temp}
-sudo mkdir -p /root/uploads/wordlists/{common,leaked,custom}
-sudo mkdir -p /root/uploads/hash-files/{wifi,other}
-
-# Set permissions
-sudo chown -R $USER:$USER /root/uploads
-sudo chmod -R 755 /root/uploads
-
-# Verify structure
-tree /root/uploads
+                <!-- Register Agent -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-green-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-green-800 font-mono text-sm">/api/v1/agents/register</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;name&quot;:&quot;agent1&quot;,&quot;ip&quot;:&quot;192.168.1.100&quot;}&apos; http://localhost:1337/api/v1/agents/register')" 
+                                class="text-green-600 hover:text-green-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
                     </div>
-                </div>
-
-                <!-- Step 3: Download Agent -->
-                <div class="api-endpoint">
-                    <h5 class="font-semibold text-md mb-4 flex items-center">
-                        <span class="step-number">3</span>Download & Build Agent
-                    </h5>
-                    
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <p class="text-gray-600 text-sm mb-3">Register a new agent in the distributed system</p>
+                    <div class="grid md:grid-cols-2 gap-4">
                         <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Option A: Pre-built Binary</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# Download latest release
-curl -L https://github.com/your-repo/go-distributed-hashcat/releases/latest/download/agent-linux \
-     -o /usr/local/bin/hashcat-agent
-
-# Make executable
-sudo chmod +x /usr/local/bin/hashcat-agent
-
-# Test installation
-hashcat-agent --version
+                            <h5 class="font-medium text-gray-800 mb-2">Request Body</h5>
+                            <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+{<br/>
+&nbsp;&nbsp;"name": "agent1",<br/>
+&nbsp;&nbsp;"ip": "192.168.1.100"<br/>
+}
                             </div>
                         </div>
-                        
                         <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Option B: Build from Source</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# Install Go 1.21+
-wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go*.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-
-# Clone and build
-git clone https://github.com/your-repo/go-distributed-hashcat.git
-cd go-distributed-hashcat
-make build-agent
-
-# Install binary
-sudo cp bin/agent /usr/local/bin/hashcat-agent
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 4: Configure Agent -->
-                <div class="api-endpoint">
-                    <h5 class="font-semibold text-md mb-4 flex items-center">
-                        <span class="step-number">4</span>Configure Agent
-                    </h5>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Create Configuration File:</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# Create config directory
-sudo mkdir -p /etc/hashcat-agent
-
-# Create configuration file
-sudo tee /etc/hashcat-agent/config.yaml &lt;&lt; 'EOF'
-server:
-  url: "http://your-server:1337"
-  
-agent:
-  name: "gpu-server-01"
-  upload_dir: "/root/uploads"
-  max_jobs: 4
-  heartbeat_interval: "30s"
-  
-gpu:
-  enabled: true
-  vendor: "nvidia"  # or "amd"
-  memory: "24GB"
-  compute_capability: "8.6"
-  
-logging:
-  level: "info"
-  file: "/var/log/hashcat-agent.log"
-EOF
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Alternative: Environment Variables</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# Set environment variables
-export HASHCAT_SERVER_URL="http://your-server:1337"
-export HASHCAT_AGENT_NAME="gpu-server-01"
-export HASHCAT_UPLOAD_DIR="/root/uploads"
-export HASHCAT_MAX_JOBS="4"
-export HASHCAT_GPU_INFO="RTX 4090, 24GB VRAM"
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 5: Setup as Service -->
-                <div class="api-endpoint">
-                    <h5 class="font-semibold text-md mb-4 flex items-center">
-                        <span class="step-number">5</span>Setup as System Service
-                    </h5>
-                    
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Systemd Service (Linux):</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# Create systemd service
-sudo tee /etc/systemd/system/hashcat-agent.service &lt;&lt; 'EOF'
-[Unit]
-Description=Hashcat Distributed Agent
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/hashcat-agent
-ExecStart=/usr/local/bin/hashcat-agent \
-    --server http://your-server:1337 \
-    --name gpu-server-01 \
-    --upload-dir /root/uploads \
-    --max-jobs 4
-Restart=always
-RestartSec=10
-
-Environment=HASHCAT_WORKLOAD_PROFILE=3
-Environment=CUDA_VISIBLE_DEVICES=0,1
-
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Enable and start service
-sudo systemctl daemon-reload
-sudo systemctl enable hashcat-agent
-sudo systemctl start hashcat-agent
-
-# Check status
-sudo systemctl status hashcat-agent
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <h6 class="font-medium mb-3 text-gray-700">Docker Service:</h6>
-                            <div class="code-block" 
-                                 @click="copyToClipboard($el.textContent.trim())"
-                                 title="Click to copy">
-# Create docker-compose.yml
-cat > docker-compose.yml &lt;&lt; 'EOF'
-version: '3.8'
-services:
-  hashcat-agent:
-    image: hashcat-agent:latest
-    container_name: hashcat-agent
-    restart: always
-    runtime: nvidia
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - HASHCAT_SERVER_URL=http://your-server:1337
-      - HASHCAT_AGENT_NAME=docker-gpu-agent
-    volumes:
-      - ./uploads:/root/uploads
-      - /dev:/dev
-    network_mode: host
-    privileged: true
-EOF
-
-# Run with Docker Compose
-docker-compose up -d
-
-# Check logs
-docker-compose logs -f hashcat-agent
+                            <h5 class="font-medium text-gray-800 mb-2">Parameters</h5>
+                            <div class="space-y-2 text-sm">
+                                <div>
+                                    <code class="text-blue-600">name</code>
+                                    <span class="text-red-500 ml-1">*</span>
+                                    <p class="text-gray-600 text-xs">Unique agent identifier</p>
+                                </div>
+                                <div>
+                                    <code class="text-blue-600">ip</code>
+                                    <span class="text-red-500 ml-1">*</span>
+                                    <p class="text-gray-600 text-xs">Agent IP address</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -448,979 +306,820 @@ docker-compose logs -f hashcat-agent
             </div>
         </div>
 
-        <!-- Agent Commands -->
-        <div class="mb-8">
-            <h4 class="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-                <i class="fas fa-terminal text-green-600 mr-2"></i>Agent Commands & Options
-            </h4>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                    <h5 class="font-medium mb-3 text-gray-700">Basic Usage:</h5>
-                    <div class="code-block" 
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-# Start agent with minimum options
-./agent --server http://localhost:1337
-
-# Start with custom name and capabilities
-./agent --server http://192.168.1.100:1337 \
-        --name "my-gpu-rig" \
-        --capabilities "RTX 4090, 24GB VRAM"
-
-# Start with custom upload directory
-./agent --server http://server:1337 \
-        --upload-dir /custom/path \
-        --name "dedicated-gpu"
+        <!-- Jobs API -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Jobs Management</h3>
+            <div class="space-y-6">
+                <!-- List Jobs -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/jobs</code>
+                        </div>
+                        <button @click="copyToClipboard('curl http://localhost:1337/api/v1/jobs')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Get all hashcat jobs with their current status and progress</p>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <h5 class="font-medium text-blue-900 mb-2">Query Parameters:</h5>
+                        <div class="text-blue-800 text-sm">
+                            <div>• <code>status</code> - Filter jobs by status (pending, running, completed, failed)</div>
+                        </div>
                     </div>
                 </div>
-                
-                <div>
-                    <h5 class="font-medium mb-3 text-gray-700">Advanced Options:</h5>
-                    <div class="code-block" 
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-# Full configuration
-./agent \
-  --server http://server:1337 \
-  --name "production-gpu-01" \
-  --ip 192.168.1.50 \
-  --port 8080 \
-  --capabilities "RTX 4090, CUDA 12.0" \
-  --upload-dir /data/uploads \
-  --max-jobs 8 \
-  --heartbeat-interval 15s \
-  --log-level debug \
-  --config /etc/agent/config.yaml
+
+                <!-- Create Job -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-green-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-green-800 font-mono text-sm">/api/v1/jobs</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;name&quot;:&quot;WiFi Crack&quot;,&quot;hash_file_id&quot;:&quot;uuid&quot;,&quot;wordlist&quot;:&quot;rockyou.txt&quot;}&apos; http://localhost:1337/api/v1/jobs')" 
+                                class="text-green-600 hover:text-green-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
                     </div>
-                </div>
-            </div>
-
-            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-                <h6 class="font-medium mb-3 text-gray-800">Available Command Line Options:</h6>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                    <div><code class="text-blue-600">--server</code> - Server URL (required)</div>
-                    <div><code class="text-blue-600">--name</code> - Agent name</div>
-                    <div><code class="text-blue-600">--ip</code> - Agent IP address</div>
-                    <div><code class="text-blue-600">--port</code> - Agent port (default: 8081)</div>
-                    <div><code class="text-blue-600">--capabilities</code> - Hardware description</div>
-                    <div><code class="text-blue-600">--upload-dir</code> - Local files directory</div>
-                    <div><code class="text-blue-600">--max-jobs</code> - Concurrent jobs limit</div>
-                    <div><code class="text-blue-600">--heartbeat-interval</code> - Heartbeat frequency</div>
-                    <div><code class="text-blue-600">--log-level</code> - Logging level</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- File Management -->
-        <div class="mb-8">
-            <h4 class="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-                <i class="fas fa-folder-open text-orange-600 mr-2"></i>File Management
-            </h4>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                    <h5 class="font-medium mb-3 text-gray-700">Directory Structure:</h5>
-                    <div class="code-block">
-/root/uploads/
-├── wordlists/
-│   ├── common/           # Popular wordlists
-│   │   ├── rockyou.txt
-│   │   └── 10k-most-common.txt
-│   ├── leaked/           # Breach data
-│   │   ├── linkedin.txt
-│   │   └── adobe.txt
-│   └── custom/           # Target-specific
-│       └── company-words.txt
-├── hash-files/
-│   ├── wifi/             # WiFi captures
-│   │   ├── handshake.hccapx
-│   │   └── capture.cap
-│   └── other/            # Other hash types
-│       └── hashes.txt
-└── temp/                 # Temporary files
-                    </div>
-                </div>
-                
-                <div>
-                    <h5 class="font-medium mb-3 text-gray-700">Download Popular Wordlists:</h5>
-                    <div class="code-block" 
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-# Create download script
-cat > download-wordlists.sh &lt;&lt; 'EOF'
-#!/bin/bash
-cd /root/uploads/wordlists/common
-
-# Download rockyou.txt (most important)
-wget https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt
-
-# Download SecLists
-git clone --depth 1 https://github.com/danielmiessler/SecLists.git /tmp/SecLists
-cp /tmp/SecLists/Passwords/Common-Credentials/*.txt .
-cp /tmp/SecLists/Passwords/Leaked-Databases/*.txt ../leaked/
-
-echo "✅ Wordlists downloaded"
-EOF
-
-chmod +x download-wordlists.sh
-./download-wordlists.sh
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Monitoring & Troubleshooting -->
-        <div class="mb-8">
-            <h4 class="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-                <i class="fas fa-chart-line text-purple-600 mr-2"></i>Monitoring & Troubleshooting
-            </h4>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div>
-                    <h5 class="font-medium mb-3 text-gray-700">Monitor Agent Status:</h5>
-                    <div class="code-block" 
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-# Check service status
-sudo systemctl status hashcat-agent
-
-# View logs
-sudo journalctl -u hashcat-agent -f
-
-# Check agent registration
-curl http://server:1337/api/v1/agents/
-
-# Monitor GPU usage
-nvidia-smi -l 1
-                    </div>
-                </div>
-                
-                <div>
-                    <h5 class="font-medium mb-3 text-gray-700">Common Issues:</h5>
-                    <div class="space-y-3 text-sm text-gray-700">
-                        <div class="flex items-start">
-                            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2 mt-1"></i>
-                            <div>
-                                <strong>Agent not registering:</strong><br>
-                                Check network connectivity and server URL
+                    <p class="text-gray-600 text-sm mb-3">Create a new hashcat job for distributed processing</p>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <h5 class="font-medium text-gray-800 mb-2">Request Body</h5>
+                            <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+{<br/>
+&nbsp;&nbsp;"name": "WiFi Crack",<br/>
+&nbsp;&nbsp;"hash_file_id": "uuid",<br/>
+&nbsp;&nbsp;"wordlist": "rockyou.txt",<br/>
+&nbsp;&nbsp;"attack_mode": 0,<br/>
+&nbsp;&nbsp;"hash_type": 2500<br/>
+}
                             </div>
                         </div>
-                        <div class="flex items-start">
-                            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2 mt-1"></i>
-                            <div>
-                                <strong>GPU not detected:</strong><br>
-                                Install proper drivers and verify with nvidia-smi
-                            </div>
-                        </div>
-                        <div class="flex items-start">
-                            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2 mt-1"></i>
-                            <div>
-                                <strong>Jobs failing:</strong><br>
-                                Check hashcat installation and file permissions
+                        <div>
+                            <h5 class="font-medium text-gray-800 mb-2">Parameters</h5>
+                            <div class="space-y-2 text-sm">
+                                <div>
+                                    <code class="text-blue-600">name</code>
+                                    <span class="text-red-500 ml-1">*</span>
+                                    <p class="text-gray-600 text-xs">Job display name</p>
+                                </div>
+                                <div>
+                                    <code class="text-blue-600">hash_file_id</code>
+                                    <span class="text-red-500 ml-1">*</span>
+                                    <p class="text-gray-600 text-xs">Uploaded hash file UUID</p>
+                                </div>
+                                <div>
+                                    <code class="text-blue-600">wordlist</code>
+                                    <span class="text-red-500 ml-1">*</span>
+                                    <p class="text-gray-600 text-xs">Wordlist filename</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div>
-                    <h5 class="font-medium mb-3 text-gray-700">Performance Optimization:</h5>
-                    <div class="code-block" 
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-# Set GPU performance mode
-sudo nvidia-smi -pm 1
 
-# Set power limit (adjust for your GPU)
-sudo nvidia-smi -pl 300
+                <!-- Get Job -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/jobs/{id}</code>
+                        </div>
+                        <button @click="copyToClipboard('curl http://localhost:1337/api/v1/jobs/your-job-uuid')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Get detailed information about a specific job</p>
+                </div>
 
-# Enable persistence mode
-sudo nvidia-smi -pm 1
+                <!-- Start Job -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-orange-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-orange-800 font-mono text-sm">/api/v1/jobs/{id}/start</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/jobs/your-job-id/start')" 
+                                class="text-orange-600 hover:text-orange-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Start execution of a created job across available agents</p>
+                </div>
 
-# Check GPU temperature
-nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader
+                <!-- Job Control Operations -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h5 class="font-medium text-gray-800 mb-3">Job Control Operations</h5>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-2 bg-yellow-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-yellow-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">POST</span>
+                                    <code class="text-yellow-800 font-mono text-xs">/jobs/{id}/pause</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-green-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">POST</span>
+                                    <code class="text-green-800 font-mono text-xs">/jobs/{id}/resume</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-red-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">POST</span>
+                                    <code class="text-red-800 font-mono text-xs">/jobs/{id}/stop</code>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-2 bg-blue-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">PUT</span>
+                                    <code class="text-blue-800 font-mono text-xs">/jobs/{id}/progress</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-green-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">POST</span>
+                                    <code class="text-green-800 font-mono text-xs">/jobs/{id}/complete</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-red-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">DELETE</span>
+                                    <code class="text-red-800 font-mono text-xs">/jobs/{id}</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Job Operations -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h5 class="font-medium text-gray-800 mb-3">Advanced Operations</h5>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
+                            <div class="flex items-center">
+                                <span class="bg-purple-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                                <code class="text-purple-800 font-mono text-sm">/api/v1/jobs/assign</code>
+                            </div>
+                            <button @click="copyToClipboard('curl -X POST -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;job_ids&quot;:[&quot;uuid1&quot;,&quot;uuid2&quot;],&quot;agent_ids&quot;:[&quot;agent-uuid&quot;]}&apos; http://localhost:1337/api/v1/jobs/assign')" 
+                                    class="text-purple-600 hover:text-purple-800 text-sm">
+                                <i class="fas fa-copy mr-1"></i>Copy
+                            </button>
+                        </div>
+                        <p class="text-gray-600 text-sm">Manually assign specific jobs to specific agents</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Security Considerations -->
-        <div class="p-6 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl border border-red-200">
-            <h4 class="text-lg font-semibold text-red-900 mb-4 flex items-center">
-                <i class="fas fa-shield-alt mr-2"></i>Security Considerations
-            </h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-red-800">
-                <div>
-                    <h5 class="font-medium mb-2">Network Security:</h5>
-                    <ul class="space-y-1">
-                        <li>• Use VPN or private networks when possible</li>
-                        <li>• Restrict agent access to necessary ports only</li>
-                        <li>• Use firewall rules to limit connections</li>
-                        <li>• Consider using reverse proxy with authentication</li>
-                    </ul>
+        <!-- Agent Management (Extended) -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Advanced Agent Management</h3>
+            <div class="space-y-6">
+                <!-- Agent Status Update -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-orange-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">PUT</span>
+                            <code class="text-orange-800 font-mono text-sm">/api/v1/agents/{id}/status</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X PUT -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;status&quot;:&quot;online&quot;}&apos; http://localhost:1337/api/v1/agents/agent-uuid/status')" 
+                                class="text-orange-600 hover:text-orange-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Update agent status (requires agent key authentication)</p>
                 </div>
-                <div>
-                    <h5 class="font-medium mb-2">System Security:</h5>
-                    <ul class="space-y-1">
-                        <li>• Run agents with limited user privileges</li>
-                        <li>• Regularly update system and dependencies</li>
-                        <li>• Monitor agent logs for suspicious activity</li>
-                        <li>• Use disk encryption for sensitive data</li>
-                    </ul>
+
+                <!-- Agent Heartbeat -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-green-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-green-800 font-mono text-sm">/api/v1/agents/{id}/heartbeat</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;X-Agent-Key: your-agent-key&quot; http://localhost:1337/api/v1/agents/agent-uuid/heartbeat')" 
+                                class="text-green-600 hover:text-green-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Send heartbeat to keep agent alive (requires agent key)</p>
+                </div>
+
+                <!-- Agent Files Registration -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/agents/{id}/files</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;X-Agent-Key: your-agent-key&quot; -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;files&quot;:[&quot;file1.txt&quot;,&quot;file2.txt&quot;]}&apos; http://localhost:1337/api/v1/agents/agent-uuid/files')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Register available files on agent (requires agent key)</p>
+                </div>
+
+                <!-- Get Next Job for Agent -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-purple-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-purple-800 font-mono text-sm">/api/v1/agents/{id}/jobs/next</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -H &quot;X-Agent-Key: your-agent-key&quot; http://localhost:1337/api/v1/agents/agent-uuid/jobs/next')" 
+                                class="text-purple-600 hover:text-purple-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Get next available job for agent to process (requires agent key)</p>
+                </div>
+
+                <!-- Get Agent Jobs -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/agents/{id}/jobs</code>
+                        </div>
+                        <button @click="copyToClipboard('curl http://localhost:1337/api/v1/agents/agent-uuid/jobs')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Get all jobs assigned to a specific agent</p>
+                </div>
+
+                <!-- Delete Agent -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-red-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">DELETE</span>
+                            <code class="text-red-800 font-mono text-sm">/api/v1/agents/{id}</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X DELETE http://localhost:1337/api/v1/agents/agent-uuid')" 
+                                class="text-red-600 hover:text-red-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Permanently remove an agent from the system</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agent Keys Management -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Agent Keys Management</h3>
+            <div class="space-y-6">
+                <!-- Generate Agent Key -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-green-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-green-800 font-mono text-sm">/api/v1/agent-keys/generate</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;description&quot;:&quot;Production Agent Key&quot;}&apos; http://localhost:1337/api/v1/agent-keys/generate')" 
+                                class="text-green-600 hover:text-green-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Generate a new agent key for agent authentication</p>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <h5 class="font-medium text-gray-800 mb-2">Request Body</h5>
+                            <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+{<br/>
+&nbsp;&nbsp;"description": "Production Agent Key"<br/>
+}
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-gray-800 mb-2">Response</h5>
+                            <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+{<br/>
+&nbsp;&nbsp;"agent_key": "ak_...",<br/>
+&nbsp;&nbsp;"description": "Production Agent Key",<br/>
+&nbsp;&nbsp;"created_at": "2024-01-15T10:30:00Z"<br/>
+}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- List Agent Keys -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/agent-keys</code>
+                        </div>
+                        <button @click="copyToClipboard('curl http://localhost:1337/api/v1/agent-keys')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">List all agent keys with their status and usage information</p>
+                </div>
+
+                <!-- Revoke Agent Key -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-yellow-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">DELETE</span>
+                            <code class="text-yellow-800 font-mono text-sm">/api/v1/agent-keys/{key}/revoke</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X DELETE http://localhost:1337/api/v1/agent-keys/ak_your-key/revoke')" 
+                                class="text-yellow-600 hover:text-yellow-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Revoke an agent key (disables but keeps for audit trail)</p>
+                </div>
+
+                <!-- Delete Agent Key -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-red-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">DELETE</span>
+                            <code class="text-red-800 font-mono text-sm">/api/v1/agent-keys/{key}</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X DELETE http://localhost:1337/api/v1/agent-keys/ak_your-key')" 
+                                class="text-red-600 hover:text-red-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Permanently delete an agent key from the system</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authentication System -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Authentication System</h3>
+            <div class="space-y-6">
+                <!-- Login -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-green-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-green-800 font-mono text-sm">/api/v1/auth/login</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;username&quot;:&quot;admin&quot;,&quot;password&quot;:&quot;password&quot;}&apos; http://localhost:1337/api/v1/auth/login')" 
+                                class="text-green-600 hover:text-green-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Authenticate user and receive JWT token</p>
+                </div>
+
+                <!-- Register -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/auth/register</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;username&quot;:&quot;newuser&quot;,&quot;password&quot;:&quot;password&quot;,&quot;email&quot;:&quot;user@example.com&quot;}&apos; http://localhost:1337/api/v1/auth/register')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Create a new user account</p>
+                </div>
+
+                <!-- Get Current User -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/auth/me</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -H &quot;Authorization: Bearer your-jwt-token&quot; http://localhost:1337/api/v1/auth/me')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Get current authenticated user information (requires JWT token)</p>
+                </div>
+
+                <!-- Change Password -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-orange-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-orange-800 font-mono text-sm">/api/v1/auth/change-password</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -H &quot;Authorization: Bearer your-jwt-token&quot; -H &quot;Content-Type: application/json&quot; -d &apos;{&quot;old_password&quot;:&quot;oldpass&quot;,&quot;new_password&quot;:&quot;newpass&quot;}&apos; http://localhost:1337/api/v1/auth/change-password')" 
+                                class="text-orange-600 hover:text-orange-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Change current user's password (requires JWT token)</p>
+                </div>
+
+                <!-- Logout -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-red-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-red-800 font-mono text-sm">/api/v1/auth/logout</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/auth/logout')" 
+                                class="text-red-600 hover:text-red-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Logout current user (invalidate token)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Management (Original) -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">File Management</h3>
+            <div class="space-y-6">
+                <!-- Upload Hash File -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-purple-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-purple-800 font-mono text-sm">/api/v1/hashfiles/upload</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -F &quot;file=@hashfile.txt&quot; http://localhost:1337/api/v1/hashfiles/upload')" 
+                                class="text-purple-600 hover:text-purple-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Upload hash files for cracking jobs (supports various formats)</p>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <h5 class="font-medium text-blue-900 mb-2">Supported Formats:</h5>
+                        <div class="text-blue-800 text-sm space-y-1">
+                            <div>• <code>.txt</code> - Plain text hashes</div>
+                            <div>• <code>.hccapx</code> - WiFi WPA/WPA2 handshakes</div>
+                            <div>• <code>.22000</code> - WiFi WPA3 handshakes</div>
+                            <div>• <code>.hash</code> - Various hash formats</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Wordlist -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-purple-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">POST</span>
+                            <code class="text-purple-800 font-mono text-sm">/api/v1/wordlists/upload</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X POST -F &quot;file=@wordlist.txt&quot; http://localhost:1337/api/v1/wordlists/upload')" 
+                                class="text-purple-600 hover:text-purple-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Upload wordlists for dictionary attacks</p>
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <h5 class="font-medium text-green-900 mb-2">Popular Wordlists:</h5>
+                        <div class="text-green-800 text-sm space-y-1">
+                            <div>• <code>rockyou.txt</code> - Most common passwords</div>
+                            <div>• <code>common-passwords.txt</code> - Frequently used passwords</div>
+                            <div>• <code>custom-wordlist.txt</code> - Your custom wordlists</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Extended File Management -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Extended File Management</h3>
+            <div class="space-y-6">
+                <!-- Hash Files Operations -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h5 class="font-medium text-gray-800 mb-3">Hash Files</h5>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-2 bg-blue-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">GET</span>
+                                    <code class="text-blue-800 font-mono text-xs">/hashfiles</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-blue-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">GET</span>
+                                    <code class="text-blue-800 font-mono text-xs">/hashfiles/{id}</code>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-2 bg-green-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">GET</span>
+                                    <code class="text-green-800 font-mono text-xs">/hashfiles/{id}/download</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-red-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">DELETE</span>
+                                    <code class="text-red-800 font-mono text-xs">/hashfiles/{id}</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wordlists Operations -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h5 class="font-medium text-gray-800 mb-3">Wordlists</h5>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-2 bg-blue-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">GET</span>
+                                    <code class="text-blue-800 font-mono text-xs">/wordlists</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-blue-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">GET</span>
+                                    <code class="text-blue-800 font-mono text-xs">/wordlists/{id}</code>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-2 bg-green-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">GET</span>
+                                    <code class="text-green-800 font-mono text-xs">/wordlists/{id}/download</code>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-red-50 rounded">
+                                <div class="flex items-center">
+                                    <span class="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium mr-2">DELETE</span>
+                                    <code class="text-red-800 font-mono text-xs">/wordlists/{id}</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cache Management -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Cache Management</h3>
+            <div class="space-y-6">
+                <!-- Get Cache Stats -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">GET</span>
+                            <code class="text-blue-800 font-mono text-sm">/api/v1/cache/stats</code>
+                        </div>
+                        <button @click="copyToClipboard('curl http://localhost:1337/api/v1/cache/stats')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Get cache statistics and performance metrics</p>
+                </div>
+
+                <!-- Clear Cache -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-red-500 text-white px-3 py-1 rounded text-xs font-medium mr-3">DELETE</span>
+                            <code class="text-red-800 font-mono text-sm">/api/v1/cache/clear</code>
+                        </div>
+                        <button @click="copyToClipboard('curl -X DELETE http://localhost:1337/api/v1/cache/clear')" 
+                                class="text-red-600 hover:text-red-800 text-sm">
+                            <i class="fas fa-copy mr-1"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">Clear all cached data to free memory</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Health Check Documentation -->
-    <div id="health-docs" class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-success mr-4">
-                <i class="fas fa-heartbeat text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">Health Check</h3>
-        </div>
-
-        <div class="api-endpoint">
-            <div class="flex items-center justify-between mb-4">
-                <h4 class="font-semibold text-lg">Check API Health</h4>
-                <span class="api-method get">GET</span>
-            </div>
-            <code class="api-url">/health</code>
-
-            <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                    <h5 class="font-medium mb-3 flex items-center">
-                        <i class="fas fa-terminal text-green-600 mr-2"></i>Example Request
-                    </h5>
-                    <div class="code-block success" 
-                         @click="copyToClipboard('curl -X GET http://localhost:1337/health')"
-                         title="Click to copy">
-curl -X GET http://localhost:1337/health
-                    </div>
-                </div>
-                
-                <div>
-                    <h5 class="font-medium mb-3 flex items-center">
-                        <i class="fas fa-code text-blue-600 mr-2"></i>Example Response
-                    </h5>
-                    <div class="code-block">
-{
-  "status": "ok",
-  "timestamp": 1642252200
-}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Agent Management Documentation -->
-    <div id="agents-docs" class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-primary mr-4">
-                <i class="fas fa-server text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">Agent Management</h3>
-        </div>
-
-        <!-- Register Agent -->
-        <div class="api-endpoint">
-            <div class="flex items-center justify-between mb-4">
-                <h4 class="font-semibold text-lg">Register Agent</h4>
-                <span class="api-method post">POST</span>
-            </div>
-            <code class="api-url">/api/v1/agents/</code>
-
-            <div class="mt-6 space-y-6">
-                <div>
-                    <h5 class="font-medium mb-3">Request Body:</h5>
-                    <div class="code-block">
-{
-  "name": "GPU-Server-01",
-  "ip_address": "192.168.1.100",
-  "port": 8080,
-  "capabilities": "NVIDIA RTX 4090, 24GB VRAM"
-}
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div>
-                        <h5 class="font-medium mb-3 flex items-center">
-                            <i class="fas fa-terminal text-green-600 mr-2"></i>Example Request
-                        </h5>
-                        <div class="code-block success"
-                             @click="copyToClipboard($el.textContent.trim())"
-                             title="Click to copy">
-curl -X POST -H "Content-Type: application/json" \
-  -d '{
-    "name": "GPU-Server-01",
-    "ip_address": "192.168.1.100", 
-    "port": 8080,
-    "capabilities": "NVIDIA RTX 4090, 24GB VRAM"
-  }' \
-  http://localhost:1337/api/v1/agents/
+    <!-- Examples Section -->
+    <div x-show="activeSection === 'examples'" x-transition class="space-y-6">
+        <!-- WiFi Cracking Example -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Complete WiFi WPA/WPA2 Cracking Workflow</h3>
+            <p class="text-gray-600 mb-6">Step-by-step guide to crack WiFi passwords using distributed hashcat</p>
+            <div class="space-y-6">
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">1</span>
+                    <div class="flex-1">
+                        <h4 class="font-medium text-gray-800 mb-2">Upload WiFi handshake file</h4>
+                        <p class="text-gray-600 text-sm mb-3">Upload your captured WPA/WPA2 handshake file (.hccapx or .22000 format)</p>
+                        <div class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg font-mono overflow-x-auto">
+curl -X POST -F "file=@wifi_handshake.hccapx" \<br/>
+&nbsp;&nbsp;http://localhost:1337/api/v1/hashfiles/upload
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500">
+                            Response: <code>{"id": "hash-file-uuid", "filename": "wifi_handshake.hccapx"}</code>
                         </div>
                     </div>
-                    
-                    <div>
-                        <h5 class="font-medium mb-3 flex items-center">
-                            <i class="fas fa-check text-green-600 mr-2"></i>Success Response
-                        </h5>
-                        <div class="code-block">
-{
-  "id": "123e4567-e89b-12d3-a456-426614174000",
-  "name": "GPU-Server-01",
-  "ip_address": "192.168.1.100",
-  "port": 8080,
-  "status": "offline",
-  "capabilities": "NVIDIA RTX 4090, 24GB VRAM",
-  "created_at": "2024-01-15T09:00:00Z",
-  "updated_at": "2024-01-15T09:00:00Z"
-}
+                </div>
+
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">2</span>
+                    <div class="flex-1">
+                        <h4 class="font-medium text-gray-800 mb-2">Upload wordlist</h4>
+                        <p class="text-gray-600 text-sm mb-3">Upload your wordlist for dictionary attack (e.g., rockyou.txt)</p>
+                        <div class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg font-mono overflow-x-auto">
+curl -X POST -F "file=@rockyou.txt" \<br/>
+&nbsp;&nbsp;http://localhost:1337/api/v1/wordlists/upload
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500">
+                            Response: <code>{"filename": "rockyou.txt", "size": "139MB"}</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">3</span>
+                    <div class="flex-1">
+                        <h4 class="font-medium text-gray-800 mb-2">Create hashcat job</h4>
+                        <p class="text-gray-600 text-sm mb-3">Create a new job linking the hash file and wordlist</p>
+                        <div class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg font-mono overflow-x-auto">
+curl -X POST -H "Content-Type: application/json" \<br/>
+&nbsp;&nbsp;-d '{<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"name": "WiFi Network Crack",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"hash_file_id": "hash-file-uuid",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"wordlist": "rockyou.txt",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"attack_mode": 0,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"hash_type": 2500<br/>
+&nbsp;&nbsp;}' \<br/>
+&nbsp;&nbsp;http://localhost:1337/api/v1/jobs
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500">
+                            Response: <code>{"id": "job-uuid", "status": "created"}</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">4</span>
+                    <div class="flex-1">
+                        <h4 class="font-medium text-gray-800 mb-2">Start the job</h4>
+                        <p class="text-gray-600 text-sm mb-3">Begin distributed cracking across all available agents</p>
+                        <div class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg font-mono overflow-x-auto">
+curl -X POST http://localhost:1337/api/v1/jobs/job-uuid/start
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm mr-4 mt-1 flex-shrink-0">5</span>
+                    <div class="flex-1">
+                        <h4 class="font-medium text-gray-800 mb-2">Monitor progress</h4>
+                        <p class="text-gray-600 text-sm mb-3">Check job status and progress in real-time</p>
+                        <div class="bg-gray-900 text-green-400 text-sm p-3 rounded-lg font-mono overflow-x-auto">
+curl http://localhost:1337/api/v1/jobs/job-uuid
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500">
+                            Response includes: progress percentage, speed, ETA, and found passwords
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Agent Endpoints Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">List All Agents</h5>
-                    <span class="api-method get">GET</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/agents/</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl http://localhost:1337/api/v1/agents/')"
-                         title="Click to copy">
-curl http://localhost:1337/api/v1/agents/
-                    </div>
-                </div>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Get Agent Details</h5>
-                    <span class="api-method get">GET</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/agents/{id}</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl http://localhost:1337/api/v1/agents/{agent-id}')"
-                         title="Click to copy">
-curl http://localhost:1337/api/v1/agents/{agent-id}
-                    </div>
-                </div>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Update Agent Status</h5>
-                    <span class="api-method put">PUT</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/agents/{id}/status</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-curl -X PUT -H "Content-Type: application/json" \
-  -d '{"status": "online"}' \
-  http://localhost:1337/api/v1/agents/{agent-id}/status
-                    </div>
-                </div>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Agent Heartbeat</h5>
-                    <span class="api-method post">POST</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/agents/{id}/heartbeat</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/agents/{agent-id}/heartbeat')"
-                         title="Click to copy">
-curl -X POST http://localhost:1337/api/v1/agents/{agent-id}/heartbeat
-                    </div>
-                </div>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Get Agent Jobs</h5>
-                    <span class="api-method get">GET</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/agents/{id}/jobs</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl http://localhost:1337/api/v1/agents/{agent-id}/jobs')"
-                         title="Click to copy">
-curl http://localhost:1337/api/v1/agents/{agent-id}/jobs
-                    </div>
-                </div>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Delete Agent</h5>
-                    <span class="api-method delete">DELETE</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/agents/{id}</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl -X DELETE http://localhost:1337/api/v1/agents/{agent-id}')"
-                         title="Click to copy">
-curl -X DELETE http://localhost:1337/api/v1/agents/{agent-id}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Job Management Documentation -->
-    <div id="jobs-docs" class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-warning mr-4">
-                <i class="fas fa-tasks text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">Job Management</h3>
-        </div>
-
-        <!-- Create Job -->
-        <div class="api-endpoint">
-            <div class="flex items-center justify-between mb-4">
-                <h4 class="font-semibold text-lg">Create Cracking Job</h4>
-                <span class="api-method post">POST</span>
-            </div>
-            <code class="api-url">/api/v1/jobs/</code>
-
-            <div class="mt-6 space-y-6">
-                <div>
-                    <h5 class="font-medium mb-3">Request Body:</h5>
-                    <div class="code-block">
-{
-  "name": "WiFi WPA2 Crack Job",
-  "hash_file_id": "uuid-of-uploaded-hash-file",
-  "wordlist": "rockyou.txt"
-}
-                    </div>
-                </div>
-
-                <div class="p-4 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg">
-                    <h6 class="font-medium text-blue-800 mb-2">Supported Hash Type:</h6>
-                    <div class="text-blue-700 text-sm">
-                        <div class="p-3 bg-blue-100 rounded-lg border border-blue-200">
-                            <div class="flex items-center justify-between">
-                                <span><strong>2500:</strong> WPA/WPA2</span>
-                                <span class="text-xs bg-blue-600 text-white px-2 py-1 rounded">Primary</span>
-                            </div>
-                            <p class="text-xs text-blue-600 mt-1">This system is specialized for WiFi WPA/WPA2 handshake cracking</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div>
-                    <h5 class="font-medium mb-3 flex items-center">
-                        <i class="fas fa-terminal text-green-600 mr-2"></i>Example Request
-                    </h5>
-                    <div class="code-block success"
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-curl -X POST -H "Content-Type: application/json" \
-  -d '{
-    "name": "WiFi Crack Job",
-    "hash_file_id": "123e4567-e89b-12d3-a456-426614174000",
-    "wordlist": "rockyou.txt"
-  }' \
-  http://localhost:1337/api/v1/jobs/
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Job Control Actions -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Start Job</h5>
-                    <span class="api-method post">POST</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/jobs/{id}/start</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/start')"
-                         title="Click to copy">
-curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/start
-                    </div>
-                </div>
-            </div>
+        <!-- WebSocket Example -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Real-time Updates with WebSocket</h3>
+            <p class="text-gray-600 mb-4">Connect to WebSocket for live job progress and system notifications</p>
             
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Stop Job</h5>
-                    <span class="api-method post">POST</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/jobs/{id}/stop</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/stop')"
-                         title="Click to copy">
-curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/stop
-                    </div>
-                </div>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Pause Job</h5>
-                    <span class="api-method post">POST</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/jobs/{id}/pause</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/pause')"
-                         title="Click to copy">
-curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/pause
-                    </div>
-                </div>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Resume Job</h5>
-                    <span class="api-method post">POST</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/jobs/{id}/resume</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/resume')"
-                         title="Click to copy">
-curl -X POST http://localhost:1337/api/v1/jobs/{job-id}/resume
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Additional Job Endpoints -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Get Job Status</h5>
-                    <span class="api-method get">GET</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/jobs/{id}</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl http://localhost:1337/api/v1/jobs/{job-id}')"
-                         title="Click to copy">
-curl http://localhost:1337/api/v1/jobs/{job-id}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">List All Jobs</h5>
-                    <span class="api-method get">GET</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/jobs/</code>
-                <p class="text-gray-600 text-xs mt-2">Optional: <code>?status=running</code></p>
-            </div>
-
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-semibold">Update Job Progress</h5>
-                    <span class="api-method put">PUT</span>
-                </div>
-                <code class="api-url text-sm">/api/v1/jobs/{id}/progress</code>
-                <div class="mt-3">
-                    <div class="code-block success"
-                         @click="copyToClipboard($el.textContent.trim())"
-                         title="Click to copy">
-curl -X PUT -H "Content-Type: application/json" \
-  -d '{"progress": 75.5, "speed": 1234567}' \
-  http://localhost:1337/api/v1/jobs/{job-id}/progress
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- File Management Documentation -->
-    <div id="files-docs" class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-info mr-4">
-                <i class="fas fa-file-upload text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">File Management</h3>
-        </div>
-
-        <!-- Hash Files -->
-        <div class="mb-8">
-            <h4 class="text-xl font-bold mb-4 text-gray-800">Hash Files</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="api-endpoint">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="font-semibold">Upload Hash File</h5>
-                        <span class="api-method post">POST</span>
-                    </div>
-                    <code class="api-url text-sm">/api/v1/hashfiles/upload</code>
-                    <div class="mt-3">
-                        <div class="code-block success"
-                             @click="copyToClipboard($el.textContent.trim())"
-                             title="Click to copy">
-curl -X POST -F "file=@capture.hccapx" \
-  http://localhost:1337/api/v1/hashfiles/upload
+            <div class="space-y-4">
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h4 class="font-medium text-gray-800 mb-2">Connection</h4>
+                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200 mb-3">
+                        <div class="flex items-center">
+                            <span class="bg-green-500 text-white px-2 py-1 rounded text-xs font-medium mr-3">WS</span>
+                            <code class="text-green-800 font-mono text-sm">ws://localhost:1337/ws</code>
                         </div>
                     </div>
-                </div>
-                
-                <div class="api-endpoint">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="font-semibold">List Hash Files</h5>
-                        <span class="api-method get">GET</span>
-                    </div>
-                    <code class="api-url text-sm">/api/v1/hashfiles/</code>
-                    <div class="mt-3">
-                        <div class="code-block success"
-                             @click="copyToClipboard('curl http://localhost:1337/api/v1/hashfiles/')"
-                             title="Click to copy">
-curl http://localhost:1337/api/v1/hashfiles/
-                        </div>
-                    </div>
-                </div>
 
-                <div class="api-endpoint">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="font-semibold">Download Hash File</h5>
-                        <span class="api-method get">GET</span>
-                    </div>
-                    <code class="api-url text-sm">/api/v1/hashfiles/{id}/download</code>
-                    <div class="mt-3">
-                        <div class="code-block success"
-                             @click="copyToClipboard('curl http://localhost:1337/api/v1/hashfiles/{file-id}/download')"
-                             title="Click to copy">
-curl http://localhost:1337/api/v1/hashfiles/{file-id}/download
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                    <div class="bg-gray-900 text-gray-300 text-sm p-4 rounded-lg font-mono">
+const ws = new WebSocket('ws://localhost:1337/ws')<br/><br/>
 
-        <!-- Wordlists -->
-        <div>
-            <h4 class="text-xl font-bold mb-4 text-gray-800">Wordlists</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="api-endpoint">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="font-semibold">Upload Wordlist</h5>
-                        <span class="api-method post">POST</span>
-                    </div>
-                    <code class="api-url text-sm">/api/v1/wordlists/upload</code>
-                    <div class="mt-3">
-                        <div class="code-block success"
-                             @click="copyToClipboard($el.textContent.trim())"
-                             title="Click to copy">
-curl -X POST -F "file=@rockyou.txt" \
-  http://localhost:1337/api/v1/wordlists/upload
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="api-endpoint">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="font-semibold">List Wordlists</h5>
-                        <span class="api-method get">GET</span>
-                    </div>
-                    <code class="api-url text-sm">/api/v1/wordlists/</code>
-                    <div class="mt-3">
-                        <div class="code-block success"
-                             @click="copyToClipboard('curl http://localhost:1337/api/v1/wordlists/')"
-                             title="Click to copy">
-curl http://localhost:1337/api/v1/wordlists/
-                        </div>
-                    </div>
-                </div>
+ws.onopen = () => {<br/>
+&nbsp;&nbsp;console.log('Connected to hashcat WebSocket')<br/>
+}<br/><br/>
 
-                <div class="api-endpoint">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="font-semibold">Download Wordlist</h5>
-                        <span class="api-method get">GET</span>
-                    </div>
-                    <code class="api-url text-sm">/api/v1/wordlists/{id}/download</code>
-                    <div class="mt-3">
-                        <div class="code-block success"
-                             @click="copyToClipboard('curl http://localhost:1337/api/v1/wordlists/{wordlist-id}/download')"
-                             title="Click to copy">
-curl http://localhost:1337/api/v1/wordlists/{wordlist-id}/download
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+ws.onmessage = (event) => {<br/>
+&nbsp;&nbsp;const data = JSON.parse(event.data)<br/>
+&nbsp;&nbsp;console.log('Received update:', data)<br/>
+&nbsp;&nbsp;<br/>
+&nbsp;&nbsp;// Handle different event types<br/>
+&nbsp;&nbsp;switch(data.type) {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;case 'job_progress':<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;updateProgressBar(data.progress)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;case 'password_found':<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;displayFoundPassword(data.password)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;case 'agent_status':<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;updateAgentStatus(data.agent_id, data.status)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break<br/>
+&nbsp;&nbsp;}<br/>
+}<br/><br/>
 
-    <!-- Cache & Performance Documentation -->
-    <div id="cache-docs" class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-danger mr-4">
-                <i class="fas fa-tachometer-alt text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">Cache & Performance</h3>
-        </div>
+ws.onclose = () => {<br/>
+&nbsp;&nbsp;console.log('WebSocket connection closed')<br/>
+}<br/><br/>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="font-semibold text-lg">Get Cache Statistics</h4>
-                    <span class="api-method get">GET</span>
-                </div>
-                <code class="api-url">/api/v1/cache/stats</code>
-
-                <div class="mt-6">
-                    <h5 class="font-medium mb-3 flex items-center">
-                        <i class="fas fa-terminal text-green-600 mr-2"></i>Example Request
-                    </h5>
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl http://localhost:1337/api/v1/cache/stats')"
-                         title="Click to copy">
-curl http://localhost:1337/api/v1/cache/stats
-                    </div>
-                </div>
-
-                <div class="mt-4">
-                    <h5 class="font-medium mb-3 flex items-center">
-                        <i class="fas fa-code text-blue-600 mr-2"></i>Example Response
-                    </h5>
-                    <div class="code-block">
-{
-  "data": {
-    "agents": 5,
-    "wordlists": 12,
-    "hashFiles": 8,
-    "hitRate": 87.5,
-    "missRate": 12.5,
-    "totalRequests": 240,
-    "cacheHits": 210,
-    "cacheMisses": 30,
-    "uptime": 3600.5,
-    "queryReduction": 78.75,
-    "responseSpeedImprovement": 83.125
-  }
+ws.onerror = (error) => {<br/>
+&nbsp;&nbsp;console.error('WebSocket error:', error)<br/>
 }
                     </div>
                 </div>
-            </div>
 
-            <div class="api-endpoint">
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="font-semibold text-lg">Clear Cache</h4>
-                    <span class="api-method delete">DELETE</span>
-                </div>
-                <code class="api-url">/api/v1/cache/clear</code>
-
-                <div class="mt-6">
-                    <h5 class="font-medium mb-3 flex items-center">
-                        <i class="fas fa-terminal text-green-600 mr-2"></i>Example Request
-                    </h5>
-                    <div class="code-block success"
-                         @click="copyToClipboard('curl -X DELETE http://localhost:1337/api/v1/cache/clear')"
-                         title="Click to copy">
-curl -X DELETE http://localhost:1337/api/v1/cache/clear
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h4 class="font-medium text-blue-900 mb-3">Real-time Event Types:</h4>
+                    <div class="grid md:grid-cols-2 gap-4 text-sm">
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs mr-2">job_progress</code>
+                                <span class="text-blue-700">Job completion percentage</span>
+                            </div>
+                            <div class="flex items-center">
+                                <code class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs mr-2">password_found</code>
+                                <span class="text-blue-700">Cracked password discovered</span>
+                            </div>
+                            <div class="flex items-center">
+                                <code class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs mr-2">job_complete</code>
+                                <span class="text-blue-700">Job finished successfully</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <code class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs mr-2">agent_status</code>
+                                <span class="text-blue-700">Agent online/offline status</span>
+                            </div>
+                            <div class="flex items-center">
+                                <code class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs mr-2">job_error</code>
+                                <span class="text-blue-700">Job execution errors</span>
+                            </div>
+                            <div class="flex items-center">
+                                <code class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs mr-2">system_notification</code>
+                                <span class="text-blue-700">General system messages</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <div class="mt-4">
-                    <h5 class="font-medium mb-3 flex items-center">
-                        <i class="fas fa-code text-blue-600 mr-2"></i>Example Response
-                    </h5>
-                    <div class="code-block">
-{
-  "message": "Cache cleared successfully"
-}
-                    </div>
-                </div>
             </div>
         </div>
 
-        <div class="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
-            <h6 class="font-medium text-yellow-800 mb-2">Performance Metrics Explanation:</h6>
-            <ul class="text-yellow-700 text-sm space-y-1">
-                <li>• <strong>Hit Rate:</strong> Percentage of requests served from cache</li>
-                <li>• <strong>Query Reduction:</strong> Estimated database query reduction (90% of hit rate)</li>
-                <li>• <strong>Response Speed:</strong> Estimated response speed improvement (95% of hit rate)</li>
-                <li>• <strong>Cache Entries:</strong> Total number of cached objects (agents + wordlists + hashFiles)</li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- WebSocket Documentation -->
-    <div class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-success mr-4">
-                <i class="fas fa-bolt text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">WebSocket Real-time Updates</h3>
-        </div>
-
-        <div class="api-endpoint">
-            <div class="flex items-center justify-between mb-4">
-                <h4 class="font-semibold text-lg">WebSocket Connection</h4>
-                <span class="api-method get" style="background-color: #10b981; color: white;">WS</span>
-            </div>
-            <code class="api-url">/ws</code>
-
-            <div class="mt-6 space-y-6">
+        <!-- Error Handling -->
+        <div class="card-modern p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Error Handling & Status Codes</h3>
+            <div class="grid md:grid-cols-2 gap-6">
                 <div>
-                    <h5 class="font-medium mb-3">JavaScript Connection Example:</h5>
-                    <div class="code-block">
-const ws = new WebSocket('ws://localhost:1337/ws')
-
-ws.onopen = function() {
-    console.log('Connected to WebSocket')
-}
-
-ws.onmessage = function(event) {
-    const data = JSON.parse(event.data)
-    console.log('Received:', data)
-}
-
-ws.onclose = function() {
-    console.log('WebSocket connection closed')
-}
-                    </div>
-                </div>
-
-                <div class="p-4 bg-green-50 border-l-4 border-green-400 rounded-r-lg">
-                    <h6 class="font-medium text-green-800 mb-2">Real-time Events:</h6>
-                    <ul class="text-green-700 text-sm space-y-1">
-                        <li>• <strong>Job Progress:</strong> Real-time progress updates</li>
-                        <li>• <strong>Job Status:</strong> Status changes (start, stop, complete, fail)</li>
-                        <li>• <strong>Agent Status:</strong> Agent online/offline/busy status</li>
-                        <li>• <strong>System Notifications:</strong> General system events</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Complete Examples -->
-    <div class="card-modern p-8 mb-8">
-        <div class="flex items-center mb-6">
-            <div class="icon-modern icon-warning mr-4">
-                <i class="fas fa-code text-xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">Complete Examples</h3>
-        </div>
-
-        <!-- WiFi Cracking Workflow -->
-        <div class="mb-8">
-            <h4 class="text-xl font-bold mb-4 text-gray-800">WiFi WPA/WPA2 Cracking Workflow</h4>
-            <div class="bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-6">
-                <div class="space-y-6">
-                    <div>
-                        <h5 class="font-medium text-gray-800 mb-3 flex items-center">
-                            <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm mr-3">1</span>
-                            Upload handshake file:
-                        </h5>
-                        <div class="code-block success"
-                             @click="copyToClipboard($el.textContent.trim())"
-                             title="Click to copy">
-curl -X POST -F "file=@wifi_handshake.hccapx" \
-  http://localhost:1337/api/v1/hashfiles/upload
+                    <h4 class="font-semibold text-gray-800 mb-3">HTTP Status Codes</h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex items-center justify-between p-2 bg-green-50 rounded">
+                            <code class="text-green-700 font-medium">200 OK</code>
+                            <span class="text-gray-600">Success</span>
                         </div>
-                    </div>
-                    
-                    <div>
-                        <h5 class="font-medium text-gray-800 mb-3 flex items-center">
-                            <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm mr-3">2</span>
-                            Upload wordlist:
-                        </h5>
-                        <div class="code-block success"
-                             @click="copyToClipboard($el.textContent.trim())"
-                             title="Click to copy">
-curl -X POST -F "file=@rockyou.txt" \
-  http://localhost:1337/api/v1/wordlists/upload
+                        <div class="flex items-center justify-between p-2 bg-blue-50 rounded">
+                            <code class="text-blue-700 font-medium">201 Created</code>
+                            <span class="text-gray-600">Resource created</span>
                         </div>
-                    </div>
-                    
-                    <div>
-                        <h5 class="font-medium text-gray-800 mb-3 flex items-center">
-                            <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm mr-3">3</span>
-                            Create cracking job:
-                        </h5>
-                        <div class="code-block success overflow-x-auto"
-                             @click="copyToClipboard($el.textContent.trim())"
-                             title="Click to copy">
-curl -X POST -H "Content-Type: application/json" \
-  -d '{
-    "name": "WiFi Network Crack",
-    "hash_file_id": "your-hash-file-uuid",
-    "wordlist": "rockyou.txt"
-  }' \
-  http://localhost:1337/api/v1/jobs/
+                        <div class="flex items-center justify-between p-2 bg-yellow-50 rounded">
+                            <code class="text-yellow-700 font-medium">400 Bad Request</code>
+                            <span class="text-gray-600">Invalid input</span>
                         </div>
-                    </div>
-                    
-                    <div>
-                        <h5 class="font-medium text-gray-800 mb-3 flex items-center">
-                            <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm mr-3">4</span>
-                            Start the job:
-                        </h5>
-                        <div class="code-block success"
-                             @click="copyToClipboard('curl -X POST http://localhost:1337/api/v1/jobs/your-job-uuid/start')"
-                             title="Click to copy">
-curl -X POST http://localhost:1337/api/v1/jobs/your-job-uuid/start
+                        <div class="flex items-center justify-between p-2 bg-red-50 rounded">
+                            <code class="text-red-700 font-medium">404 Not Found</code>
+                            <span class="text-gray-600">Resource not found</span>
                         </div>
-                    </div>
-                    
-                    <div>
-                        <h5 class="font-medium text-gray-800 mb-3 flex items-center">
-                            <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm mr-3">5</span>
-                            Monitor progress:
-                        </h5>
-                        <div class="code-block success"
-                             @click="copyToClipboard('curl http://localhost:1337/api/v1/jobs/your-job-uuid')"
-                             title="Click to copy">
-curl http://localhost:1337/api/v1/jobs/your-job-uuid
+                        <div class="flex items-center justify-between p-2 bg-red-50 rounded">
+                            <code class="text-red-700 font-medium">500 Server Error</code>
+                            <span class="text-gray-600">Internal error</span>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Additional Resources -->
-        <div>
-            <h4 class="text-xl font-bold mb-4 text-gray-800">Additional Resources</h4>
-            <div class="bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                    <div>
-                        <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                            <i class="fas fa-server text-blue-600 mr-2"></i>API Endpoints
-                        </h5>
-                        <ul class="space-y-2 text-gray-600">
-                            <li>• Base URL: <code class="text-blue-600 bg-blue-50 px-2 py-1 rounded">http://localhost:1337</code></li>
-                            <li>• Health Check: <code class="text-green-600 bg-green-50 px-2 py-1 rounded">/health</code></li>
-                            <li>• API Version: <code class="text-purple-600 bg-purple-50 px-2 py-1 rounded">/api/v1/*</code></li>
-                            <li>• WebSocket: <code class="text-orange-600 bg-orange-50 px-2 py-1 rounded">/ws</code></li>
-                        </ul>
-                    </div>
-                    
-                    <div>
-                        <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                            <i class="fas fa-tools text-orange-600 mr-2"></i>Built With
-                        </h5>
-                        <ul class="space-y-2 text-gray-600">
-                            <li>• <strong>Backend:</strong> Go 1.21 + Gin Framework</li>
-                            <li>• <strong>Frontend:</strong> Alpine.js + Tailwind CSS</li>
-                            <li>• <strong>Database:</strong> SQLite with Migrations</li>
-                            <li>• <strong>Cracking:</strong> Hashcat Integration</li>
-                            <li>• <strong>Real-time:</strong> WebSocket Support</li>
-                        </ul>
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-3">Error Response Format</h4>
+                    <div class="bg-gray-900 text-gray-300 text-sm p-3 rounded-lg font-mono">
+{<br/>
+&nbsp;&nbsp;"error": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"code": "INVALID_INPUT",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"message": "Hash file is required",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"details": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"field": "hash_file_id",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"reason": "missing_required_field"<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br/>
+&nbsp;&nbsp;}<br/>
+}
                     </div>
                 </div>
             </div>

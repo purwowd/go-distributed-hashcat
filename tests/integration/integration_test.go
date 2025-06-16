@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go-distributed-hashcat/internal/delivery/http/handler"
+	"go-distributed-hashcat/internal/delivery/http/middleware"
 	"go-distributed-hashcat/internal/domain"
 	"go-distributed-hashcat/internal/infrastructure/database"
 	"go-distributed-hashcat/internal/infrastructure/repository"
@@ -31,6 +32,7 @@ type APITestSuite struct {
 	jobHandler   *handler.JobHandler
 	db           *database.SQLiteDB
 	cleanup      func()
+	testAgentKey string // Store test agent key
 	// Add fields to store test data between methods
 	agent1ID string
 	agent2ID string
@@ -39,6 +41,23 @@ type APITestSuite struct {
 // SetupSuite initializes the test suite with real database and dependencies
 func (suite *APITestSuite) SetupSuite() {
 	// Setup is done per test for better isolation
+}
+
+// createTestAgentKey creates a valid agent key for testing
+func (suite *APITestSuite) createTestAgentKey(agentKeyRepo domain.AgentKeyRepository) string {
+	agentKey := &domain.AgentKey{
+		ID:          uuid.New(),
+		AgentKey:    "test-integration-key-" + uuid.New().String(),
+		Name:        "Integration Test Key",
+		Description: "Test key for integration tests",
+		Status:      "active",
+		CreatedAt:   time.Now(),
+	}
+
+	err := agentKeyRepo.Create(context.Background(), agentKey)
+	suite.Require().NoError(err)
+
+	return agentKey.AgentKey
 }
 
 // SetupTest creates a fresh database for each test
@@ -62,12 +81,17 @@ func (suite *APITestSuite) SetupTest() {
 
 	// Initialize repositories
 	agentRepo := repository.NewAgentRepository(db)
+	agentKeyRepo := repository.NewAgentKeyRepository(db)
 	jobRepo := repository.NewJobRepository(db)
 	hashFileRepo := repository.NewHashFileRepository(db)
 	wordlistRepo := repository.NewWordlistRepository(db)
 
+	// Create test agent key
+	suite.testAgentKey = suite.createTestAgentKey(agentKeyRepo)
+
 	// Initialize use cases
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentKeyRepo)
+	agentKeyUsecase := usecase.NewAgentKeyUsecase(agentKeyRepo, agentRepo)
 	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
 
 	// Initialize enrichment service for integration tests
@@ -77,10 +101,10 @@ func (suite *APITestSuite) SetupTest() {
 	suite.agentHandler = handler.NewAgentHandler(agentUsecase)
 	suite.jobHandler = handler.NewJobHandler(jobUsecase, jobEnrichmentService)
 
-	// Setup router
+	// Setup router with middleware
 	gin.SetMode(gin.TestMode)
 	suite.router = gin.New()
-	suite.setupRoutes()
+	suite.setupRoutes(agentKeyUsecase)
 }
 
 // TearDownTest cleans up after each test
@@ -96,11 +120,12 @@ func (suite *APITestSuite) TearDownSuite() {
 }
 
 // setupRoutes configures all API routes
-func (suite *APITestSuite) setupRoutes() {
+func (suite *APITestSuite) setupRoutes(agentKeyUsecase usecase.AgentKeyUsecase) {
 	api := suite.router.Group("/api/v1")
 	{
-		// Agent routes
+		// Agent routes with middleware
 		agents := api.Group("/agents")
+		agents.Use(middleware.AgentKeyMiddleware(agentKeyUsecase))
 		{
 			agents.POST("/", suite.agentHandler.RegisterAgent)
 			agents.GET("/", suite.agentHandler.GetAllAgents)
@@ -148,6 +173,46 @@ func (suite *APITestSuite) makeRequest(method, url string, body interface{}) *ht
 	return recorder
 }
 
+// makeAgentRequest helper function to make HTTP requests with agent key
+func (suite *APITestSuite) makeAgentRequest(method, url string, body interface{}) *httptest.ResponseRecorder {
+	var reqBody *bytes.Buffer
+	if body != nil {
+		jsonBody, _ := json.Marshal(body)
+		reqBody = bytes.NewBuffer(jsonBody)
+	} else {
+		reqBody = bytes.NewBuffer(nil)
+	}
+
+	req := httptest.NewRequest(method, url, reqBody)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-Key", suite.testAgentKey)
+
+	recorder := httptest.NewRecorder()
+	suite.router.ServeHTTP(recorder, req)
+
+	return recorder
+}
+
+// makeAgentRequestWithKey helper function to make HTTP requests with specific agent key
+func (suite *APITestSuite) makeAgentRequestWithKey(method, url string, body interface{}, agentKey string) *httptest.ResponseRecorder {
+	var reqBody *bytes.Buffer
+	if body != nil {
+		jsonBody, _ := json.Marshal(body)
+		reqBody = bytes.NewBuffer(jsonBody)
+	} else {
+		reqBody = bytes.NewBuffer(nil)
+	}
+
+	req := httptest.NewRequest(method, url, reqBody)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-Key", agentKey)
+
+	recorder := httptest.NewRecorder()
+	suite.router.ServeHTTP(recorder, req)
+
+	return recorder
+}
+
 // TestHealthEndpoint tests the health check endpoint
 func (suite *APITestSuite) TestHealthEndpoint() {
 	recorder := suite.makeRequest("GET", "/health", nil)
@@ -166,7 +231,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	t := suite.T()
 
 	// 1. Initially no agents
-	recorder := suite.makeRequest("GET", "/api/v1/agents/", nil)
+	recorder := suite.makeAgentRequest("GET", "/api/v1/agents/", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	var listResponse map[string]interface{}
@@ -182,7 +247,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 		Capabilities: "NVIDIA RTX 4090, 24GB VRAM",
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/agents/", agentReq1)
+	recorder = suite.makeAgentRequest("POST", "/api/v1/agents/", agentReq1)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	var createResponse map[string]interface{}
@@ -195,7 +260,10 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	assert.Equal(t, float64(agentReq1.Port), agent1Data["port"])
 	assert.Equal(t, "online", agent1Data["status"])
 
-	// 3. Create second agent
+	// 3. Create second agent with different agent key
+	agentKeyRepo := repository.NewAgentKeyRepository(suite.db)
+	testAgentKey2 := suite.createTestAgentKey(agentKeyRepo)
+
 	agentReq2 := domain.CreateAgentRequest{
 		Name:         "CPU-Agent-02",
 		IPAddress:    "192.168.1.101",
@@ -203,7 +271,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 		Capabilities: "64-core AMD EPYC, 256GB RAM",
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/agents/", agentReq2)
+	recorder = suite.makeAgentRequestWithKey("POST", "/api/v1/agents/", agentReq2, testAgentKey2)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	json.Unmarshal(recorder.Body.Bytes(), &createResponse)
@@ -211,7 +279,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	suite.agent2ID = agent2Data["id"].(string)
 
 	// 4. List all agents (should have 2)
-	recorder = suite.makeRequest("GET", "/api/v1/agents/", nil)
+	recorder = suite.makeAgentRequest("GET", "/api/v1/agents/", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	json.Unmarshal(recorder.Body.Bytes(), &listResponse)
@@ -219,7 +287,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	assert.Len(t, agents, 2)
 
 	// 5. Get specific agent
-	recorder = suite.makeRequest("GET", fmt.Sprintf("/api/v1/agents/%s", suite.agent1ID), nil)
+	recorder = suite.makeAgentRequest("GET", fmt.Sprintf("/api/v1/agents/%s", suite.agent1ID), nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	var getResponse map[string]interface{}
@@ -230,15 +298,15 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 
 	// 6. Update agent status
 	statusUpdate := map[string]string{"status": "busy"}
-	recorder = suite.makeRequest("PUT", fmt.Sprintf("/api/v1/agents/%s/status", suite.agent1ID), statusUpdate)
+	recorder = suite.makeAgentRequest("PUT", fmt.Sprintf("/api/v1/agents/%s/status", suite.agent1ID), statusUpdate)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	// 7. Send heartbeat
-	recorder = suite.makeRequest("POST", fmt.Sprintf("/api/v1/agents/%s/heartbeat", suite.agent1ID), nil)
+	recorder = suite.makeAgentRequest("POST", fmt.Sprintf("/api/v1/agents/%s/heartbeat", suite.agent1ID), nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	// 8. Invalid agent ID should return 400
-	recorder = suite.makeRequest("GET", "/api/v1/agents/invalid-uuid", nil)
+	recorder = suite.makeAgentRequest("GET", "/api/v1/agents/invalid-uuid", nil)
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 }
 
@@ -428,6 +496,7 @@ func (suite *APITestSuite) TestErrorHandling() {
 	// Test invalid JSON
 	req := httptest.NewRequest("POST", "/api/v1/agents/", bytes.NewBufferString("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-Key", suite.testAgentKey)
 	recorder := httptest.NewRecorder()
 	suite.router.ServeHTTP(recorder, req)
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
@@ -436,17 +505,24 @@ func (suite *APITestSuite) TestErrorHandling() {
 	incompleteReq := map[string]interface{}{
 		"name": "", // Empty name should fail validation
 	}
-	recorder = suite.makeRequest("POST", "/api/v1/agents/", incompleteReq)
+	recorder = suite.makeAgentRequest("POST", "/api/v1/agents/", incompleteReq)
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 
 	// Test non-existent resource
-	recorder = suite.makeRequest("GET", fmt.Sprintf("/api/v1/agents/%s", uuid.New()), nil)
+	recorder = suite.makeAgentRequest("GET", fmt.Sprintf("/api/v1/agents/%s", uuid.New()), nil)
 	assert.Equal(t, http.StatusNotFound, recorder.Code)
 }
 
 // TestConcurrentRequests tests API under concurrent load
 func (suite *APITestSuite) TestConcurrentRequests() {
 	t := suite.T()
+
+	// Create agent keys for concurrent tests
+	agentKeyRepo := repository.NewAgentKeyRepository(suite.db)
+	agentKeys := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		agentKeys[i] = suite.createTestAgentKey(agentKeyRepo)
+	}
 
 	// Create multiple agents concurrently
 	done := make(chan bool, 5)
@@ -460,7 +536,7 @@ func (suite *APITestSuite) TestConcurrentRequests() {
 				Capabilities: fmt.Sprintf("Test GPU %d", index),
 			}
 
-			recorder := suite.makeRequest("POST", "/api/v1/agents/", agentReq)
+			recorder := suite.makeAgentRequestWithKey("POST", "/api/v1/agents/", agentReq, agentKeys[index])
 			assert.Equal(t, http.StatusCreated, recorder.Code)
 			done <- true
 		}(i)
@@ -472,7 +548,7 @@ func (suite *APITestSuite) TestConcurrentRequests() {
 	}
 
 	// Verify all agents were created
-	recorder := suite.makeRequest("GET", "/api/v1/agents/", nil)
+	recorder := suite.makeAgentRequest("GET", "/api/v1/agents/", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	var response map[string]interface{}

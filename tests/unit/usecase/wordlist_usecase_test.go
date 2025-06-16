@@ -32,9 +32,14 @@ func (m *MockWordlistRepository) GetByID(ctx context.Context, id uuid.UUID) (*do
 	return args.Get(0).(*domain.Wordlist), args.Error(1)
 }
 
-func (m *MockWordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, error) {
+func (m *MockWordlistRepository) GetAll(ctx context.Context) ([]*domain.Wordlist, error) {
 	args := m.Called(ctx)
-	return args.Get(0).([]domain.Wordlist), args.Error(1)
+	return args.Get(0).([]*domain.Wordlist), args.Error(1)
+}
+
+func (m *MockWordlistRepository) GetByName(ctx context.Context, name string) (*domain.Wordlist, error) {
+	args := m.Called(ctx, name)
+	return args.Get(0).(*domain.Wordlist), args.Error(1)
 }
 
 func (m *MockWordlistRepository) Delete(ctx context.Context, id uuid.UUID) error {
@@ -164,7 +169,7 @@ func TestWordlistUsecase_GetWordlist(t *testing.T) {
 }
 
 func TestWordlistUsecase_GetAllWordlists(t *testing.T) {
-	expectedWordlists := []domain.Wordlist{
+	expectedWordlists := []*domain.Wordlist{
 		{
 			ID:       uuid.New(),
 			Name:     "rockyou.txt",
@@ -198,7 +203,7 @@ func TestWordlistUsecase_GetAllWordlists(t *testing.T) {
 		{
 			name: "no wordlists found",
 			mockSetup: func(repo *MockWordlistRepository) {
-				repo.On("GetAll", mock.Anything).Return([]domain.Wordlist{}, nil)
+				repo.On("GetAll", mock.Anything).Return([]*domain.Wordlist{}, nil)
 			},
 			expectedCount: 0,
 			expectedError: false,
@@ -206,7 +211,7 @@ func TestWordlistUsecase_GetAllWordlists(t *testing.T) {
 		{
 			name: "repository error",
 			mockSetup: func(repo *MockWordlistRepository) {
-				repo.On("GetAll", mock.Anything).Return([]domain.Wordlist{}, errors.New("database error"))
+				repo.On("GetAll", mock.Anything).Return([]*domain.Wordlist{}, errors.New("database error"))
 			},
 			expectedError: true,
 		},

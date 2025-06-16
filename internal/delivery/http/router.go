@@ -17,6 +17,8 @@ func NewRouter(
 	hashFileUsecase usecase.HashFileUsecase,
 	wordlistUsecase usecase.WordlistUsecase,
 	jobEnrichmentService usecase.JobEnrichmentService,
+	authUsecase usecase.AuthUsecase,
+	agentKeyUsecase usecase.AgentKeyUsecase,
 ) *gin.Engine {
 	// Set Gin to release mode for production performance
 	gin.SetMode(gin.ReleaseMode)
@@ -49,6 +51,8 @@ func NewRouter(
 	wordlistHandler := handler.NewWordlistHandler(wordlistUsecase)
 	cacheHandler := handler.NewCacheHandler(jobEnrichmentService)
 	wsHandler := handler.NewWebSocketHandler()
+	authHandler := handler.NewAuthHandler(authUsecase)
+	agentKeyHandler := handler.NewAgentKeyHandler(agentKeyUsecase)
 
 	// Serve modern frontend (production build)
 	router.Static("/assets", "./frontend/dist/assets")
@@ -58,7 +62,7 @@ func NewRouter(
 	// WebSocket endpoint
 	router.GET("/ws", wsHandler.HandleWebSocket)
 
-	// Health check (optimized)
+	// Health check (optimized) - Public
 	router.OPTIONS("/health", func(c *gin.Context) {
 		c.Status(204)
 	})
@@ -78,18 +82,43 @@ func NewRouter(
 	})
 
 	{
-		// Agent routes
+		// Auth routes (public)
+		auth := v1.Group("/auth")
+		{
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/logout", authHandler.Logout)
+			auth.GET("/me", middleware.AuthMiddleware(authUsecase), authHandler.GetCurrentUser)
+			auth.POST("/change-password", middleware.AuthMiddleware(authUsecase), authHandler.ChangePassword)
+		}
+
+		// Agent key management routes (public for dashboard)
+		agentKeys := v1.Group("/agent-keys")
+		{
+			agentKeys.POST("/generate", agentKeyHandler.GenerateAgentKey)
+			agentKeys.GET("/", agentKeyHandler.ListAgentKeys)
+			agentKeys.DELETE("/:key/revoke", agentKeyHandler.RevokeAgentKey)
+			agentKeys.DELETE("/:key", agentKeyHandler.DeleteAgentKey)
+		}
+
+		// Agent routes (require agent key)
 		agents := v1.Group("/agents")
+		agents.Use(middleware.AgentKeyMiddleware(agentKeyUsecase))
 		{
 			agents.POST("/", agentHandler.RegisterAgent)
-			agents.GET("/", agentHandler.GetAllAgents)
-			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
 			agents.POST("/:id/heartbeat", agentHandler.Heartbeat)
 			agents.POST("/:id/files", agentHandler.RegisterAgentFiles)
-			agents.GET("/:id/jobs", jobHandler.GetJobsByAgentID)
 			agents.GET("/:id/jobs/next", jobHandler.GetAvailableJobForAgent)
-			agents.DELETE("/:id", agentHandler.DeleteAgent)
+		}
+
+		// Agent management routes (public for dashboard)
+		agentMgmt := v1.Group("/agents")
+		{
+			agentMgmt.GET("/", agentHandler.GetAllAgents)
+			agentMgmt.GET("/:id", agentHandler.GetAgent)
+			agentMgmt.GET("/:id/jobs", jobHandler.GetJobsByAgentID)
+			agentMgmt.DELETE("/:id", agentHandler.DeleteAgent)
 		}
 
 		// Job routes

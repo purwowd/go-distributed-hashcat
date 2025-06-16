@@ -40,7 +40,7 @@ func (r *agentRepository) prepareStatements() {
 
 	// Prepare optimized queries
 	r.getByIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, last_seen, agent_key, created_at, updated_at
 		FROM agents WHERE id = ? LIMIT 1
 	`)
 	if err != nil {
@@ -48,7 +48,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameIPStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, last_seen, agent_key, created_at, updated_at
 		FROM agents WHERE name = ? AND ip_address = ? LIMIT 1
 	`)
 	if err != nil {
@@ -56,7 +56,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, last_seen, agent_key, created_at, updated_at
 		FROM agents ORDER BY status DESC, updated_at DESC
 	`)
 	if err != nil {
@@ -80,14 +80,20 @@ func (r *agentRepository) prepareStatements() {
 
 func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error {
 	query := `
-		INSERT INTO agents (id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, name, ip_address, port, status, capabilities, last_seen, agent_key, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	now := time.Now()
 	agent.CreatedAt = now
 	agent.UpdatedAt = now
 	agent.LastSeen = now
+
+	// Handle nullable agent_key
+	var agentKey sql.NullString
+	if agent.AgentKey != "" {
+		agentKey = sql.NullString{String: agent.AgentKey, Valid: true}
+	}
 
 	_, err := r.db.DB().ExecContext(ctx, query,
 		agent.ID.String(),
@@ -97,6 +103,7 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 		agent.Status,
 		agent.Capabilities,
 		agent.LastSeen,
+		agentKey,
 		agent.CreatedAt,
 		agent.UpdatedAt,
 	)
@@ -122,6 +129,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 
 	// Fallback to database with prepared statement
 	var idStr string
+	var agentKey sql.NullString
 
 	err := r.getByIDStmt.QueryRowContext(ctx, id.String()).Scan(
 		&idStr,
@@ -131,6 +139,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 		&agent.Status,
 		&agent.Capabilities,
 		&agent.LastSeen,
+		&agentKey,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
@@ -143,6 +152,11 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+
+	// Handle nullable fields
+	if agentKey.Valid {
+		agent.AgentKey = agentKey.String
+	}
 
 	// Cache the result
 	r.cache.Set(ctx, cacheKey, &agent)
@@ -161,6 +175,7 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 
 	// Fallback to database with prepared statement
 	var idStr string
+	var agentKey sql.NullString
 
 	err := r.getByNameIPStmt.QueryRowContext(ctx, name, ip).Scan(
 		&idStr,
@@ -170,6 +185,7 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 		&agent.Status,
 		&agent.Capabilities,
 		&agent.LastSeen,
+		&agentKey,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
@@ -182,6 +198,11 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+
+	// Handle nullable fields
+	if agentKey.Valid {
+		agent.AgentKey = agentKey.String
+	}
 
 	// Cache the result
 	r.cache.Set(ctx, cacheKey, &agent)
@@ -209,6 +230,7 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 	for rows.Next() {
 		var agent domain.Agent
 		var idStr string
+		var agentKey sql.NullString
 
 		err := rows.Scan(
 			&idStr,
@@ -218,6 +240,7 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 			&agent.Status,
 			&agent.Capabilities,
 			&agent.LastSeen,
+			&agentKey,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
 		)
@@ -226,6 +249,12 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 		}
 
 		agent.ID = uuid.MustParse(idStr)
+
+		// Handle nullable fields
+		if agentKey.Valid {
+			agent.AgentKey = agentKey.String
+		}
+
 		agents = append(agents, agent)
 	}
 
@@ -295,6 +324,88 @@ func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) erro
 	if err == nil {
 		// Invalidate caches
 		r.cache.Delete(ctx, "agent:"+id.String())
+		r.cache.Delete(ctx, "agents:all")
+	}
+
+	return err
+}
+
+func (r *agentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
+	cacheKey := "agent:key:" + agentKey
+
+	// Try cache first
+	var agent domain.Agent
+	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		return &agent, nil
+	}
+
+	// Fallback to database
+	query := `
+		SELECT id, name, ip_address, port, status, capabilities, last_seen, agent_key, created_at, updated_at
+		FROM agents WHERE agent_key = ? LIMIT 1
+	`
+
+	var idStr string
+	var agentKeyDB sql.NullString
+
+	err := r.db.DB().QueryRowContext(ctx, query, agentKey).Scan(
+		&idStr,
+		&agent.Name,
+		&agent.IPAddress,
+		&agent.Port,
+		&agent.Status,
+		&agent.Capabilities,
+		&agent.LastSeen,
+		&agentKeyDB,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("agent not found")
+		}
+		return nil, err
+	}
+
+	agent.ID = uuid.MustParse(idStr)
+
+	// Handle nullable fields
+	if agentKeyDB.Valid {
+		agent.AgentKey = agentKeyDB.String
+	}
+
+	// Cache the result
+	r.cache.Set(ctx, cacheKey, &agent)
+
+	return &agent, nil
+}
+
+func (r *agentRepository) UpdateAgentKey(ctx context.Context, id uuid.UUID, agentKey string) error {
+	query := `UPDATE agents SET agent_key = ?, updated_at = ? WHERE id = ?`
+	now := time.Now()
+	_, err := r.db.DB().ExecContext(ctx, query, agentKey, now, id.String())
+
+	if err == nil {
+		// Invalidate caches
+		r.cache.Delete(ctx, "agent:"+id.String())
+		r.cache.Delete(ctx, "agents:all")
+		if agentKey != "" {
+			r.cache.Delete(ctx, "agent:key:"+agentKey)
+		}
+	}
+
+	return err
+}
+
+func (r *agentRepository) RevokeAgentKey(ctx context.Context, agentKey string) error {
+	query := `UPDATE agents SET status = 'banned', updated_at = ? WHERE agent_key = ?`
+	now := time.Now()
+	_, err := r.db.DB().ExecContext(ctx, query, now, agentKey)
+
+	if err == nil {
+		// Invalidate caches
+		r.cache.Delete(ctx, "agent:key:"+agentKey)
 		r.cache.Delete(ctx, "agents:all")
 	}
 

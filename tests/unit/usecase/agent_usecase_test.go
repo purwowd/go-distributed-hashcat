@@ -65,6 +65,80 @@ func (m *MockAgentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) 
 	return args.Error(0)
 }
 
+func (m *MockAgentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
+	args := m.Called(ctx, agentKey)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
+func (m *MockAgentRepository) UpdateAgentKey(ctx context.Context, id uuid.UUID, agentKey string) error {
+	args := m.Called(ctx, id, agentKey)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) RevokeAgentKey(ctx context.Context, agentKey string) error {
+	args := m.Called(ctx, agentKey)
+	return args.Error(0)
+}
+
+// MockAgentKeyRepository is a mock implementation of domain.AgentKeyRepository
+type MockAgentKeyRepository struct {
+	mock.Mock
+}
+
+func (m *MockAgentKeyRepository) Create(ctx context.Context, agentKey *domain.AgentKey) error {
+	args := m.Called(ctx, agentKey)
+	return args.Error(0)
+}
+
+func (m *MockAgentKeyRepository) GetByKey(ctx context.Context, key string) (*domain.AgentKey, error) {
+	args := m.Called(ctx, key)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.AgentKey), args.Error(1)
+}
+
+func (m *MockAgentKeyRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.AgentKey, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.AgentKey), args.Error(1)
+}
+
+func (m *MockAgentKeyRepository) GetAll(ctx context.Context) ([]*domain.AgentKey, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]*domain.AgentKey), args.Error(1)
+}
+
+func (m *MockAgentKeyRepository) Update(ctx context.Context, agentKey *domain.AgentKey) error {
+	args := m.Called(ctx, agentKey)
+	return args.Error(0)
+}
+
+func (m *MockAgentKeyRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockAgentKeyRepository) UpdateStatus(ctx context.Context, key string, status string) error {
+	args := m.Called(ctx, key, status)
+	return args.Error(0)
+}
+
+func (m *MockAgentKeyRepository) UpdateLastUsed(ctx context.Context, key string) error {
+	args := m.Called(ctx, key)
+	return args.Error(0)
+}
+
+func (m *MockAgentKeyRepository) LinkToAgent(ctx context.Context, key string, agentID uuid.UUID) error {
+	args := m.Called(ctx, key, agentID)
+	return args.Error(0)
+}
+
 func TestAgentUsecase_RegisterAgent(t *testing.T) {
 	existingAgentID := uuid.New()
 	existingAgent := &domain.Agent{
@@ -167,9 +241,10 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
+			mockAgentKeyRepo := new(MockAgentKeyRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, mockAgentKeyRepo)
 			ctx := context.Background()
 
 			agent, err := usecase.RegisterAgent(ctx, tt.request)
@@ -240,9 +315,10 @@ func TestAgentUsecase_GetAgent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
+			mockAgentKeyRepo := new(MockAgentKeyRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, mockAgentKeyRepo)
 			ctx := context.Background()
 
 			agent, err := usecase.GetAgent(ctx, tt.agentID)
@@ -313,9 +389,10 @@ func TestAgentUsecase_GetAllAgents(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
+			mockAgentKeyRepo := new(MockAgentKeyRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, mockAgentKeyRepo)
 			ctx := context.Background()
 
 			agents, err := usecase.GetAllAgents(ctx)
@@ -365,9 +442,10 @@ func TestAgentUsecase_UpdateAgentStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
+			mockAgentKeyRepo := new(MockAgentKeyRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, mockAgentKeyRepo)
 			ctx := context.Background()
 
 			err := usecase.UpdateAgentStatus(ctx, tt.agentID, tt.status)
@@ -413,9 +491,10 @@ func TestAgentUsecase_DeleteAgent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
+			mockAgentKeyRepo := new(MockAgentKeyRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, mockAgentKeyRepo)
 			ctx := context.Background()
 
 			err := usecase.DeleteAgent(ctx, tt.agentID)
@@ -486,9 +565,10 @@ func TestAgentUsecase_GetAvailableAgent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
+			mockAgentKeyRepo := new(MockAgentKeyRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, mockAgentKeyRepo)
 			ctx := context.Background()
 
 			agent, err := usecase.GetAvailableAgent(ctx)
@@ -539,9 +619,10 @@ func TestAgentUsecase_UpdateAgentHeartbeat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
+			mockAgentKeyRepo := new(MockAgentKeyRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, mockAgentKeyRepo)
 			ctx := context.Background()
 
 			err := usecase.UpdateAgentHeartbeat(ctx, tt.agentID)

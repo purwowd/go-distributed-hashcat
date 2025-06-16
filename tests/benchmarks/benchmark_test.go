@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go-distributed-hashcat/internal/delivery/http/handler"
+	"go-distributed-hashcat/internal/delivery/http/middleware"
 	"go-distributed-hashcat/internal/domain"
 	"go-distributed-hashcat/internal/infrastructure/database"
 	"go-distributed-hashcat/internal/infrastructure/repository"
@@ -30,18 +31,43 @@ func setupBenchmarkDB(b *testing.B) *database.SQLiteDB {
 	return db
 }
 
+// createTestAgentKey creates a valid agent key for testing
+func createTestAgentKey(b *testing.B, agentKeyRepo domain.AgentKeyRepository) string {
+	agentKey := &domain.AgentKey{
+		ID:          uuid.New(),
+		AgentKey:    "test-agent-key-" + uuid.New().String(),
+		Name:        "Test Agent Key",
+		Description: "Test key for benchmarks",
+		Status:      "active",
+		CreatedAt:   time.Now(),
+	}
+
+	err := agentKeyRepo.Create(context.Background(), agentKey)
+	if err != nil {
+		b.Fatalf("Failed to create test agent key: %v", err)
+	}
+
+	return agentKey.AgentKey
+}
+
 // BenchmarkAgentCreation benchmarks agent creation performance
 func BenchmarkAgentCreation(b *testing.B) {
 	db := setupBenchmarkDB(b)
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentKeyRepo := repository.NewAgentKeyRepository(db)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentKeyRepo)
+	agentKeyUsecase := usecase.NewAgentKeyUsecase(agentKeyRepo, agentRepo)
 	agentHandler := handler.NewAgentHandler(agentUsecase)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/agents/", agentHandler.RegisterAgent)
+
+	// Add middleware for agent key validation
+	agentGroup := router.Group("/api/v1/agents")
+	agentGroup.Use(middleware.AgentKeyMiddleware(agentKeyUsecase))
+	agentGroup.POST("/", agentHandler.RegisterAgent)
 
 	// Pre-allocate request template
 	agentReq := domain.CreateAgentRequest{
@@ -55,6 +81,9 @@ func BenchmarkAgentCreation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
+		// Create new agent key for each iteration to avoid conflicts
+		newAgentKey := createTestAgentKey(b, agentKeyRepo)
+
 		// Minimize allocations in hot path
 		agentReq.Name = fmt.Sprintf("Benchmark Agent %d", i)
 		agentReq.IPAddress = fmt.Sprintf("192.168.1.%d", 100+(i%50))
@@ -62,6 +91,7 @@ func BenchmarkAgentCreation(b *testing.B) {
 		reqBody, _ := json.Marshal(agentReq)
 		req := httptest.NewRequest("POST", "/api/v1/agents/", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Agent-Key", newAgentKey)
 
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, req)
@@ -140,7 +170,8 @@ func BenchmarkAgentListing(b *testing.B) {
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentKeyRepo := repository.NewAgentKeyRepository(db)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentKeyRepo)
 	agentHandler := handler.NewAgentHandler(agentUsecase)
 
 	gin.SetMode(gin.TestMode)
@@ -182,7 +213,8 @@ func BenchmarkDirectAgentCreation(b *testing.B) {
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentKeyRepo := repository.NewAgentKeyRepository(db)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentKeyRepo)
 
 	agentReq := domain.CreateAgentRequest{
 		Name:         "Direct Agent",
@@ -211,12 +243,21 @@ func BenchmarkLimitedConcurrentAgentCreation(b *testing.B) {
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentKeyRepo := repository.NewAgentKeyRepository(db)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentKeyRepo)
+	agentKeyUsecase := usecase.NewAgentKeyUsecase(agentKeyRepo, agentRepo)
 	agentHandler := handler.NewAgentHandler(agentUsecase)
+
+	// Create test agent key
+	testAgentKey := createTestAgentKey(b, agentKeyRepo)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/agents/", agentHandler.RegisterAgent)
+
+	// Add middleware for agent key validation
+	agentGroup := router.Group("/api/v1/agents")
+	agentGroup.Use(middleware.AgentKeyMiddleware(agentKeyUsecase))
+	agentGroup.POST("/", agentHandler.RegisterAgent)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -235,6 +276,7 @@ func BenchmarkLimitedConcurrentAgentCreation(b *testing.B) {
 			reqBody, _ := json.Marshal(agentReq)
 			req := httptest.NewRequest("POST", "/api/v1/agents/", bytes.NewBuffer(reqBody))
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Agent-Key", testAgentKey)
 
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, req)

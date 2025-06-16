@@ -11,6 +11,7 @@ import { agentStore } from './stores/agent.store'
 import { jobStore } from './stores/job.store'
 import { fileStore } from './stores/file.store'
 import { wordlistStore } from './stores/wordlist.store'
+import { authStore, createAuthData } from './stores/auth.store'
 
 // Alpine.js global type
 declare global {
@@ -183,6 +184,7 @@ class DashboardApplication {
             
             // Load all components in parallel with proper paths
             const componentMap = [
+                { name: 'pages/login', path: '/components/pages/login.html' },
                 { name: 'layout/navigation', path: '/components/layout/navigation.html' },
                 { name: 'ui/breadcrumb', path: '/components/ui/breadcrumb.html' },
                 { name: 'tabs/overview', path: '/components/tabs/overview.html' },
@@ -190,11 +192,13 @@ class DashboardApplication {
                 { name: 'tabs/jobs', path: '/components/tabs/jobs.html' },
                 { name: 'tabs/files', path: '/components/tabs/files.html' },
                 { name: 'tabs/wordlists', path: '/components/tabs/wordlists.html' },
+                { name: 'pages/agent-keys', path: '/components/pages/agent-keys.html' },
                 { name: 'tabs/docs', path: '/components/tabs/docs.html' },
                 { name: 'modals/agent-modal', path: '/components/modals/agent-modal.html' },
                 { name: 'modals/job-modal', path: '/components/modals/job-modal.html' },
                 { name: 'modals/file-modal', path: '/components/modals/file-modal.html' },
                 { name: 'modals/wordlist-modal', path: '/components/modals/wordlist-modal.html' },
+    
                 { name: 'ui/notification', path: '/components/ui/notification.html' },
                 { name: 'ui/loading', path: '/components/ui/loading.html' }
             ]
@@ -220,102 +224,109 @@ class DashboardApplication {
      * Inject loaded components into the DOM
      */
     private async injectComponents(): Promise<void> {
-        // console.log('🔧 Starting component injection...')
+        // console.log('🔧 Starting authentication-aware component injection...')
         
-        // Find main container or create it
+        // Load login component first (always available)
+        const loginHtml = await componentLoader.loadComponent('pages/login')
+        const loginContainer = document.getElementById('login-container')
+        if (loginContainer && loginHtml) {
+            loginContainer.innerHTML = loginHtml
+            // console.log('✅ Login component injected')
+        }
+
+        // Find or create dashboard container
+        let dashboardContainer = document.getElementById('dashboard-container')
+        if (!dashboardContainer) {
+            dashboardContainer = document.getElementById('dashboard-container')
+        }
+
+        if (!dashboardContainer) {
+            console.error('❌ Dashboard container not found')
+            return
+        }
+
+        // Create main container for dashboard components
         let mainContainer = document.querySelector('main.container-modern')
         if (!mainContainer) {
-            // console.log('📦 Creating main container...')
-            // Create main container if it doesn't exist
             mainContainer = document.createElement('main')
             mainContainer.className = 'container-modern'
-            document.body.appendChild(mainContainer)
-        } else {
-            console.log('📦 Found existing main container')
+            dashboardContainer.appendChild(mainContainer)
         }
 
         // Load navigation
-        // console.log('🧭 Loading navigation component...')
         const navigation = await componentLoader.loadComponent('layout/navigation')
-        // console.log('✅ Navigation loaded:', navigation.length, 'characters')
-        
         const navigationContainer = document.createElement('div')
         navigationContainer.innerHTML = navigation
         
-        // Find the actual nav element (skip script tags)
         const navElement = navigationContainer.querySelector('nav')
         if (navElement) {
-            document.body.insertBefore(navElement, mainContainer)
-            // console.log('✅ Navigation injected into DOM')
-        } else {
-            console.error('❌ Failed to find nav element in navigation component')
-            // console.log('📝 Navigation content preview:', navigation.substring(0, 200) + '...')
+            dashboardContainer.insertBefore(navElement, mainContainer)
+            // console.log('✅ Navigation injected into dashboard')
         }
 
         // Load breadcrumb component
-        // console.log('🗂️ Loading breadcrumb component...')
         const breadcrumb = await componentLoader.loadComponent('ui/breadcrumb')
-        // console.log('✅ Breadcrumb loaded:', breadcrumb.length, 'characters')
-        
         const breadcrumbContainer = document.createElement('div')
         breadcrumbContainer.innerHTML = breadcrumb
         
-        // Find the actual nav element for breadcrumb
         const breadcrumbElement = breadcrumbContainer.querySelector('nav')
         if (breadcrumbElement) {
-            document.body.insertBefore(breadcrumbElement, mainContainer)
-            // console.log('✅ Breadcrumb injected into DOM')
-        } else {
-            console.error('❌ Failed to find nav element in breadcrumb component')
+            dashboardContainer.insertBefore(breadcrumbElement, mainContainer)
+            // console.log('✅ Breadcrumb injected into dashboard')
         }
 
-        // Load tab content
+        // Load tab content with proper routing visibility
         const tabComponents = [
-            'tabs/overview',
-            'tabs/agents', 
-            'tabs/jobs',
-            'tabs/files',
-            'tabs/wordlists',
-            'tabs/docs'
+            { name: 'tabs/overview', route: 'overview' },
+            { name: 'tabs/agents', route: 'agents' }, 
+            { name: 'tabs/jobs', route: 'jobs' },
+            { name: 'tabs/files', route: 'files' },
+            { name: 'tabs/wordlists', route: 'wordlists' },
+            { name: 'pages/agent-keys', route: 'agent-keys' },
+            { name: 'tabs/docs', route: 'docs' }
         ]
 
         for (const component of tabComponents) {
-            const html = await componentLoader.loadComponent(component)
+            const html = await componentLoader.loadComponent(component.name)
             const container = document.createElement('div')
             container.innerHTML = html
-            // Find actual content element (skip script tags)
             const element = container.querySelector('section, div, article') || container.firstElementChild
             if (element && element.tagName !== 'SCRIPT') {
+                // Add route-based visibility attributes
+                element.setAttribute('x-show', `currentTab === '${component.route}'`)
+                element.setAttribute('x-transition:enter', 'transition ease-out duration-300')
+                element.setAttribute('x-transition:enter-start', 'opacity-0 transform scale-95')
+                element.setAttribute('x-transition:enter-end', 'opacity-100 transform scale-100')
+                element.setAttribute('x-transition:leave', 'transition ease-in duration-200')
+                element.setAttribute('x-transition:leave-start', 'opacity-100 transform scale-100')
+                element.setAttribute('x-transition:leave-end', 'opacity-0 transform scale-95')
+                
                 mainContainer.appendChild(element)
-                // console.log(`✅ Injected ${component} component`)
-            } else {
-                console.warn(`❌ Failed to inject ${component} component`)
+                // console.log(`✅ Injected ${component.name} component with route visibility`)
             }
         }
 
-        // Load modals
+        // Load modals (available globally)
         const modalComponents = [
             'modals/agent-modal',
             'modals/job-modal',
             'modals/file-modal', 
-            'modals/wordlist-modal'
+            'modals/wordlist-modal',
+            
         ]
 
         for (const component of modalComponents) {
             const html = await componentLoader.loadComponent(component)
             const container = document.createElement('div')
             container.innerHTML = html
-            // Find actual content element (skip script tags)
             const element = container.querySelector('div[x-data], [x-show]') || container.querySelector('div') || container.firstElementChild
             if (element && element.tagName !== 'SCRIPT') {
                 document.body.appendChild(element)
                 // console.log(`✅ Injected ${component} modal`)
-            } else {
-                console.warn(`❌ Failed to inject ${component} modal`)
             }
         }
 
-        // Load UI components
+        // Load UI components (available globally)
         const uiComponents = [
             'ui/notification',
             'ui/loading'
@@ -325,13 +336,10 @@ class DashboardApplication {
             const html = await componentLoader.loadComponent(component)
             const container = document.createElement('div')
             container.innerHTML = html
-            // Find actual content element (skip script tags)
             const element = container.querySelector('div, section') || container.firstElementChild
             if (element && element.tagName !== 'SCRIPT') {
                 document.body.appendChild(element)
                 // console.log(`✅ Injected ${component} UI component`)
-            } else {
-                console.warn(`❌ Failed to inject ${component} UI component`)
             }
         }
     }
@@ -386,7 +394,7 @@ class DashboardApplication {
         const self = this
         window.Alpine.data('dashboardApp', () => ({
             // Reactive state
-            currentTab: router.getCurrentRoute(),
+            currentTab: router.getCurrentRoute() || 'overview',
             isLoading: false,
             isAlpineInitialized: false,
             notifications: [] as any[],
@@ -396,12 +404,17 @@ class DashboardApplication {
             showJobModal: false,
             showFileModal: false,
             showWordlistModal: false,
+            showGenerateModal: false,
+            showKeyModal: false,
             
             // Form states
             agentForm: { name: '', ip_address: '', port: 8080, capabilities: '' },
             jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' },
             fileForm: { file: null },
             wordlistForm: { file: null },
+            generateForm: { name: '', description: '' },
+            generatedKey: null as any,
+            isGenerating: false,
             
             // Command template for job creation
             commandTemplate: '',
@@ -427,10 +440,16 @@ class DashboardApplication {
             reactiveJobs: [] as any[],
             reactiveHashFiles: [] as any[],
             reactiveWordlists: [] as any[],
+            agentKeys: [] as any[],
+            
+            // Auth state for easy access
+            auth: createAuthData(),
 
             // Getters that return reactive data
             get agents() { 
-                return this.reactiveAgents || []
+                // Filter out agents with status "key_generated" (these are just placeholder records for agent keys)
+                const allAgents = this.reactiveAgents || []
+                return allAgents.filter((agent: any) => agent.status !== 'key_generated')
             },
             get jobs() { 
                 return this.reactiveJobs || []
@@ -440,6 +459,11 @@ class DashboardApplication {
             },
             get wordlists() { 
                 return this.reactiveWordlists || []
+            },
+            
+            // Get all agents including key_generated ones (for agent keys page)
+            get allAgents() {
+                return this.reactiveAgents || []
             },
             
             // Computed properties with safe checks
@@ -461,6 +485,9 @@ class DashboardApplication {
                 // console.log('🔄 Initializing Alpine.js dashboard data...')
                 this.isAlpineInitialized = true
                 
+                // Ensure currentTab is set correctly on init
+                this.currentTab = router.getCurrentRoute() || 'overview'
+                
                 // Setup router listener
                 router.subscribe((route: string) => {
                     this.currentTab = route
@@ -469,8 +496,16 @@ class DashboardApplication {
                 // Setup store subscriptions for reactivity
                 this.setupStoreSubscriptions()
                 
+                // Setup auth store subscription for UI visibility control
+                authStore.subscribe(() => {
+                    this.updateUIVisibility()
+                })
+                
                 // Setup WebSocket for real-time updates
                 this.setupWebSocketSubscriptions()
+                
+                // Initial auth check and UI setup
+                this.updateUIVisibility()
                 
                 try {
                     await this.loadInitialData()
@@ -482,6 +517,9 @@ class DashboardApplication {
                 
                 this.setupPolling()
                 
+                // Hide initial loader
+                this.hideInitialLoader()
+                
                 // Safety timeout to prevent infinite loading
                 setTimeout(() => {
                     if (this.isLoading) {
@@ -490,6 +528,61 @@ class DashboardApplication {
                         this.showNotification('Loading took too long. Data may be incomplete.', 'warning')
                     }
                 }, 15000) // 15 second safety timeout
+            },
+
+            // Update UI visibility based on auth state
+            updateUIVisibility() {
+                const isAuthenticated = authStore.isAuthenticated()
+                const currentUser = authStore.getUser()
+                const loginContainer = document.getElementById('login-container')
+                const dashboardContainer = document.getElementById('dashboard-container')
+                
+                console.log('🔄 Auth state update:', { isAuthenticated, currentUser })
+                
+                if (isAuthenticated) {
+                    // Show dashboard, hide login
+                    if (loginContainer) loginContainer.style.display = 'none'
+                    if (dashboardContainer) dashboardContainer.style.display = 'block'
+                    console.log('✅ Showing dashboard, hiding login')
+                    
+                    // Force Alpine.js to re-evaluate auth data
+                    this.auth = createAuthData()
+                    
+                    // Force all Alpine components to re-render
+                    if (window.Alpine && window.Alpine.nextTick) {
+                        window.Alpine.nextTick(() => {
+                            // Force reactive update for all auth-related components
+                            const authElements = document.querySelectorAll('[x-show*="auth"]')
+                            authElements.forEach((el: any) => {
+                                if (el._x_dataStack) {
+                                    // Update Alpine data stack for auth
+                                    el._x_dataStack.forEach((data: any) => {
+                                        if (data.auth) {
+                                            data.auth = createAuthData()
+                                        }
+                                    })
+                                }
+                            })
+                        })
+                    }
+                } else {
+                    // Show login, hide dashboard
+                    if (loginContainer) loginContainer.style.display = 'block'
+                    if (dashboardContainer) dashboardContainer.style.display = 'none'
+                    console.log('🔐 Showing login, hiding dashboard')
+                }
+            },
+
+            // Hide initial loader
+            hideInitialLoader() {
+                const loader = document.getElementById('initial-loader')
+                if (loader) {
+                    setTimeout(() => {
+                        loader.style.opacity = '0'
+                        loader.style.transition = 'opacity 0.3s ease-out'
+                        setTimeout(() => loader.remove(), 300)
+                    }, 1000)
+                }
             },
 
             // NEW: Setup store subscriptions for reactive updates
@@ -666,6 +759,11 @@ class DashboardApplication {
                         console.warn('Failed to load cache stats:', err)
                     })
                     
+                    // Load agent keys
+                    await this.loadAgentKeys().catch(err => {
+                        console.warn('Failed to load agent keys:', err)
+                    })
+                    
                 } catch (error) {
                     console.error('❌ Failed to load initial data:', error)
                     this.showNotification('Failed to load data. Please refresh the page.', 'error')
@@ -682,6 +780,11 @@ class DashboardApplication {
                 
                 // Use router to navigate (this will update URL and current tab)
                 router.navigate(tab)
+                
+                // Load data for specific tabs
+                if (tab === 'agent-keys') {
+                    await this.loadAgentKeys()
+                }
                 
                 // Lazy load tab component if needed
                 if (self.config.features.lazyLoading) {
@@ -1374,7 +1477,205 @@ class DashboardApplication {
                 }
             },
 
+            // Agent Keys Management
+            async loadAgentKeys() {
+                try {
+                    const { AgentKeyService } = await import('./services/agent-key.service')
+                    const agentKeyService = new AgentKeyService()
+                    const keys = await agentKeyService.listAgentKeys()
+                    // ✅ Force Alpine.js reactivity by creating new array reference
+                    this.agentKeys = [...keys]
+                } catch (error) {
+                    console.error('Failed to load agent keys:', error)
+                    this.showNotification('Failed to load agent keys', 'error')
+                }
+            },
 
+            async generateKey() {
+                if (!this.generateForm.name) {
+                    this.showNotification('Key name is required', 'error')
+                    return
+                }
+
+                this.isGenerating = true
+                try {
+                    const { AgentKeyService } = await import('./services/agent-key.service')
+                    const agentKeyService = new AgentKeyService()
+                    
+                    this.generatedKey = await agentKeyService.generateAgentKey({
+                        name: this.generateForm.name,
+                        description: this.generateForm.description
+                    })
+                    
+                    this.showGenerateModal = false
+                    this.showKeyModal = true
+                    this.generateForm = { name: '', description: '' }
+                    this.showNotification('Agent key generated successfully!', 'success')
+                    
+                    // Refresh the agent keys list
+                    await this.loadAgentKeys()
+                } catch (error) {
+                    console.error('Failed to generate agent key:', error)
+                    this.showNotification('Failed to generate agent key', 'error')
+                } finally {
+                    this.isGenerating = false
+                }
+            },
+
+            async revokeKey(agentKey: string) {
+                if (!confirm('Are you sure you want to revoke this agent key? This will disable the key but keep it for audit purposes.')) {
+                    return
+                }
+
+                try {
+                    const { AgentKeyService } = await import('./services/agent-key.service')
+                    const agentKeyService = new AgentKeyService()
+                    
+                    await agentKeyService.revokeAgentKey(agentKey)
+                    await this.loadAgentKeys() // Refresh the list
+                    this.showNotification('Agent key revoked successfully', 'success')
+                } catch (error) {
+                    console.error('Failed to revoke agent key:', error)
+                    this.showNotification('Failed to revoke agent key', 'error')
+                }
+            },
+
+            async deleteKey(agentKey: string) {
+                if (!confirm('Are you sure you want to permanently delete this agent key? This action cannot be undone and will remove all history.')) {
+                    return
+                }
+
+                try {
+                    const { AgentKeyService } = await import('./services/agent-key.service')
+                    const agentKeyService = new AgentKeyService()
+                    
+                    await agentKeyService.deleteAgentKey(agentKey)
+                    await this.loadAgentKeys() // Refresh the list
+                    this.showNotification('Agent key deleted successfully', 'success')
+                } catch (error) {
+                    console.error('Failed to delete agent key:', error)
+                    const errorMessage = error instanceof Error ? error.message : 'Failed to delete agent key'
+                    this.showNotification(errorMessage, 'error')
+                }
+            },
+
+            // Get agent name by agent key
+            getAgentNameByKey(key: any) {
+                if (!key.agent_id) return 'Not connected'
+                
+                const agent = this.allAgents.find((agent: any) => agent.id === key.agent_id)
+                return agent ? agent.name : 'Unknown Agent'
+            },
+
+
+        }))
+
+        // Register auth data
+        const authData = createAuthData()
+        window.Alpine.data('auth', () => authData)
+
+        // Subscribe to auth store changes to force Alpine reactivity
+        authStore.subscribe(() => {
+            console.log('🔔 Auth store changed, triggering UI update')
+            
+            // Simple approach: just update container visibility
+            // Alpine.js will handle reactivity through its own getters
+            try {
+                const isAuthenticated = authStore.isAuthenticated()
+                const loginContainer = document.getElementById('login-container')
+                const dashboardContainer = document.getElementById('dashboard-container')
+                
+                if (isAuthenticated) {
+                    if (loginContainer) loginContainer.style.display = 'none'
+                    if (dashboardContainer) dashboardContainer.style.display = 'block'
+                    console.log('✅ Showing dashboard, hiding login')
+                } else {
+                    if (loginContainer) loginContainer.style.display = 'block'
+                    if (dashboardContainer) dashboardContainer.style.display = 'none'
+                    console.log('🔐 Showing login, hiding dashboard')
+                }
+                
+                // Let Alpine.js handle its own reactivity through getters
+                // No need to manually update proxy objects
+                console.log('🔄 UI containers updated, Alpine.js will handle reactivity')
+                
+            } catch (error) {
+                console.error('Error updating auth UI:', error)
+            }
+        })
+
+        // Make auth functions globally available for login component
+        window.Alpine.data('loginPageData', () => ({
+            showPassword: false,
+            isLoading: false,
+            error: null as string | null,
+            form: {
+                username: '',
+                password: ''
+            },
+
+            // Form validation
+            get isFormValid() {
+                return this.form.username && this.form.password
+            },
+
+            // Handle form submission
+            async handleSubmit() {
+                if (!this.isFormValid) return
+
+                this.isLoading = true
+                this.error = null
+
+                try {
+                    // Login user
+                    await this.login()
+                } catch (error: any) {
+                    this.error = error.message || 'An error occurred'
+                } finally {
+                    this.isLoading = false
+                }
+            },
+
+            // Login user
+            async login() {
+                await authStore.login({
+                    username: this.form.username,
+                    password: this.form.password
+                })
+                
+                // Force immediate UI update after successful login
+                console.log('🎉 Login successful!')
+                
+                // Manually trigger updateUIVisibility to ensure immediate UI update
+                setTimeout(() => {
+                    // Force auth store subscription trigger
+                    authStore.forceUpdate()
+                }, 100)
+            },
+
+            // Reset form
+            resetForm() {
+                this.form = {
+                    username: '',
+                    password: ''
+                }
+                this.showPassword = false
+            },
+
+            // Clear messages
+            clearMessages() {
+                this.error = null
+            },
+
+            // Initialize
+            init() {
+                // No special initialization needed for login-only mode
+            },
+
+            // Get auth state
+            get isAuthenticated() {
+                return authStore.isAuthenticated()
+            }
         }))
 
         perf.endTimer('alpine-initialization')

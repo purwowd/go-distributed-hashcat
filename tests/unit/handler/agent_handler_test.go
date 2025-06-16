@@ -32,6 +32,14 @@ func (m *MockAgentUsecase) RegisterAgent(ctx context.Context, req *domain.Create
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentUsecase) RegisterAgentWithKey(ctx context.Context, agentKey string, req *domain.CreateAgentRequest) (*domain.Agent, error) {
+	args := m.Called(ctx, agentKey, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
 func (m *MockAgentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
@@ -79,7 +87,7 @@ func setupTestRouter() *gin.Engine {
 	return router
 }
 
-func TestAgentHandler_CreateAgent(t *testing.T) {
+func TestAgentHandler_RegisterAgent(t *testing.T) {
 	tests := []struct {
 		name           string
 		requestBody    interface{}
@@ -88,7 +96,7 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
-			name: "successful agent creation",
+			name: "successful agent registration with key",
 			requestBody: map[string]interface{}{
 				"name":         "test-agent",
 				"ip_address":   "192.168.1.100",
@@ -104,7 +112,8 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 					Capabilities: "gpu,cpu",
 					Status:       "online",
 				}
-				mockUsecase.On("RegisterAgent", mock.Anything, mock.AnythingOfType("*domain.CreateAgentRequest")).Return(expectedAgent, nil)
+				// Mock RegisterAgentWithKey since that's what the handler calls
+				mockUsecase.On("RegisterAgentWithKey", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*domain.CreateAgentRequest")).Return(expectedAgent, nil)
 			},
 			expectedStatus: http.StatusCreated,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -158,7 +167,7 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 				"capabilities": "gpu,cpu",
 			},
 			mockSetup: func(mockUsecase *MockAgentUsecase) {
-				mockUsecase.On("RegisterAgent", mock.Anything, mock.AnythingOfType("*domain.CreateAgentRequest")).Return(nil, errors.New("database error"))
+				mockUsecase.On("RegisterAgentWithKey", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*domain.CreateAgentRequest")).Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -177,7 +186,17 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 
 			handler := handler.NewAgentHandler(mockUsecase)
 			router := setupTestRouter()
-			router.POST("/agents", handler.RegisterAgent)
+
+			// Add middleware to simulate agent key validation
+			router.POST("/agents", func(c *gin.Context) {
+				// Simulate middleware setting agent in context
+				keyAgent := &domain.Agent{
+					ID:     uuid.New(),
+					Status: "pending",
+				}
+				c.Set("agent", keyAgent)
+				handler.RegisterAgent(c)
+			})
 
 			var body []byte
 			var err error

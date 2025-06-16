@@ -128,11 +128,11 @@ func (r *wordlistRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	return &wordlist, nil
 }
 
-func (r *wordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, error) {
+func (r *wordlistRepository) GetAll(ctx context.Context) ([]*domain.Wordlist, error) {
 	cacheKey := "wordlists:all"
 
 	// Try cache first
-	var wordlists []domain.Wordlist
+	var wordlists []*domain.Wordlist
 	if found, err := r.cache.Get(ctx, cacheKey, &wordlists); err == nil && found {
 		return wordlists, nil
 	}
@@ -144,7 +144,7 @@ func (r *wordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, err
 	}
 	defer rows.Close()
 
-	wordlists = make([]domain.Wordlist, 0, 10) // Pre-allocate slice
+	wordlists = make([]*domain.Wordlist, 0, 10) // Pre-allocate slice
 	for rows.Next() {
 		var wordlist domain.Wordlist
 		var idStr string
@@ -169,7 +169,7 @@ func (r *wordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, err
 			wordlist.WordCount = &wordCount.Int64
 		}
 
-		wordlists = append(wordlists, wordlist)
+		wordlists = append(wordlists, &wordlist)
 	}
 
 	// Cache the result
@@ -189,4 +189,40 @@ func (r *wordlistRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return err
+}
+
+func (r *wordlistRepository) GetByName(ctx context.Context, name string) (*domain.Wordlist, error) {
+	query := `
+		SELECT id, name, orig_name, path, size, word_count, created_at
+		FROM wordlists WHERE name = ? LIMIT 1
+	`
+
+	var wordlist domain.Wordlist
+	var idStr string
+	var wordCount sql.NullInt64
+
+	err := r.db.DB().QueryRowContext(ctx, query, name).Scan(
+		&idStr,
+		&wordlist.Name,
+		&wordlist.OrigName,
+		&wordlist.Path,
+		&wordlist.Size,
+		&wordCount,
+		&wordlist.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("wordlist not found")
+		}
+		return nil, err
+	}
+
+	wordlist.ID = uuid.MustParse(idStr)
+
+	if wordCount.Valid {
+		wordlist.WordCount = &wordCount.Int64
+	}
+
+	return &wordlist, nil
 }

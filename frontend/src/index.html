@@ -68,6 +68,10 @@
                     title: 'Wordlists - Hashcat Dashboard',
                     description: 'Manage wordlists and dictionaries for attacks'
                 },
+                'agent-keys': {
+                    title: 'Agent Keys - Hashcat Dashboard',
+                    description: 'Generate and manage authentication keys for distributed agents'
+                },
                 'docs': {
                     title: 'API Documentation - Hashcat Dashboard',
                     description: 'REST API documentation and integration guides'
@@ -109,7 +113,11 @@
     </script>
 </head>
 <body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen">
-    <!-- Components will be loaded dynamically by main.ts -->
+    <!-- Login component (always available initially) -->
+    <div id="login-container"></div>
+    
+    <!-- Dashboard container (will be shown/hidden by Alpine.js auth state) -->
+    <div id="dashboard-container" style="display: none;"></div>
     
     <!-- Initial loading state -->
     <div id="initial-loader" class="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -122,7 +130,7 @@
             </h1>
             <div class="flex items-center justify-center space-x-2 text-gray-600">
                 <div class="animate-spin rounded-full h-6 w-6 border-4 border-blue-200 border-t-blue-600"></div>
-                <span class="text-sm font-medium">Loading components...</span>
+                <span class="text-sm font-medium">Initializing dashboard...</span>
             </div>
         </div>
     </div>
@@ -131,17 +139,8 @@
     <script type="module" src="./main.ts"></script>
     
     <script>
-        // Hide initial loader once Alpine is ready
-        document.addEventListener('alpine:init', () => {
-            const loader = document.getElementById('initial-loader');
-            if (loader) {
-                setTimeout(() => {
-                    loader.style.opacity = '0';
-                    loader.style.transition = 'opacity 0.3s ease-out';
-                    setTimeout(() => loader.remove(), 300);
-                }, 500);
-            }
-        });
+        // Initial loader will be handled by main.ts dashboard app init
+        console.log('🚀 Loading Hashcat Dashboard...')
     </script>
 </body>
 </html> 

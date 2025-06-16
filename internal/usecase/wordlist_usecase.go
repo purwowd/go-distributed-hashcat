@@ -17,7 +17,7 @@ import (
 type WordlistUsecase interface {
 	UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error)
 	GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error)
-	GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error)
+	GetAllWordlists(ctx context.Context) ([]*domain.Wordlist, error)
 	DeleteWordlist(ctx context.Context, id uuid.UUID) error
 }
 
@@ -91,7 +91,7 @@ func (u *wordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*domai
 	return wordlist, nil
 }
 
-func (u *wordlistUsecase) GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error) {
+func (u *wordlistUsecase) GetAllWordlists(ctx context.Context) ([]*domain.Wordlist, error) {
 	wordlists, err := u.wordlistRepo.GetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get wordlists: %w", err)

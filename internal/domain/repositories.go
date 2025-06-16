@@ -11,11 +11,14 @@ type AgentRepository interface {
 	Create(ctx context.Context, agent *Agent) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Agent, error)
 	GetByNameAndIP(ctx context.Context, name, ip string, port int) (*Agent, error)
+	GetByAgentKey(ctx context.Context, agentKey string) (*Agent, error)
 	GetAll(ctx context.Context) ([]Agent, error)
 	Update(ctx context.Context, agent *Agent) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateLastSeen(ctx context.Context, id uuid.UUID) error
+	UpdateAgentKey(ctx context.Context, id uuid.UUID, agentKey string) error
+	RevokeAgentKey(ctx context.Context, agentKey string) error
 }
 
 // JobRepository defines the interface for job data operations
@@ -44,6 +47,32 @@ type HashFileRepository interface {
 type WordlistRepository interface {
 	Create(ctx context.Context, wordlist *Wordlist) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Wordlist, error)
-	GetAll(ctx context.Context) ([]Wordlist, error)
+	GetAll(ctx context.Context) ([]*Wordlist, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	GetByName(ctx context.Context, name string) (*Wordlist, error)
+}
+
+// UserRepository defines the interface for user data operations
+type UserRepository interface {
+	Create(*User) error
+	GetByID(uuid.UUID) (*User, error)
+	GetByUsername(string) (*User, error)
+	GetByEmail(string) (*User, error)
+	GetAll() ([]*User, error)
+	Update(*User) error
+	Delete(uuid.UUID) error
+	UpdateLastLogin(uuid.UUID) error
+}
+
+// AgentKeyRepository defines the interface for agent key data operations
+type AgentKeyRepository interface {
+	Create(ctx context.Context, agentKey *AgentKey) error
+	GetByKey(ctx context.Context, key string) (*AgentKey, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*AgentKey, error)
+	GetAll(ctx context.Context) ([]*AgentKey, error)
+	Update(ctx context.Context, agentKey *AgentKey) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	UpdateStatus(ctx context.Context, key string, status string) error
+	UpdateLastUsed(ctx context.Context, key string) error
+	LinkToAgent(ctx context.Context, key string, agentID uuid.UUID) error
 }

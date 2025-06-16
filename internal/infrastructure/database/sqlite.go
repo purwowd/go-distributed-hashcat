@@ -86,7 +86,8 @@ func (s *SQLiteDB) migrate() error {
 			capabilities TEXT,
 			last_seen DATETIME,
 			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL
+			updated_at DATETIME NOT NULL,
+			agent_key TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS jobs (
 			id TEXT PRIMARY KEY,
@@ -134,6 +135,25 @@ func (s *SQLiteDB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents(last_seen DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_created_at ON agents(created_at DESC)`,
+
+		// Agent Keys table
+		`CREATE TABLE IF NOT EXISTS agent_keys (
+			id TEXT PRIMARY KEY,
+			agent_key TEXT UNIQUE NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT,
+			status TEXT NOT NULL DEFAULT 'active',
+			created_at DATETIME NOT NULL,
+			expires_at DATETIME,
+			last_used_at DATETIME,
+			agent_id TEXT,
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL
+		)`,
+
+		// Agent Keys indexes
+		`CREATE INDEX IF NOT EXISTS idx_agent_keys_key ON agent_keys(agent_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_keys_status ON agent_keys(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_keys_agent_id ON agent_keys(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_jobs_agent_id ON jobs(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC)`,

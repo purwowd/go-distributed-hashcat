@@ -30,6 +30,7 @@ type Agent struct {
 	ID         uuid.UUID
 	Name       string
 	ServerURL  string
+	AgentKey   string
 	Client     *http.Client
 	CurrentJob *domain.Job
 	UploadDir  string
@@ -58,8 +59,14 @@ func main() {
 	rootCmd.Flags().Int("port", 8081, "Agent port")
 	rootCmd.Flags().String("capabilities", "GPU", "Agent capabilities")
 	rootCmd.Flags().String("upload-dir", "/root/uploads", "Local uploads directory")
+	rootCmd.Flags().String("agent-key", "", "Agent authentication key (required)")
 
 	viper.BindPFlags(rootCmd.Flags())
+
+	// Bind environment variables
+	viper.BindEnv("agent-key", "AGENT_KEY")
+	viper.BindEnv("server", "SERVER_URL")
+	viper.BindEnv("name", "AGENT_NAME")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
@@ -73,6 +80,12 @@ func runAgent(cmd *cobra.Command, args []string) {
 	port := viper.GetInt("port")
 	capabilities := viper.GetString("capabilities")
 	uploadDir := viper.GetString("upload-dir")
+	agentKey := viper.GetString("agent-key")
+
+	// Validate required agent key
+	if agentKey == "" {
+		log.Fatal("❌ Agent key is required. Use --agent-key flag or set AGENT_KEY environment variable")
+	}
 
 	if name == "" {
 		hostname, _ := os.Hostname()
@@ -87,6 +100,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	agent := &Agent{
 		Name:       name,
 		ServerURL:  serverURL,
+		AgentKey:   agentKey,
 		Client:     &http.Client{Timeout: 30 * time.Second},
 		UploadDir:  uploadDir,
 		LocalFiles: make(map[string]LocalFile),
@@ -135,6 +149,12 @@ func runAgent(cmd *cobra.Command, args []string) {
 	agent.updateStatus("offline")
 
 	log.Println("Agent exited")
+}
+
+// addAuthHeaders adds the X-Agent-Key header to HTTP requests
+func (a *Agent) addAuthHeaders(req *http.Request) {
+	req.Header.Set("X-Agent-Key", a.AgentKey)
+	req.Header.Set("Content-Type", "application/json")
 }
 
 func (a *Agent) initializeDirectories() error {
@@ -314,7 +334,15 @@ func (a *Agent) registerLocalFiles() error {
 	}
 
 	url := fmt.Sprintf("%s/api/v1/agents/%s/files", a.ServerURL, a.ID.String())
-	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -367,11 +395,17 @@ func (a *Agent) registerWithServer(name, ip string, port int, capabilities strin
 		return err
 	}
 
-	resp, err := a.Client.Post(
+	// Create HTTP request with X-Agent-Key header
+	httpReq, err := http.NewRequest(http.MethodPost,
 		fmt.Sprintf("%s/api/v1/agents", a.ServerURL),
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+		bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -417,7 +451,15 @@ func (a *Agent) startHeartbeat(ctx context.Context) {
 
 func (a *Agent) sendHeartbeat() error {
 	url := fmt.Sprintf("%s/api/v1/agents/%s/heartbeat", a.ServerURL, a.ID.String())
-	resp, err := a.Client.Post(url, "application/json", nil)
+
+	httpReq, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -446,7 +488,8 @@ func (a *Agent) updateStatus(status string) error {
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
+
+	a.addAuthHeaders(httpReq)
 
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
@@ -478,7 +521,15 @@ func (a *Agent) pollForJobs(ctx context.Context) {
 func (a *Agent) checkForNewJob() error {
 	// Get jobs assigned to this agent
 	url := fmt.Sprintf("%s/api/v1/jobs?status=pending", a.ServerURL)
-	resp, err := a.Client.Get(url)
+
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -532,7 +583,15 @@ func (a *Agent) executeJob(job *domain.Job) {
 
 func (a *Agent) startJob(jobID uuid.UUID) error {
 	url := fmt.Sprintf("%s/api/v1/jobs/%s/start", a.ServerURL, jobID.String())
-	resp, err := a.Client.Post(url, "application/json", nil)
+
+	httpReq, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -691,7 +750,15 @@ func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
 
 	// Download file from server
 	url := fmt.Sprintf("%s/api/v1/hashfiles/%s/download", a.ServerURL, hashFileID.String())
-	resp, err := a.Client.Get(url)
+
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
 	}
@@ -738,7 +805,15 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 
 	// Download file from server
 	url := fmt.Sprintf("%s/api/v1/wordlists/%s/download", a.ServerURL, wordlistID.String())
-	resp, err := a.Client.Get(url)
+
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
 	}
@@ -858,7 +933,7 @@ func (a *Agent) updateJobProgress(jobID uuid.UUID, progress float64, speed int64
 	url := fmt.Sprintf("%s/api/v1/jobs/%s/progress", a.ServerURL, jobID.String())
 
 	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
-	httpReq.Header.Set("Content-Type", "application/json")
+	a.addAuthHeaders(httpReq)
 
 	a.Client.Do(httpReq)
 }
@@ -894,7 +969,15 @@ func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec
 
 func (a *Agent) checkJobStatus(jobID uuid.UUID) (string, error) {
 	url := fmt.Sprintf("%s/api/v1/jobs/%s", a.ServerURL, jobID.String())
-	resp, err := a.Client.Get(url)
+
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	a.addAuthHeaders(httpReq)
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return "", err
 	}
@@ -925,7 +1008,10 @@ func (a *Agent) completeJob(jobID uuid.UUID, result string) {
 	jsonData, _ := json.Marshal(req)
 	url := fmt.Sprintf("%s/api/v1/jobs/%s/complete", a.ServerURL, jobID.String())
 
-	a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	httpReq, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	a.addAuthHeaders(httpReq)
+
+	a.Client.Do(httpReq)
 }
 
 func (a *Agent) failJob(jobID uuid.UUID, reason string) {
@@ -936,7 +1022,10 @@ func (a *Agent) failJob(jobID uuid.UUID, reason string) {
 	jsonData, _ := json.Marshal(req)
 	url := fmt.Sprintf("%s/api/v1/jobs/%s/fail", a.ServerURL, jobID.String())
 
-	a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	httpReq, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	a.addAuthHeaders(httpReq)
+
+	a.Client.Do(httpReq)
 }
 
 func getLocalIP() string {

@@ -12,6 +12,7 @@ import (
 
 type AgentUsecase interface {
 	RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error)
+	RegisterAgentWithKey(ctx context.Context, agentKey string, req *domain.CreateAgentRequest) (*domain.Agent, error)
 	GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error)
 	GetAllAgents(ctx context.Context) ([]domain.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error
@@ -22,14 +23,16 @@ type AgentUsecase interface {
 }
 
 type agentUsecase struct {
-	agentRepo domain.AgentRepository
-	wsHub     WebSocketHub // ✅ Add WebSocket hub (interface defined in health monitor)
+	agentRepo    domain.AgentRepository
+	agentKeyRepo domain.AgentKeyRepository
+	wsHub        WebSocketHub // ✅ Add WebSocket hub (interface defined in health monitor)
 }
 
-func NewAgentUsecase(agentRepo domain.AgentRepository) AgentUsecase {
+func NewAgentUsecase(agentRepo domain.AgentRepository, agentKeyRepo domain.AgentKeyRepository) AgentUsecase {
 	return &agentUsecase{
-		agentRepo: agentRepo,
-		wsHub:     nil, // Will be set later when available
+		agentRepo:    agentRepo,
+		agentKeyRepo: agentKeyRepo,
+		wsHub:        nil, // Will be set later when available
 	}
 }
 
@@ -97,6 +100,85 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 	}
 
 	return existingAgent, nil
+}
+
+func (u *agentUsecase) RegisterAgentWithKey(ctx context.Context, agentKeyStr string, req *domain.CreateAgentRequest) (*domain.Agent, error) {
+	// Get the agent key to validate it exists
+	agentKey, err := u.agentKeyRepo.GetByKey(ctx, agentKeyStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid agent key: %w", err)
+	}
+
+	// Check if key is already linked to an agent
+	if agentKey.AgentID != nil {
+		// Get the existing agent
+		existingAgent, err := u.agentRepo.GetByID(ctx, *agentKey.AgentID)
+		if err != nil {
+			return nil, fmt.Errorf("linked agent not found: %w", err)
+		}
+
+		// Check if the same agent is trying to re-register (same name and IP)
+		if existingAgent.Name == req.Name && existingAgent.IPAddress == req.IPAddress {
+			// Allow re-registration: update the existing agent
+			existingAgent.Port = req.Port
+			existingAgent.Status = "online"
+			existingAgent.Capabilities = req.Capabilities
+
+			if err := u.agentRepo.Update(ctx, existingAgent); err != nil {
+				return nil, fmt.Errorf("failed to update existing agent: %w", err)
+			}
+
+			// Update last used timestamp for the key
+			u.agentKeyRepo.UpdateLastUsed(ctx, agentKeyStr)
+
+			// ✅ Broadcast agent re-registration via WebSocket
+			if u.wsHub != nil {
+				log.Printf("📡 Broadcasting agent %s re-registration via WebSocket", existingAgent.Name)
+				u.wsHub.BroadcastAgentStatus(
+					existingAgent.ID.String(),
+					existingAgent.Status,
+					existingAgent.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
+				)
+			}
+
+			return existingAgent, nil
+		} else {
+			// Different agent trying to use the same key
+			return nil, fmt.Errorf("agent key already in use by different agent (name: %s, ip: %s)", existingAgent.Name, existingAgent.IPAddress)
+		}
+	}
+
+	// Create new agent
+	agent := &domain.Agent{
+		ID:           uuid.New(),
+		Name:         req.Name,
+		IPAddress:    req.IPAddress,
+		Port:         req.Port,
+		Status:       "online",
+		Capabilities: req.Capabilities,
+		AgentKey:     agentKeyStr,
+	}
+
+	if err := u.agentRepo.Create(ctx, agent); err != nil {
+		return nil, fmt.Errorf("failed to create agent: %w", err)
+	}
+
+	// Link the key to the agent
+	if err := u.agentKeyRepo.LinkToAgent(ctx, agentKeyStr, agent.ID); err != nil {
+		return nil, fmt.Errorf("failed to link key to agent: %w", err)
+	}
+
+	// ✅ Broadcast agent registration via WebSocket
+	if u.wsHub != nil {
+		log.Printf("📡 Broadcasting agent %s registration via WebSocket", agent.Name)
+		u.wsHub.BroadcastAgentStatus(
+			agent.ID.String(),
+			agent.Status,
+			agent.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
+		)
+	}
+
+	return agent, nil
 }
 
 func (u *agentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
