@@ -100,3 +100,5 @@ cpu.prof
 # Development
 .air.toml
 hot-reload.*
+
+distribute.txt
