@@ -104,7 +104,18 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	// Register agent with server
 	if err := agent.registerWithServer(name, ip, port, capabilities); err != nil {
-		log.Fatalf("Failed to register with server: %v", err)
+		log.Printf("Failed to register with server: %v", err)
+
+		if strings.Contains(err.Error(), "already exists") {
+			agentID, lookupErr := getAgentIDByName(agent, name)
+			if lookupErr != nil {
+				log.Fatalf("Failed to lookup existing agent ID: %v", lookupErr)
+			}
+			agent.ID = agentID
+			log.Printf("Using existing agent ID: %s", agent.ID.String())
+		} else {
+			log.Fatalf("Failed to register and lookup agent: %v", err)
+		}
 	}
 
 	log.Printf("Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
@@ -135,6 +146,37 @@ func runAgent(cmd *cobra.Command, args []string) {
 	agent.updateStatus("offline")
 
 	log.Println("Agent exited")
+}
+
+func getAgentIDByName(agent *Agent, name string) (uuid.UUID, error) {
+	url := fmt.Sprintf("%s/api/v1/agents?name=%s", agent.ServerURL, name)
+	resp, err := agent.Client.Get(url)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return uuid.Nil, fmt.Errorf("failed to lookup agent: %s", string(body))
+	}
+
+	var response struct {
+		Data []struct {
+			ID   uuid.UUID `json:"id"`
+			Name string    `json:"name"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return uuid.Nil, err
+	}
+
+	for _, agentData := range response.Data {
+		if agentData.Name == name {
+			return agentData.ID, nil
+		}
+	}
+	return uuid.Nil, fmt.Errorf("agent with name %s not found", name)
 }
 
 func (a *Agent) initializeDirectories() error {
