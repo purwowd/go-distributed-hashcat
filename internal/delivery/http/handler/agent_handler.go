@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 
 	"go-distributed-hashcat/internal/domain"
@@ -27,8 +29,18 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		return
 	}
 
+	if req.Port == 0 {
+		req.Port = 8080
+	}
+
 	agent, err := h.agentUsecase.RegisterAgent(c.Request.Context(), &req)
 	if err != nil {
+		// Check if it's a duplicate agent error
+		var duplicateErr *domain.DuplicateAgentError
+		if errors.As(err, &duplicateErr) {
+			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("already exists %s", duplicateErr.Name)})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,6 +86,7 @@ func (h *AgentHandler) UpdateAgentStatus(c *gin.Context) {
 	var req struct {
 		Status string `json:"status" binding:"required"`
 	}
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -137,14 +150,11 @@ func (h *AgentHandler) RegisterAgentFiles(c *gin.Context) {
 		return
 	}
 
-	// Validate agent ID matches URL parameter
 	if req.AgentID != id {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Agent ID mismatch"})
 		return
 	}
 
-	// For now, just acknowledge the registration
-	// In future, we could store file metadata in database
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Agent files registered successfully",
 		"agent_id":   req.AgentID,

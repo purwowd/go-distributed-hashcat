@@ -90,18 +90,24 @@ class AgentStore {
             this.setState({ loading: true, error: null })
             
             try {
-                const newAgent = await apiService.createAgent(agentData)
-                if (newAgent) {
-                    this.setState({ 
-                        agents: [...this.state.agents, newAgent],
-                        loading: false 
+                const { agent, error } = await apiService.createAgent(agentData)
+                if (agent) {
+                    this.setState({
+                        agents: [...this.state.agents, agent],
+                        loading: false
                     })
+                    return agent
+                } else {
+                    this.setState({
+                        loading: false,
+                        error: error || 'Failed to create agent'
+                    })
+                    return null
                 }
-                return newAgent
             } catch (error) {
-                this.setState({ 
-                    loading: false, 
-                    error: error instanceof Error ? error.message : 'Failed to create agent' 
+                this.setState({
+                    loading: false,
+                    error: error instanceof Error ? error.message : 'Failed to create agent'
                 })
                 return null
             }

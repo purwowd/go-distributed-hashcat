@@ -26,19 +26,16 @@ type agentRepository struct {
 func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository {
 	repo := &agentRepository{
 		db:    db,
-		cache: cache.NewMemoryCache(30 * time.Second), // 30 second cache for agents
+		cache: cache.NewMemoryCache(30 * time.Second),
 	}
 
-	// Prepare frequently used statements
 	repo.prepareStatements()
-
 	return repo
 }
 
 func (r *agentRepository) prepareStatements() {
 	var err error
 
-	// Prepare optimized queries
 	r.getByIDStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
 		FROM agents WHERE id = ? LIMIT 1
@@ -49,7 +46,7 @@ func (r *agentRepository) prepareStatements() {
 
 	r.getByNameIPStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
-		FROM agents WHERE name = ? AND ip_address = ? LIMIT 1
+		FROM agents WHERE name = ? AND ip_address = ? AND port = ? LIMIT 1
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getByNameIP statement: %v", err))
@@ -72,7 +69,9 @@ func (r *agentRepository) prepareStatements() {
 		panic(fmt.Sprintf("Failed to prepare update statement: %v", err))
 	}
 
-	r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM agents WHERE id = ?`)
+	r.deleteStmt, err = r.db.DB().Prepare(`
+		DELETE FROM agents WHERE id = ?
+	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare delete statement: %v", err))
 	}
@@ -102,9 +101,7 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 	)
 
 	if err == nil {
-		// Cache the new agent
 		r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
-		// Invalidate list cache
 		r.cache.Delete(ctx, "agents:all")
 	}
 
@@ -114,15 +111,12 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
 	cacheKey := "agent:" + id.String()
 
-	// Try cache first
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
 		return &agent, nil
 	}
 
-	// Fallback to database with prepared statement
 	var idStr string
-
 	err := r.getByIDStmt.QueryRowContext(ctx, id.String()).Scan(
 		&idStr,
 		&agent.Name,
@@ -134,7 +128,6 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("agent not found")
@@ -143,8 +136,6 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 	}
 
 	agent.ID = uuid.MustParse(idStr)
-
-	// Cache the result
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -153,16 +144,13 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
 	cacheKey := "agent:name_ip:" + name + ":" + ip
 
-	// Try cache first
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
 		return &agent, nil
 	}
 
-	// Fallback to database with prepared statement
 	var idStr string
-
-	err := r.getByNameIPStmt.QueryRowContext(ctx, name, ip).Scan(
+	err := r.getByNameIPStmt.QueryRowContext(ctx, name, ip, port).Scan(
 		&idStr,
 		&agent.Name,
 		&agent.IPAddress,
@@ -173,7 +161,6 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("agent not found")
@@ -182,8 +169,6 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 	}
 
 	agent.ID = uuid.MustParse(idStr)
-
-	// Cache the result
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -192,20 +177,18 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 	cacheKey := "agents:all"
 
-	// Try cache first
 	var agents []domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agents); err == nil && found {
 		return agents, nil
 	}
 
-	// Fallback to database with prepared statement
 	rows, err := r.getAllStmt.QueryContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	agents = make([]domain.Agent, 0, 10) // Pre-allocate slice
+	agents = make([]domain.Agent, 0, 10)
 	for rows.Next() {
 		var agent domain.Agent
 		var idStr string
@@ -229,7 +212,6 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 		agents = append(agents, agent)
 	}
 
-	// Cache the result
 	r.cache.Set(ctx, cacheKey, agents)
 
 	return agents, nil
@@ -249,11 +231,8 @@ func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error
 	)
 
 	if err == nil {
-		// Update cache
 		r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
-		// Update name+IP cache
 		r.cache.Set(ctx, "agent:name_ip:"+agent.Name+":"+agent.IPAddress, agent)
-		// Invalidate list cache
 		r.cache.Delete(ctx, "agents:all")
 	}
 
@@ -264,9 +243,7 @@ func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := r.deleteStmt.ExecContext(ctx, id.String())
 
 	if err == nil {
-		// Remove from cache
 		r.cache.Delete(ctx, "agent:"+id.String())
-		// Invalidate list cache
 		r.cache.Delete(ctx, "agents:all")
 	}
 
@@ -274,12 +251,13 @@ func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *agentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
-	query := `UPDATE agents SET status = ?, updated_at = ? WHERE id = ?`
+	query := `
+		UPDATE agents SET status = ?, updated_at = ? WHERE id = ?
+	`
 	now := time.Now()
 	_, err := r.db.DB().ExecContext(ctx, query, status, now, id.String())
 
 	if err == nil {
-		// Invalidate caches
 		r.cache.Delete(ctx, "agent:"+id.String())
 		r.cache.Delete(ctx, "agents:all")
 	}
@@ -288,12 +266,13 @@ func (r *agentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 }
 
 func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) error {
-	query := `UPDATE agents SET last_seen = ?, updated_at = ? WHERE id = ?`
+	query := `
+		UPDATE agents SET last_seen = ?, updated_at = ? WHERE id = ?
+	`
 	now := time.Now()
 	_, err := r.db.DB().ExecContext(ctx, query, now, now, id.String())
 
 	if err == nil {
-		// Invalidate caches
 		r.cache.Delete(ctx, "agent:"+id.String())
 		r.cache.Delete(ctx, "agents:all")
 	}

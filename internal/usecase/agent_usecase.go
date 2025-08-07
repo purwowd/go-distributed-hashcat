@@ -40,7 +40,7 @@ func (u *agentUsecase) SetWebSocketHub(wsHub WebSocketHub) {
 
 func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) {
 	// First, check if agent with same name and IP already exists
-	existingAgent, err := u.agentRepo.GetByNameAndIP(ctx, req.Name, req.IPAddress, req.Port)
+	_, err := u.agentRepo.GetByNameAndIP(ctx, req.Name, req.IPAddress, req.Port)
 	if err != nil {
 		// If agent not found, create new one
 		if err.Error() == "agent not found" {
@@ -49,7 +49,7 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 				Name:         req.Name,
 				IPAddress:    req.IPAddress,
 				Port:         req.Port,
-				Status:       "online",
+				Status:       "offline", // Set default status to offline saat pendaftaran manual
 				Capabilities: req.Capabilities,
 			}
 
@@ -73,30 +73,12 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 		return nil, fmt.Errorf("failed to check existing agent: %w", err)
 	}
 
-	// Agent exists, update status to online and capabilities
-	existingAgent.Status = "online"
-	existingAgent.Capabilities = req.Capabilities
-
-	if err := u.agentRepo.Update(ctx, existingAgent); err != nil {
-		return nil, fmt.Errorf("failed to update existing agent: %w", err)
+	// Agent already exists, return custom error
+	return nil, &domain.DuplicateAgentError{
+		Name:      req.Name,
+		IPAddress: req.IPAddress,
+		Port:      req.Port,
 	}
-
-	// Also update last seen timestamp
-	if err := u.agentRepo.UpdateLastSeen(ctx, existingAgent.ID); err != nil {
-		return nil, fmt.Errorf("failed to update agent last seen: %w", err)
-	}
-
-	// ✅ Broadcast existing agent reconnection via WebSocket
-	if u.wsHub != nil {
-		log.Printf("📡 Broadcasting agent %s reconnection via WebSocket", existingAgent.Name)
-		u.wsHub.BroadcastAgentStatus(
-			existingAgent.ID.String(),
-			existingAgent.Status,
-			existingAgent.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
-		)
-	}
-
-	return existingAgent, nil
 }
 
 func (u *agentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {

@@ -100,7 +100,7 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 				repo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Agent")).Return(nil)
 			},
 			expectedError:  false,
-			expectedStatus: "online",
+			expectedStatus: "offline", // New agents are set to offline by default
 			isExisting:     false,
 		},
 		{

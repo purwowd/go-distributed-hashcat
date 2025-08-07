@@ -29,7 +29,7 @@ interface Agent {
     id: string
     name: string
     ip_address: string
-    port?: number
+    port?: number | string
     status: 'online' | 'offline' | 'busy'
     capabilities?: string
     gpu_info?: string
@@ -398,7 +398,7 @@ class DashboardApplication {
             showWordlistModal: false,
             
             // Form states
-            agentForm: { name: '', ip_address: '', port: 8080, capabilities: '' },
+            agentForm: { name: '', ip_address: '', port: null as number | null, capabilities: '' },
             jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' },
             fileForm: { file: null },
             wordlistForm: { file: null },
@@ -922,7 +922,7 @@ class DashboardApplication {
             // Modal actions
             async openAgentModal() {
                 this.showAgentModal = true
-                this.agentForm = { name: '', ip_address: '', port: 8080, capabilities: '' }
+                this.agentForm = { name: '', ip_address: '', port: null as number | null, capabilities: '' }
             },
             
             closeAgentModal() {
@@ -930,12 +930,44 @@ class DashboardApplication {
             },
 
             async createAgent(agentData: any) {
-                const result = await agentStore.actions.createAgent(agentData)
+                // Handle empty port - convert to number or omit if empty
+                const processedData = { ...agentData }
+                if (processedData.port === '' || processedData.port === null || processedData.port === undefined || processedData.port === 0) {
+                    delete processedData.port // Let backend handle default
+                } else if (typeof processedData.port === 'string') {
+                    const portStr = processedData.port.trim()
+                    if (portStr === '') {
+                        delete processedData.port // Empty string, let backend handle default
+                    } else {
+                        const portNum = parseInt(portStr)
+                        if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+                            this.showNotification('Invalid port number. Please enter a number between 1-65535 or leave empty for default.', 'error')
+                            return
+                        } else {
+                            processedData.port = portNum
+                        }
+                    }
+                } else if (typeof processedData.port === 'number') {
+                    // For number input, validate range
+                    if (processedData.port < 1 || processedData.port > 65535) {
+                        this.showNotification('Invalid port number. Please enter a number between 1-65535 or leave empty for default.', 'error')
+                        return
+                    }
+                    // Number is valid, keep as is
+                }
+                
+                const result = await agentStore.actions.createAgent(processedData)
                 if (result) {
                     this.showNotification('Agent created successfully!', 'success')
                     this.closeAgentModal()
                 } else {
-                    this.showNotification('Failed to create agent', 'error')
+                    // Check if it's a duplicate agent error
+                    const state = agentStore.getState();
+                    if (state.error && state.error.includes('already exists')) {
+                        this.showNotification(state.error, 'error')
+                    } else {
+                        this.showNotification('Failed to create agent', 'error')
+                    }
                 }
             },
 

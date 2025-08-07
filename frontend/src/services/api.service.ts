@@ -100,7 +100,12 @@ class ApiService {
                 try {
                     const errorData = await response.json()
                     if (errorData.error) {
-                        errorMessage = `${errorMessage} - ${errorData.error}`
+                        // For duplicate agent errors, use only the backend error message
+                        if (errorData.error.startsWith('already exists')) {
+                            errorMessage = errorData.error
+                        } else {
+                            errorMessage = `${errorMessage} - ${errorData.error}`
+                        }
                     }
                 } catch (e) {
                     // If response isn't JSON, use default message
@@ -173,9 +178,12 @@ class ApiService {
         return response.success ? response.data! : null
     }
 
-    public async createAgent(agentData: Partial<Agent>): Promise<Agent | null> {
+    public async createAgent(agentData: Partial<Agent>): Promise<{agent: Agent | null, error: string | null}> {
         const response = await this.post<Agent>('/api/v1/agents/', agentData)
-        return response.success ? response.data! : null
+        return {
+            agent: response.success ? response.data! : null,
+            error: response.error || null
+        }
     }
 
     public async updateAgent(id: string, agentData: Partial<Agent>): Promise<Agent | null> {

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -99,6 +100,17 @@ type EnrichedJob struct {
 type CreateAgentRequest struct {
 	Name         string `json:"name" binding:"required"`
 	IPAddress    string `json:"ip_address" binding:"required"`
-	Port         int    `json:"port" binding:"required"`
+	Port         int    `json:"port,omitempty"` // Optional, will default to 8080
 	Capabilities string `json:"capabilities,omitempty"`
+}
+
+// DuplicateAgentError represents an error when trying to create an agent that already exists
+type DuplicateAgentError struct {
+	Name      string
+	IPAddress string
+	Port      int
+}
+
+func (e *DuplicateAgentError) Error() string {
+	return fmt.Sprintf("agent with name '%s' and IP address '%s:%d' already exists", e.Name, e.IPAddress, e.Port)
 }
