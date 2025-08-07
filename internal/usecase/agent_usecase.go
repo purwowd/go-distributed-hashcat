@@ -39,8 +39,8 @@ func (u *agentUsecase) SetWebSocketHub(wsHub WebSocketHub) {
 }
 
 func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) {
-	// First, check if agent with same name and IP already exists
-	_, err := u.agentRepo.GetByNameAndIP(ctx, req.Name, req.IPAddress, req.Port)
+	// First, check if agent with same name already exists
+	_, err := u.agentRepo.GetByName(ctx, req.Name)
 	if err != nil {
 		// If agent not found, create new one
 		if err.Error() == "agent not found" {

@@ -10,6 +10,7 @@ import (
 type AgentRepository interface {
 	Create(ctx context.Context, agent *Agent) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Agent, error)
+	GetByName(ctx context.Context, name string) (*Agent, error)
 	GetByNameAndIP(ctx context.Context, name, ip string, port int) (*Agent, error)
 	GetAll(ctx context.Context) ([]Agent, error)
 	Update(ctx context.Context, agent *Agent) error

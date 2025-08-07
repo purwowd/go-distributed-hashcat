@@ -32,6 +32,14 @@ func (m *MockAgentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domai
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentRepository) GetByName(ctx context.Context, name string) (*domain.Agent, error) {
+	args := m.Called(ctx, name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
 func (m *MockAgentRepository) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
 	args := m.Called(ctx, name, ip, port)
 	if args.Get(0) == nil {
@@ -96,7 +104,7 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 			},
 			mockSetup: func(repo *MockAgentRepository) {
 				// Agent not found, create new
-				repo.On("GetByNameAndIP", mock.Anything, "new-agent", "192.168.1.101", 8081).Return(nil, errors.New("agent not found"))
+				repo.On("GetByName", mock.Anything, "new-agent").Return(nil, errors.New("agent not found"))
 				repo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Agent")).Return(nil)
 			},
 			expectedError:  false,
@@ -113,7 +121,7 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 			},
 			mockSetup: func(repo *MockAgentRepository) {
 				// Agent found, update existing
-				repo.On("GetByNameAndIP", mock.Anything, "test-agent", "192.168.1.100", 8080).Return(existingAgent, nil)
+				repo.On("GetByName", mock.Anything, "test-agent").Return(existingAgent, nil)
 				repo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Agent")).Return(nil)
 				repo.On("UpdateLastSeen", mock.Anything, existingAgentID).Return(nil)
 			},
@@ -130,7 +138,7 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 				Capabilities: "gpu,cpu",
 			},
 			mockSetup: func(repo *MockAgentRepository) {
-				repo.On("GetByNameAndIP", mock.Anything, "test-agent", "192.168.1.100", 8080).Return(nil, errors.New("database error"))
+				repo.On("GetByName", mock.Anything, "test-agent").Return(nil, errors.New("database error"))
 			},
 			expectedError: true,
 		},
@@ -143,7 +151,7 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 				Capabilities: "gpu,cpu",
 			},
 			mockSetup: func(repo *MockAgentRepository) {
-				repo.On("GetByNameAndIP", mock.Anything, "new-agent", "192.168.1.102", 8082).Return(nil, errors.New("agent not found"))
+				repo.On("GetByName", mock.Anything, "new-agent").Return(nil, errors.New("agent not found"))
 				repo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Agent")).Return(errors.New("create error"))
 			},
 			expectedError: true,
@@ -157,7 +165,7 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 				Capabilities: "new-capabilities",
 			},
 			mockSetup: func(repo *MockAgentRepository) {
-				repo.On("GetByNameAndIP", mock.Anything, "test-agent", "192.168.1.100", 8080).Return(existingAgent, nil)
+				repo.On("GetByName", mock.Anything, "test-agent").Return(existingAgent, nil)
 				repo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Agent")).Return(errors.New("update error"))
 			},
 			expectedError: true,

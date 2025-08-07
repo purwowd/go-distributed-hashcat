@@ -40,6 +40,14 @@ func (m *MockAgentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domai
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentRepository) GetByName(ctx context.Context, name string) (*domain.Agent, error) {
+	args := m.Called(ctx, name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
 func (m *MockAgentRepository) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
 	args := m.Called(ctx, name, ip, port)
 	if args.Get(0) == nil {
