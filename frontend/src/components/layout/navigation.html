@@ -40,6 +40,14 @@
                           x-text="agents.length"></span>
                     <div class="route-indicator"></div>
                 </a>
+                <!-- <a :href="getRouteUrl('agent-keys')" 
+                   @click.prevent="switchTab('agent-keys')"
+                   :class="currentTab === 'agent-keys' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"
+                   class="transition-all duration-300 relative">
+                    <i class="fas fa-key sm:mr-2"></i>
+                    <span class="hidden sm:inline">Agent Keys</span>
+                    <div class="route-indicator"></div>
+                </a> -->
                 <a :href="getRouteUrl('jobs')" 
                    @click.prevent="switchTab('jobs')"
                    :class="currentTab === 'jobs' ? 'nav-item nav-item-active' : 'nav-item text-gray-600 hover:text-gray-800'"

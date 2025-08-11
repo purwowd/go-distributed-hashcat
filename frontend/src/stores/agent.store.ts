@@ -6,6 +6,12 @@ interface AgentState {
     loading: boolean
     error: string | null
     lastUpdated: Date | null
+    pagination?: {
+        total: number
+        page: number
+        pageSize: number
+        search: string
+    }
 }
 
 class AgentStore {
@@ -43,16 +49,22 @@ class AgentStore {
     // Actions
     public actions = {
         // Fetch all agents
-        fetchAgents: async (): Promise<void> => {
+        fetchAgents: async (params?: { page?: number; page_size?: number; search?: string }): Promise<void> => {
             this.setState({ loading: true, error: null })
             
             try {
-                const agents = await apiService.getAgents()
+                const result = await apiService.getAgents(params)
                 this.setState({ 
-                    agents, 
+                    agents: result.data, 
                     loading: false, 
                     lastUpdated: new Date(),
-                    error: null 
+                    error: null,
+                    pagination: {
+                        total: result.total,
+                        page: result.page,
+                        pageSize: result.page_size,
+                        search: params?.search || ''
+                    }
                 })
             } catch (error) {
                 this.setState({ 

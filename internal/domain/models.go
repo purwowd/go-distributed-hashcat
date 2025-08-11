@@ -15,6 +15,7 @@ type Agent struct {
 	Port         int       `json:"port" db:"port"`
 	Status       string    `json:"status" db:"status"` // online, offline, busy
 	Capabilities string    `json:"capabilities" db:"capabilities"`
+	AgentKey     string    `json:"agent_key" db:"agent_key"`
 	LastSeen     time.Time `json:"last_seen" db:"last_seen"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
@@ -99,9 +100,10 @@ type EnrichedJob struct {
 // CreateAgentRequest represents the request to register a new agent
 type CreateAgentRequest struct {
 	Name         string `json:"name" binding:"required"`
-	IPAddress    string `json:"ip_address" binding:"required"`
+	IPAddress    string `json:"ip_address" binding:"omitempty"`
 	Port         int    `json:"port,omitempty"` // Optional, will default to 8080
 	Capabilities string `json:"capabilities,omitempty"`
+	AgentKey     string `json:"agent_key,omitempty"` // Agent key for validation
 }
 
 // DuplicateAgentError represents an error when trying to create an agent that already exists
@@ -113,4 +115,17 @@ type DuplicateAgentError struct {
 
 func (e *DuplicateAgentError) Error() string {
 	return fmt.Sprintf("agent with name '%s' and IP address '%s:%d' already exists", e.Name, e.IPAddress, e.Port)
+}
+
+// AlreadyRegisteredAgentError represents an error when trying to register an agent that is already registered
+type AlreadyRegisteredAgentError struct {
+	Name         string
+	IPAddress    string
+	Port         int
+	Capabilities string
+}
+
+func (e *AlreadyRegisteredAgentError) Error() string {
+	return fmt.Sprintf("agent '%s' is already registered with IP address '%s', port '%d', and capabilities '%s'",
+		e.Name, e.IPAddress, e.Port, e.Capabilities)
 }

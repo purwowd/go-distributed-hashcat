@@ -9,6 +9,7 @@ export interface Agent {
     port?: number
     status: 'online' | 'offline' | 'busy'
     capabilities?: string
+    agent_key: string
     last_seen: string
     created_at: string
     updated_at: string
@@ -103,6 +104,15 @@ class ApiService {
                         // For duplicate agent errors, use only the backend error message
                         if (errorData.error.startsWith('already exists')) {
                             errorMessage = errorData.error
+                        } else if (errorData.error.includes('is already registered with agent name')) {
+                            // For agent key already registered errors, use only the backend error message
+                            errorMessage = errorData.error
+                        } else if (errorData.error.includes('is not registered in database')) {
+                            // For agent key not registered errors, use only the backend error message
+                            errorMessage = errorData.error
+                        } else if (errorData.error.includes('is already registered with IP address')) {
+                            // For already registered agent errors, use only the backend error message
+                            errorMessage = errorData.error
                         } else {
                             errorMessage = `${errorMessage} - ${errorData.error}`
                         }
@@ -165,23 +175,33 @@ class ApiService {
     }
 
     // Agent Management
-    public async getAgents(): Promise<Agent[]> {
-        const response = await this.get<{data: Agent[]}>('/api/v1/agents/')
-        if (response.success && response.data && response.data.data) {
-            return response.data.data // Extract array from wrapper
+    public async getAgents(params?: { page?: number; page_size?: number; search?: string }): Promise<{ data: Agent[]; total: number; page: number; page_size: number }> {
+        const query: string[] = []
+        if (params?.page) query.push(`page=${params.page}`)
+        if (params?.page_size) query.push(`page_size=${params.page_size}`)
+        if (params?.search) query.push(`search=${encodeURIComponent(params.search)}`)
+        const qs = query.length ? `?${query.join('&')}` : ''
+        const response = await this.get<{ data: Agent[]; total: number; page: number; page_size: number }>(`/api/v1/agents/${qs}`)
+        if (response.success && response.data) {
+            return {
+                data: (response.data as any).data || [],
+                total: (response.data as any).total || 0,
+                page: (response.data as any).page || 1,
+                page_size: (response.data as any).page_size || 10
+            }
         }
-        return []
+        return { data: [], total: 0, page: 1, page_size: 10 }
     }
 
     public async getAgent(id: string): Promise<Agent | null> {
-        const response = await this.get<Agent>(`/api/v1/agents/${id}`)
-        return response.success ? response.data! : null
+        const response = await this.get<{data: Agent}>(`/api/v1/agents/${id}`)
+        return response.success ? response.data!.data : null
     }
 
     public async createAgent(agentData: Partial<Agent>): Promise<{agent: Agent | null, error: string | null}> {
-        const response = await this.post<Agent>('/api/v1/agents/', agentData)
+        const response = await this.post<{data: Agent}>('/api/v1/agents/', agentData)
         return {
-            agent: response.success ? response.data! : null,
+            agent: response.success ? response.data!.data : null,
             error: response.error || null
         }
     }
@@ -225,12 +245,22 @@ class ApiService {
     }
 
     // Job Management
-    public async getJobs(): Promise<Job[]> {
-        const response = await this.get<{data: Job[]}>('/api/v1/jobs/')
-        if (response.success && response.data && response.data.data) {
-            return response.data.data // Extract array from wrapper
+    public async getJobs(params?: { page?: number; page_size?: number; search?: string }): Promise<{ data: Job[]; total: number; page: number; page_size: number }> {
+        const query: string[] = []
+        if (params?.page) query.push(`page=${params.page}`)
+        if (params?.page_size) query.push(`page_size=${params.page_size}`)
+        if (params?.search) query.push(`search=${encodeURIComponent(params.search)}`)
+        const qs = query.length ? `?${query.join('&')}` : ''
+        const response = await this.get<{ data: Job[]; total: number; page: number; page_size: number }>(`/api/v1/jobs/${qs}`)
+        if (response.success && response.data) {
+            return {
+                data: (response.data as any).data || [],
+                total: (response.data as any).total || 0,
+                page: (response.data as any).page || 1,
+                page_size: (response.data as any).page_size || 10
+            }
         }
-        return []
+        return { data: [], total: 0, page: 1, page_size: 10 }
     }
 
     public async getJob(id: string): Promise<Job | null> {

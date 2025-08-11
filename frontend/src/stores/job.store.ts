@@ -37,22 +37,24 @@ class JobStore {
     }
 
     public actions = {
-        fetchJobs: async (): Promise<void> => {
+        fetchJobs: async (params?: { page?: number; page_size?: number; search?: string }): Promise<{ data: Job[]; total: number; page: number; page_size: number } | null> => {
             this.setState({ loading: true, error: null })
             
             try {
-                const jobs = await apiService.getJobs()
-                this.setState({ 
-                    jobs, 
-                    loading: false, 
+                const result = await apiService.getJobs(params)
+                this.setState({
+                    jobs: result.data,
+                    loading: false,
                     lastUpdated: new Date(),
-                    error: null 
+                    error: null
                 })
+                return result
             } catch (error) {
-                this.setState({ 
-                    loading: false, 
-                    error: error instanceof Error ? error.message : 'Failed to fetch jobs' 
+                this.setState({
+                    loading: false,
+                    error: error instanceof Error ? error.message : 'Failed to fetch jobs'
                 })
+                return null
             }
         },
 
