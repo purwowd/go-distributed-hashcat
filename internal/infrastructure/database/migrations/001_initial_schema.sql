@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS agents (
     port INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'offline',
     capabilities TEXT,
+    agent_key TEXT NOT NULL,
     last_seen DATETIME,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL

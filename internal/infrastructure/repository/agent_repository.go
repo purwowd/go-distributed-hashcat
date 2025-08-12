@@ -38,7 +38,7 @@ func (r *agentRepository) prepareStatements() {
 	var err error
 
 	r.getByIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
 		FROM agents WHERE id = ? LIMIT 1
 	`)
 	if err != nil {
@@ -46,7 +46,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
 		FROM agents WHERE name = ? LIMIT 1
 	`)
 	if err != nil {
@@ -54,7 +54,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameIPStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
 		FROM agents WHERE name = ? AND ip_address = ? AND port = ? LIMIT 1
 	`)
 	if err != nil {
@@ -62,7 +62,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
 		FROM agents ORDER BY status DESC, updated_at DESC
 	`)
 	if err != nil {
@@ -88,8 +88,8 @@ func (r *agentRepository) prepareStatements() {
 
 func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error {
 	query := `
-		INSERT INTO agents (id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	now := time.Now()
@@ -104,6 +104,7 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 		agent.Port,
 		agent.Status,
 		agent.Capabilities,
+		agent.AgentKey,
 		agent.LastSeen,
 		agent.CreatedAt,
 		agent.UpdatedAt,
@@ -133,6 +134,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.AgentKey,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
@@ -166,6 +168,7 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.AgentKey,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
@@ -199,6 +202,7 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.AgentKey,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
@@ -242,6 +246,7 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 			&agent.Port,
 			&agent.Status,
 			&agent.Capabilities,
+			&agent.AgentKey,
 			&agent.LastSeen,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,

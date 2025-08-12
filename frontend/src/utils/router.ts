@@ -1,6 +1,6 @@
 // Client-side Router for Dashboard
-type RouteKey = '' | 'overview' | 'agents' | 'jobs' | 'files' | 'wordlists' | 'docs'
-type RouteValue = 'overview' | 'agents' | 'jobs' | 'files' | 'wordlists' | 'docs'
+type RouteKey = '' | 'overview' | 'agents' | 'agent-keys' | 'jobs' | 'files' | 'wordlists' | 'docs'
+type RouteValue = 'overview' | 'agents' | 'agent-keys' | 'jobs' | 'files' | 'wordlists' | 'docs'
 
 export class Router {
     private static instance: Router
@@ -12,6 +12,7 @@ export class Router {
         '': 'overview',
         'overview': 'overview', 
         'agents': 'agents',
+        'agent-keys': 'agent-keys',
         'jobs': 'jobs',
         'files': 'files',
         'wordlists': 'wordlists',

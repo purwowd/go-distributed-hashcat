@@ -187,11 +187,14 @@ class DashboardApplication {
                 { name: 'ui/breadcrumb', path: '/components/ui/breadcrumb.html' },
                 { name: 'tabs/overview', path: '/components/tabs/overview.html' },
                 { name: 'tabs/agents', path: '/components/tabs/agents.html' },
+                { name: 'tabs/agent-keys', path: '/components/tabs/agent-keys.html' },
                 { name: 'tabs/jobs', path: '/components/tabs/jobs.html' },
                 { name: 'tabs/files', path: '/components/tabs/files.html' },
                 { name: 'tabs/wordlists', path: '/components/tabs/wordlists.html' },
                 { name: 'tabs/docs', path: '/components/tabs/docs.html' },
                 { name: 'modals/agent-modal', path: '/components/modals/agent-modal.html' },
+                { name: 'modals/agent-key-modal', path: '/components/modals/agent-key-modal.html' },
+                { name: 'modals/delete-confirm-modal', path: '/components/modals/delete-confirm-modal.html' },
                 { name: 'modals/job-modal', path: '/components/modals/job-modal.html' },
                 { name: 'modals/file-modal', path: '/components/modals/file-modal.html' },
                 { name: 'modals/wordlist-modal', path: '/components/modals/wordlist-modal.html' },
@@ -272,7 +275,8 @@ class DashboardApplication {
         // Load tab content
         const tabComponents = [
             'tabs/overview',
-            'tabs/agents', 
+            'tabs/agents',
+            'tabs/agent-keys',
             'tabs/jobs',
             'tabs/files',
             'tabs/wordlists',
@@ -296,8 +300,10 @@ class DashboardApplication {
         // Load modals
         const modalComponents = [
             'modals/agent-modal',
+            'modals/agent-key-modal',
+            'modals/delete-confirm-modal',
             'modals/job-modal',
-            'modals/file-modal', 
+            'modals/file-modal',
             'modals/wordlist-modal'
         ]
 
@@ -393,12 +399,19 @@ class DashboardApplication {
             
             // Modal states
             showAgentModal: false,
+            showAgentKeyModal: false,
+            showDeleteAgentModal: false,
+            showAgentKeys: false,
             showJobModal: false,
             showFileModal: false,
             showWordlistModal: false,
             
             // Form states
-            agentForm: { name: '', ip_address: '', port: null as number | null, capabilities: '' },
+            agentForm: { name: '', ip_address: '', port: null as number | null, capabilities: '', agent_key: '' },
+            agentKeyForm: { name: '', agent_key: '' },
+            createdAgent: null as any,
+            createdAgentKey: null as any,
+            deleteTargetAgent: null as any,
             jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' },
             fileForm: { file: null },
             wordlistForm: { file: null },
@@ -424,21 +437,41 @@ class DashboardApplication {
             
             // Reactive data arrays - these will be updated by store subscriptions
             reactiveAgents: [] as any[],
+            reactiveAgentKeys: [] as any[],
             reactiveJobs: [] as any[],
             reactiveHashFiles: [] as any[],
             reactiveWordlists: [] as any[],
 
+            // Server-side table state for Agents/Agent-Keys
+            agentTable: {
+                page: 1,
+                pageSize: 10,
+                search: '',
+                total: 0
+            },
+            
+            // Server-side table state for Jobs
+            jobTable: {
+                page: 1,
+                pageSize: 10,
+                search: '',
+                total: 0
+            },
+
             // Getters that return reactive data
-            get agents() { 
+            get agents() {
                 return this.reactiveAgents || []
             },
-            get jobs() { 
+            get agentKeys() {
+                return this.reactiveAgentKeys || []
+            },
+            get jobs() {
                 return this.reactiveJobs || []
             },
-            get hashFiles() { 
+            get hashFiles() {
                 return this.reactiveHashFiles || []
             },
-            get wordlists() { 
+            get wordlists() {
                 return this.reactiveWordlists || []
             },
             
@@ -499,7 +532,21 @@ class DashboardApplication {
                     const state = agentStore.getState()
                     // ✅ Force Alpine.js reactivity by creating new array reference
                     this.reactiveAgents = [...(state.agents || [])]
+                    // Also update agentKeys with agents that have no IP address (these are just keys)
+                    this.reactiveAgentKeys = [...(state.agents || [])].filter(agent => !agent.ip_address || agent.ip_address === '')
                     console.log('🔄 Agent store updated:', this.reactiveAgents.length, 'agents')
+
+                    // Sync pagination (if available)
+                    if (state.pagination) {
+                        this.agentTable.total = state.pagination.total
+                        // Keep page size and page if already set
+                        if (state.pagination.pageSize && this.agentTable.pageSize !== state.pagination.pageSize) {
+                            this.agentTable.pageSize = state.pagination.pageSize
+                        }
+                        if (state.pagination.page && this.agentTable.page !== state.pagination.page) {
+                            this.agentTable.page = state.pagination.page
+                        }
+                    }
                 })
                 
                 // Subscribe to job store changes
@@ -508,6 +555,9 @@ class DashboardApplication {
                     // ✅ Force Alpine.js reactivity by creating new array reference
                     this.reactiveJobs = [...(state.jobs || [])]
                     console.log('🔄 Job store updated:', this.reactiveJobs.length, 'jobs')
+                    
+                    // Sync pagination (if available)
+                    // Note: This would need to be updated when we implement job pagination in the backend
                 })
                 
                 // Subscribe to file store changes
@@ -523,6 +573,91 @@ class DashboardApplication {
                 })
                 
                 // console.log('📡 Store subscriptions setup for reactive UI updates')
+            },
+
+            // Server-side table helpers
+            async refreshAgentsTable() {
+                await agentStore.actions.fetchAgents({
+                    page: this.agentTable.page,
+                    page_size: this.agentTable.pageSize,
+                    search: this.agentTable.search
+                })
+            },
+            async setAgentTablePageSize(event: any) {
+                const val = parseInt(event?.target?.value || '10')
+                this.agentTable.pageSize = isNaN(val) ? 10 : val
+                this.agentTable.page = 1
+                await this.refreshAgentsTable()
+            },
+            async setAgentTableSearch(event: any) {
+                this.agentTable.search = event?.target?.value || ''
+                this.agentTable.page = 1
+                await this.refreshAgentsTable()
+            },
+            async goPrevAgentsPage() {
+                if (this.agentTable.page > 1) {
+                    this.agentTable.page -= 1
+                    await this.refreshAgentsTable()
+                }
+            },
+            async goNextAgentsPage() {
+                const canNext = this.agentTable.page * this.agentTable.pageSize < (this.agentTable.total || 0)
+                if (canNext) {
+                    this.agentTable.page += 1
+                    await this.refreshAgentsTable()
+                }
+            },
+
+            // Server-side table helpers for Jobs
+            async refreshJobsTable() {
+                const result = await jobStore.actions.fetchJobs({
+                    page: this.jobTable.page,
+                    page_size: this.jobTable.pageSize,
+                    search: this.jobTable.search
+                })
+                if (result) {
+                    this.jobTable.total = result.total
+                }
+            },
+            async setJobTablePageSize(event: any) {
+                const val = parseInt(event?.target?.value || '10')
+                this.jobTable.pageSize = isNaN(val) ? 10 : val
+                this.jobTable.page = 1
+                await this.refreshJobsTable()
+            },
+            async setJobTableSearch(event: any) {
+                this.jobTable.search = event?.target?.value || ''
+                this.jobTable.page = 1
+                await this.refreshJobsTable()
+            },
+            async goPrevJobsPage() {
+                if (this.jobTable.page > 1) {
+                    this.jobTable.page -= 1
+                    await this.refreshJobsTable()
+                }
+            },
+            async goNextJobsPage() {
+                const canNext = this.jobTable.page * this.jobTable.pageSize < (this.jobTable.total || 0)
+                if (canNext) {
+                    this.jobTable.page += 1
+                    await this.refreshJobsTable()
+                }
+            },
+            async goToJobsPage(page: number) {
+                const totalPages = Math.max(1, Math.ceil((this.jobTable.total || 0) / (this.jobTable.pageSize || 10)))
+                const target = Math.min(Math.max(1, page), totalPages)
+                if (target !== this.jobTable.page) {
+                    this.jobTable.page = target
+                    await this.refreshJobsTable()
+                }
+            },
+            async goToAgentsPage(page: number) {
+                const totalPages = Math.max(1, Math.ceil((this.agentTable.total || 0) / (this.agentTable.pageSize || 10)))
+                const target = Math.min(Math.max(1, page), totalPages)
+                if (target !== this.agentTable.page) {
+                    this.agentTable.page = target
+                    await this.refreshAgentsTable()
+                }
             },
 
             // NEW: Setup WebSocket subscriptions for real-time updates
@@ -653,13 +788,22 @@ class DashboardApplication {
                     })
                     
                     // Load jobs with separate timeout
-                    await Promise.race([
+                    const jobResult = await Promise.race([
                         timeout,
-                        jobStore.actions.fetchJobs().catch(err => {
+                        jobStore.actions.fetchJobs({
+                            page: this.jobTable.page,
+                            page_size: this.jobTable.pageSize,
+                            search: this.jobTable.search
+                        }).catch(err => {
                             console.warn('Failed to load jobs:', err)
-                            return []
+                            return null
                         })
                     ])
+                    
+                    // Sync job pagination data
+                    if (jobResult) {
+                        this.jobTable.total = (jobResult as any).total
+                    }
                     
                     // Load cache stats
                     await this.refreshCacheStats().catch(err => {
@@ -911,10 +1055,19 @@ class DashboardApplication {
                 // Poll for updates every 30 seconds
                 setInterval(async () => {
                     if (!this.isLoading && this.currentTab === 'overview') {
-                        await Promise.all([
+                        const [_, jobResult] = await Promise.all([
                             agentStore.actions.fetchAgents(),
-                            jobStore.actions.fetchJobs()
+                            jobStore.actions.fetchJobs({
+                                page: this.jobTable.page,
+                                page_size: this.jobTable.pageSize,
+                                search: this.jobTable.search
+                            })
                         ])
+                        
+                        // Sync job pagination data
+                        if (jobResult) {
+                            this.jobTable.total = (jobResult as any).total
+                        }
                     }
                 }, 30000)
             },
@@ -922,11 +1075,50 @@ class DashboardApplication {
             // Modal actions
             async openAgentModal() {
                 this.showAgentModal = true
-                this.agentForm = { name: '', ip_address: '', port: null as number | null, capabilities: '' }
+                this.agentForm = { name: '', ip_address: '', port: null as number | null, capabilities: '', agent_key: '' }
+                this.createdAgent = null
             },
             
             closeAgentModal() {
                 this.showAgentModal = false
+                this.createdAgent = null
+            },
+            
+            async openAgentKeyModal() {
+                this.showAgentKeyModal = true
+                // Pre-generate an 8-char hex key on the client for instant UX; server will accept or generate if absent
+                const pregenerated = Math.random().toString(16).slice(2, 10).padEnd(8, '0').slice(0,8)
+                this.agentKeyForm = { name: '', agent_key: pregenerated }
+                this.createdAgentKey = null
+            },
+            
+            closeAgentKeyModal() {
+                this.showAgentKeyModal = false
+                this.createdAgentKey = null
+            },
+
+            // Delete Agent Modal actions
+            openDeleteAgentModal(agent: any) {
+                this.deleteTargetAgent = agent
+                this.showDeleteAgentModal = true
+            },
+            closeDeleteAgentModal() {
+                this.showDeleteAgentModal = false
+                this.deleteTargetAgent = null
+            },
+            async confirmDeleteAgent() {
+                const id = this.deleteTargetAgent?.id
+                if (!id) {
+                    this.showNotification('Error: No agent ID provided', 'error')
+                    return
+                }
+                const success = await agentStore.actions.deleteAgent(id)
+                if (success) {
+                    this.showNotification('Agent deleted successfully!', 'success')
+                } else {
+                    this.showNotification('Failed to delete agent', 'error')
+                }
+                this.closeDeleteAgentModal()
             },
 
             async createAgent(agentData: any) {
@@ -956,17 +1148,83 @@ class DashboardApplication {
                     // Number is valid, keep as is
                 }
                 
+                // Check if agent name is provided
+                if (!processedData.name || processedData.name.trim() === '') {
+                    this.showNotification('Agent name is required. Please enter an agent name.', 'error')
+                    return
+                }
+                
+                // Check if agent key is provided
+                if (!processedData.agent_key || processedData.agent_key.trim() === '') {
+                    this.showNotification('Agent key is required. Please enter an agent key.', 'error')
+                    return
+                }
+                
+                // Note: IP address and capabilities are not required for registration
+                // The backend will handle validation based on existing database records
+                
                 const result = await agentStore.actions.createAgent(processedData)
                 if (result) {
-                    this.showNotification('Agent created successfully!', 'success')
-                    this.closeAgentModal()
+                    this.showNotification('Agent registered successfully!', 'success')
+                    this.closeAgentModal() // Close modal after success
                 } else {
                     // Check if it's a duplicate agent error
                     const state = agentStore.getState();
                     if (state.error && state.error.includes('already exists')) {
                         this.showNotification(state.error, 'error')
+                    } else if (state.error && state.error.includes('not found')) {
+                        this.showNotification(state.error, 'error')
+                    } else if (state.error && state.error.includes('invalid agent key')) {
+                        this.showNotification('Invalid agent key. Please check the agent key and try again.', 'error')
+                    } else if (state.error) {
+                        this.showNotification(state.error, 'error')
                     } else {
-                        this.showNotification('Failed to create agent', 'error')
+                        this.showNotification('Failed to register agent', 'error')
+                    }
+                }
+            },
+
+
+            async copyAgentKey(agentKey: string) {
+                try {
+                    await navigator.clipboard.writeText(agentKey)
+                    this.showNotification('Agent key copied to clipboard!', 'success')
+                } catch (err) {
+                    console.error('Failed to copy agent key: ', err)
+                    this.showNotification('Failed to copy agent key', 'error')
+                }
+            },
+            
+            async createAgentKey(agentKeyData: any) {
+                // For agent key generation, we don't need to provide agent details
+                // Important: send only name so backend either creates a new key or returns duplicate with
+                // a clean "already exists <name>" message (no 401 invalid key)
+                const keyData = { name: agentKeyData.name }
+                const result = await agentStore.actions.createAgent(keyData)
+                if (result) {
+                    this.showNotification('Agent Key Generated Successfully!', 'success')
+                    this.createdAgentKey = result
+                    if (result.agent_key) {
+                        this.agentKeyForm.agent_key = result.agent_key
+                    }
+                    // Auto-close modal after short delay
+                    setTimeout(() => {
+                        this.closeAgentKeyModal()
+                    }, 400)
+                } else {
+                    const state = agentStore.getState()
+                    const rawError = String(state.error || '')
+                    const err = rawError.toLowerCase()
+                    if (err.includes('already exists')) {
+                        // Extract agent name if present: "already exists <name>"
+                        const namePart = rawError.split('already exists')[1]?.trim() || agentKeyData.name
+                        this.showNotification(`already exists ${namePart}`, 'error')
+                    } else if (err.includes('unauthorized') || err.includes('invalid agent key')) {
+                        this.showNotification(`HTTP 401: Unauthorized - invalid agent key for agent '${agentKeyData.name}'`, 'error')
+                    } else if (state.error != null && String(state.error).trim() !== '') {
+                        this.showNotification(String(state.error), 'error')
+                    } else {
+                        this.showNotification('Failed to generate agent key', 'error')
                     }
                 }
             },
@@ -1039,7 +1297,7 @@ class DashboardApplication {
                         this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
                         
                         // Refresh jobs list to show the new job
-                        await jobStore.actions.fetchJobs()
+                        await this.refreshJobsTable()
                     } else {
                         this.showNotification('Failed to create job - server returned null', 'error')
                     }
