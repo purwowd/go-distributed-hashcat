@@ -73,8 +73,12 @@ func runAgent(cmd *cobra.Command, args []string) {
 	ip := viper.GetString("ip")
 	port := viper.GetInt("port")
 	capabilities := viper.GetString("capabilities")
-	agentKey := viper.GetString("agent-key") // ← Ambil agent key
+	agentKey := viper.GetString("agent-key")
 	uploadDir := viper.GetString("upload-dir")
+
+	if agentKey == "" {
+		log.Fatalf("Agent key is required. Please provide --agent-key parameter.")
+	}
 
 	if name == "" {
 		hostname, _ := os.Hostname()
