@@ -57,6 +57,7 @@ func main() {
 	rootCmd.Flags().String("ip", "", "Agent IP address")
 	rootCmd.Flags().Int("port", 8081, "Agent port")
 	rootCmd.Flags().String("capabilities", "GPU", "Agent capabilities")
+	rootCmd.Flags().String("agent-key", "", "Agent key")
 	rootCmd.Flags().String("upload-dir", "/root/uploads", "Local uploads directory")
 
 	viper.BindPFlags(rootCmd.Flags())
@@ -72,6 +73,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	ip := viper.GetString("ip")
 	port := viper.GetInt("port")
 	capabilities := viper.GetString("capabilities")
+	agentKey := viper.GetString("agent-key") // ← Ambil agent key
 	uploadDir := viper.GetString("upload-dir")
 
 	if name == "" {
@@ -80,7 +82,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 	}
 
 	if ip == "" {
-		// Try to get local IP
 		ip = getLocalIP()
 	}
 
@@ -92,18 +93,15 @@ func runAgent(cmd *cobra.Command, args []string) {
 		LocalFiles: make(map[string]LocalFile),
 	}
 
-	// Create upload directory structure
 	if err := agent.initializeDirectories(); err != nil {
 		log.Fatalf("Failed to initialize directories: %v", err)
 	}
 
-	// Scan local files
 	if err := agent.scanLocalFiles(); err != nil {
 		log.Printf("Warning: Failed to scan local files: %v", err)
 	}
 
-	// Register agent with server
-	if err := agent.registerWithServer(name, ip, port, capabilities); err != nil {
+	if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil { // ← kirim agentKey
 		log.Printf("Failed to register with server: %v", err)
 
 		if strings.Contains(err.Error(), "already exists") {
@@ -122,29 +120,23 @@ func runAgent(cmd *cobra.Command, args []string) {
 	log.Printf("Local upload directory: %s", agent.UploadDir)
 	log.Printf("Found %d local files", len(agent.LocalFiles))
 
-	// Register local files with server
 	if err := agent.registerLocalFiles(); err != nil {
 		log.Printf("Warning: Failed to register local files: %v", err)
 	}
 
-	// Start background processes
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	go agent.startHeartbeat(ctx)
 	go agent.pollForJobs(ctx)
-	go agent.watchLocalFiles(ctx) // Watch for file changes
+	go agent.watchLocalFiles(ctx)
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down agent...")
-
-	// Update status to offline
 	agent.updateStatus("offline")
-
 	log.Println("Agent exited")
 }
 
@@ -396,12 +388,13 @@ func (a *Agent) findLocalFile(filename string) (string, bool) {
 	return "", false
 }
 
-func (a *Agent) registerWithServer(name, ip string, port int, capabilities string) error {
+func (a *Agent) registerWithServer(name, ip string, port int, capabilities, agentKey string) error {
 	req := domain.CreateAgentRequest{
 		Name:         name,
 		IPAddress:    ip,
 		Port:         port,
 		Capabilities: capabilities,
+		AgentKey:     agentKey, // ← kirim agentKey ke server
 	}
 
 	jsonData, err := json.Marshal(req)
