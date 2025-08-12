@@ -45,6 +45,15 @@ type LocalFile struct {
 	ModTime time.Time `json:"mod_time"`
 }
 
+type AgentInfo struct {
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	IPAddress    string    `json:"ip_address"`
+	Port         int       `json:"port"`
+	Capabilities string    `json:"capabilities"`
+	AgentKey     string    `json:"agent_key"`
+}
+
 func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "agent",
@@ -105,16 +114,48 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Printf("Warning: Failed to scan local files: %v", err)
 	}
 
-	if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil { // ← kirim agentKey
+	// if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil { // ← kirim agentKey
+	// 	log.Printf("Failed to register with server: %v", err)
+
+	// 	if strings.Contains(err.Error(), "already exists") {
+	// 		agentID, lookupErr := getAgentIDByName(agent, name)
+	// 		if lookupErr != nil {
+	// 			log.Fatalf("Failed to lookup existing agent ID: %v", lookupErr)
+	// 		}
+	// 		agent.ID = agentID
+	// 		log.Printf("Using existing agent ID: %s", agent.ID.String())
+	// 	} else {
+	// 		log.Fatalf("Failed to register and lookup agent: %v", err)
+	// 	}
+	// }
+	if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil {
 		log.Printf("Failed to register with server: %v", err)
 
-		if strings.Contains(err.Error(), "already exists") {
-			agentID, lookupErr := getAgentIDByName(agent, name)
+		// Jika agent sudah terdaftar
+		if strings.Contains(err.Error(), "already registered") {
+			info, lookupErr := getAgentByNameAndKey(agent, name, agentKey)
 			if lookupErr != nil {
-				log.Fatalf("Failed to lookup existing agent ID: %v", lookupErr)
+				log.Fatalf("Gagal ambil data agent: %v", lookupErr)
 			}
-			agent.ID = agentID
-			log.Printf("Using existing agent ID: %s", agent.ID.String())
+
+			// Cek jika agent key dipakai agent name lain
+			if info.Name != name {
+				log.Fatalf("❌ Agent key '%s' sudah dipakai oleh agent lain: %s", agentKey, info.Name)
+			}
+
+			// Kalau IP, port, capabilities sudah ada
+			if info.IPAddress != "" && info.Port != 0 && info.Capabilities != "" {
+				log.Printf("✅ Agent '%s' sudah terdaftar dengan IP '%s', port '%d', capabilities '%s'",
+					info.Name, info.IPAddress, info.Port, info.Capabilities)
+				agent.ID = info.ID
+				agent.updateStatus("online")
+			} else {
+				// Kalau data belum lengkap → buat baru
+				log.Println("⚠️ Data agent belum lengkap, membuat agent baru...")
+				if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil {
+					log.Fatalf("Gagal membuat agent baru: %v", err)
+				}
+			}
 		} else {
 			log.Fatalf("Failed to register and lookup agent: %v", err)
 		}
@@ -144,36 +185,64 @@ func runAgent(cmd *cobra.Command, args []string) {
 	log.Println("Agent exited")
 }
 
-func getAgentIDByName(agent *Agent, name string) (uuid.UUID, error) {
-	url := fmt.Sprintf("%s/api/v1/agents?name=%s", agent.ServerURL, name)
-	resp, err := agent.Client.Get(url)
+func getAgentByNameAndKey(a *Agent, name, key string) (AgentInfo, error) {
+	var info AgentInfo
+	url := fmt.Sprintf("%s/api/v1/agents?name=%s&agent_key=%s", a.ServerURL, name, key)
+	resp, err := a.Client.Get(url)
 	if err != nil {
-		return uuid.Nil, err
+		return info, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return uuid.Nil, fmt.Errorf("failed to lookup agent: %s", string(body))
+		return info, fmt.Errorf("gagal ambil agent: %s", string(body))
 	}
 
-	var response struct {
-		Data []struct {
-			ID   uuid.UUID `json:"id"`
-			Name string    `json:"name"`
-		} `json:"data"`
+	var res struct {
+		Data []AgentInfo `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return uuid.Nil, err
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return info, err
 	}
 
-	for _, agentData := range response.Data {
-		if agentData.Name == name {
-			return agentData.ID, nil
-		}
+	if len(res.Data) > 0 {
+		return res.Data[0], nil
 	}
-	return uuid.Nil, fmt.Errorf("agent with name %s not found", name)
+
+	return info, fmt.Errorf("agent tidak ditemukan")
 }
+
+// func getAgentIDByName(agent *Agent, name string) (uuid.UUID, error) {
+// 	url := fmt.Sprintf("%s/api/v1/agents?name=%s", agent.ServerURL, name)
+// 	resp, err := agent.Client.Get(url)
+// 	if err != nil {
+// 		return uuid.Nil, err
+// 	}
+// 	defer resp.Body.Close()
+
+// 	if resp.StatusCode != http.StatusOK {
+// 		body, _ := io.ReadAll(resp.Body)
+// 		return uuid.Nil, fmt.Errorf("failed to lookup agent: %s", string(body))
+// 	}
+
+// 	var response struct {
+// 		Data []struct {
+// 			ID   uuid.UUID `json:"id"`
+// 			Name string    `json:"name"`
+// 		} `json:"data"`
+// 	}
+// 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+// 		return uuid.Nil, err
+// 	}
+
+// 	for _, agentData := range response.Data {
+// 		if agentData.Name == name {
+// 			return agentData.ID, nil
+// 		}
+// 	}
+// 	return uuid.Nil, fmt.Errorf("agent with name %s not found", name)
+// }
 
 func (a *Agent) initializeDirectories() error {
 	dirs := []string{
