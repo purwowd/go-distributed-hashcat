@@ -131,30 +131,30 @@ func runAgent(cmd *cobra.Command, args []string) {
 	if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil {
 		log.Printf("Failed to register with server: %v", err)
 
-		// Jika agent sudah terdaftar
 		if strings.Contains(err.Error(), "already registered") {
-			info, lookupErr := getAgentByNameAndKey(agent, name, agentKey)
+			info, lookupErr := getAgentByKeyOnly(agent, agentKey)
 			if lookupErr != nil {
-				log.Fatalf("Gagal ambil data agent: %v", lookupErr)
+				log.Fatalf("❌ Agent key '%s' tidak terdaftar di database", agentKey)
 			}
 
-			// Cek jika agent key dipakai agent name lain
+			// Kalau agent key dipakai nama lain → gagal
 			if info.Name != name {
 				log.Fatalf("❌ Agent key '%s' sudah dipakai oleh agent lain: %s", agentKey, info.Name)
 			}
 
-			// Kalau IP, port, capabilities sudah ada
-			if info.IPAddress != "" && info.Port != 0 && info.Capabilities != "" {
-				log.Printf("✅ Agent '%s' sudah terdaftar dengan IP '%s', port '%d', capabilities '%s'",
-					info.Name, info.IPAddress, info.Port, info.Capabilities)
-				agent.ID = info.ID
-				agent.updateStatus("online")
-			} else {
-				// Kalau data belum lengkap → buat baru
-				log.Println("⚠️ Data agent belum lengkap, membuat agent baru...")
-				if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil {
-					log.Fatalf("Gagal membuat agent baru: %v", err)
+			agent.ID = info.ID
+
+			// Kalau ada field kosong → update
+			if info.IPAddress == "" || info.Port == 0 || info.Capabilities == "" {
+				log.Printf("⚠️ Data agent belum lengkap, mengupdate data...")
+				if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
+					log.Fatalf("Gagal update agent info: %v", err)
 				}
+				log.Printf("✅ Agent '%s' berhasil diupdate dan online", name)
+			} else {
+				// Sudah lengkap → tidak update, tapi tetap online
+				log.Printf("✅ Agent '%s' sudah terdaftar lengkap, tetap online", name)
+				agent.updateStatus("online")
 			}
 		} else {
 			log.Fatalf("Failed to register and lookup agent: %v", err)
@@ -183,34 +183,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 	log.Println("Shutting down agent...")
 	agent.updateStatus("offline")
 	log.Println("Agent exited")
-}
-
-func getAgentByNameAndKey(a *Agent, name, key string) (AgentInfo, error) {
-	var info AgentInfo
-	url := fmt.Sprintf("%s/api/v1/agents?name=%s&agent_key=%s", a.ServerURL, name, key)
-	resp, err := a.Client.Get(url)
-	if err != nil {
-		return info, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return info, fmt.Errorf("gagal ambil agent: %s", string(body))
-	}
-
-	var res struct {
-		Data []AgentInfo `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return info, err
-	}
-
-	if len(res.Data) > 0 {
-		return res.Data[0], nil
-	}
-
-	return info, fmt.Errorf("agent tidak ditemukan")
 }
 
 // func getAgentIDByName(agent *Agent, name string) (uuid.UUID, error) {
@@ -243,6 +215,67 @@ func getAgentByNameAndKey(a *Agent, name, key string) (AgentInfo, error) {
 // 	}
 // 	return uuid.Nil, fmt.Errorf("agent with name %s not found", name)
 // }
+
+func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
+	var info AgentInfo
+	url := fmt.Sprintf("%s/api/v1/agents?agent_key=%s", a.ServerURL, key)
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		return info, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return info, fmt.Errorf("gagal ambil agent: %s", string(body))
+	}
+
+	var res struct {
+		Data []AgentInfo `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return info, err
+	}
+
+	if len(res.Data) == 0 {
+		return info, fmt.Errorf("agent key tidak ditemukan")
+	}
+
+	return res.Data[0], nil
+}
+
+func (a *Agent) updateAgentInfo(agentID uuid.UUID, ip string, port int, capabilities string, status string) error {
+	req := struct {
+		IPAddress    string `json:"ip_address"`
+		Port         int    `json:"port"`
+		Capabilities string `json:"capabilities"`
+		Status       string `json:"status"`
+	}{
+		IPAddress:    ip,
+		Port:         port,
+		Capabilities: capabilities,
+		Status:       status,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/agents/%s", a.ServerURL, agentID.String())
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("gagal update agent info: %s", string(body))
+	}
+
+	return nil
+}
 
 func (a *Agent) initializeDirectories() error {
 	dirs := []string{
