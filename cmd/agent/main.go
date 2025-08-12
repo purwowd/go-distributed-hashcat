@@ -137,23 +137,22 @@ func runAgent(cmd *cobra.Command, args []string) {
 				log.Fatalf("❌ Agent key '%s' tidak terdaftar di database", agentKey)
 			}
 
-			// Kalau agent key dipakai nama lain → gagal
+			// Pastikan agent key tidak digunakan agent lain
 			if info.Name != name {
 				log.Fatalf("❌ Agent key '%s' sudah dipakai oleh agent lain: %s", agentKey, info.Name)
 			}
 
 			agent.ID = info.ID
 
-			// Kalau ada field kosong → update
+			// Update jika ada data kosong
 			if info.IPAddress == "" || info.Port == 0 || info.Capabilities == "" {
-				log.Printf("⚠️ Data agent belum lengkap, mengupdate data...")
+				log.Printf("⚠️ Data agent '%s' belum lengkap, mengupdate...", name)
 				if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
 					log.Fatalf("Gagal update agent info: %v", err)
 				}
 				log.Printf("✅ Agent '%s' berhasil diupdate dan online", name)
 			} else {
-				// Sudah lengkap → tidak update, tapi tetap online
-				log.Printf("✅ Agent '%s' sudah terdaftar lengkap, tetap online", name)
+				log.Printf("✅ Agent '%s' sudah lengkap, tetap online", name)
 				agent.updateStatus("online")
 			}
 		} else {
