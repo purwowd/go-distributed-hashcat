@@ -20,7 +20,7 @@
 
 ```bash
 # Install dependencies (Ubuntu)
-sudo apt update && sudo apt install git nodejs npm golang-go hashcat -y
+sudo apt update && sudo apt install git nodejs npm golang-go hashcat sqlite3 -y
 
 # Clone and build
 git clone https://github.com/purwowd/go-distributed-hashcat.git
@@ -33,6 +33,22 @@ cd frontend && npm install && npm run dev
 ```
 
 **Access**: http://localhost:3000
+
+### 🗝️ Agent Key Setup
+
+1. Buka dashboard server di browser: http://localhost:3000
+2. Masuk ke menu **Agent Key**.
+3. Buat agent name baru (misal: `gpu-worker-01`), lalu copy agent key yang di-generate.
+4. Simpan agent key untuk digunakan pada worker.
+
+### 🖥️ GPU Worker (remote machine)
+
+```bash
+./bin/agent --server http://YOUR_SERVER:1337 --name gpu-worker-01 --ip "AGENT_IP" --agent-key "AGENT_KEY"
+```
+- Ganti `YOUR_SERVER` dengan IP server.
+- Ganti `AGENT_IP` dengan IP worker.
+- Ganti `AGENT_KEY` dengan agent key yang sudah di-copy dari dashboard.
 
 ## 🏗️ Architecture
 
@@ -56,7 +72,7 @@ Frontend (TypeScript) ←→ REST API (Go) ←→ Agent Network (GPU)
 cd frontend && npm run build && python3 -m http.server 3000 &
 
 # GPU workers (remote machines)
-./bin/agent --server http://YOUR_SERVER:1337 --name gpu-worker-01
+./bin/agent --server http://YOUR_SERVER:1337 --name gpu-worker-01 --ip "AGENT_IP" --agent-key "AGENT_KEY"
 ```
 
 ## 🔌 API Overview

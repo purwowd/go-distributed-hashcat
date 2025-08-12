@@ -27,11 +27,22 @@ cd frontend && npm install && npm run dev
 ```
 **Access**: http://localhost:3000
 
+### 🗝️ Agent Key Setup
+
+1. **Buka dashboard server di browser:**  
+   http://localhost:3000
+2. **Masuk ke menu "Agent Key".**
+3. **Buat agent name baru** (misal: `gpu-worker-01`), lalu copy agent key yang di-generate.
+4. **Simpan agent key untuk digunakan pada worker.**
+
 **GPU Worker** (separate machine):
 ```bash
 cd go-distributed-hashcat
-./bin/agent --server http://SERVER_IP:1337 --name gpu-worker-01
+./bin/agent --server http://SERVER_IP:1337 --name gpu-worker-01 --ip "AGENT_IP" --agent-key "AGENT_KEY"
 ```
+- Ganti `SERVER_IP` dengan IP server.
+- Ganti `AGENT_IP` dengan IP worker.
+- Ganti `AGENT_KEY` dengan agent key yang sudah di-copy dari dashboard.
 
 ## 🔒 2. Production Setup (with VPN)
 
@@ -74,8 +85,9 @@ sudo systemctl enable wg-quick@wg0 && sudo systemctl start wg-quick@wg0
 cd frontend && npm run build && python3 -m http.server 3000 --bind 15.15.15.1 &
 
 # Worker (15.15.15.2) 
-./bin/agent --server http://15.15.15.1:1337 --name remote-gpu
+./bin/agent --server http://15.15.15.1:1337 --name remote-gpu --ip "15.15.15.2" --agent-key "AGENT_KEY"
 ```
+- Pastikan agent key sudah dibuat dan di-copy dari dashboard server.
 
 ## ✅ 3. Verification
 
