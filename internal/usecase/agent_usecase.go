@@ -4,17 +4,17 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"log"
+	"time"
 
 	"go-distributed-hashcat/internal/domain"
 
 	"github.com/google/uuid"
 )
 
-// generateAgentKey creates a random 8-character hex string for agent authentication
 func generateAgentKey() (string, error) {
-	bytes := make([]byte, 4) // 4 bytes = 8 hex characters
+	bytes := make([]byte, 4)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
@@ -29,156 +29,103 @@ type AgentUsecase interface {
 	DeleteAgent(ctx context.Context, id uuid.UUID) error
 	GetAvailableAgent(ctx context.Context) (*domain.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error
-	SetWebSocketHub(wsHub WebSocketHub) // ✅ Add method to interface
+	SetWebSocketHub(wsHub WebSocketHub)
+	ValidateUniqueIPForAgentKey(ctx context.Context, agentKey, ipAddress, agentName string) error
+	GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error)
+    CreateAgent(ctx context.Context, agent *domain.Agent) error
+    UpdateAgent(ctx context.Context, agent *domain.Agent) error
 }
 
 type agentUsecase struct {
 	agentRepo domain.AgentRepository
-	wsHub     WebSocketHub // ✅ Add WebSocket hub (interface defined in health monitor)
+	wsHub     WebSocketHub
 }
 
 func NewAgentUsecase(agentRepo domain.AgentRepository) AgentUsecase {
 	return &agentUsecase{
 		agentRepo: agentRepo,
-		wsHub:     nil, // Will be set later when available
 	}
 }
 
-// ✅ NEW: Set WebSocket hub for real-time broadcasts
 func (u *agentUsecase) SetWebSocketHub(wsHub WebSocketHub) {
 	u.wsHub = wsHub
 }
 
 func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) {
-	// First, check if agent with same name already exists
 	existingAgent, err := u.agentRepo.GetByName(ctx, req.Name)
 	if err != nil {
-		// If agent not found, check if agent key was provided
-		if err.Error() == "agent not found" {
-			// If client provided a pre-generated key, check if it's already used by another agent
-			if req.AgentKey != "" {
-				// Check if agent key already exists in the database
-				agents, err := u.agentRepo.GetAll(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("failed to check existing agents: %w", err)
-				}
-
-				var foundAgent *domain.Agent
-				for _, agent := range agents {
-					if agent.AgentKey == req.AgentKey {
-						foundAgent = &agent
-						break
-					}
-				}
-
-				// If agent key is not found in database, return error
-				if foundAgent == nil {
-					return nil, fmt.Errorf("agent key '%s' is not registered in database", req.AgentKey)
-				}
-
-				// If agent key is found but used by different agent name, return error
-				if foundAgent.Name != req.Name {
-					return nil, fmt.Errorf("agent key '%s' is already registered with agent name '%s'", req.AgentKey, foundAgent.Name)
+		if errors.Is(err, domain.ErrAgentNotFound) {
+			// Cek IP unik
+			if req.IPAddress != "" {
+				if agentWithIP, err := u.agentRepo.GetByIPAddress(ctx, req.IPAddress); err == nil && agentWithIP != nil {
+					return nil, fmt.Errorf("already exists IP address %s", req.IPAddress)
+				} else if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
+					return nil, err
 				}
 			}
 
-			// If client provided a pre-generated key, use it; otherwise generate server-side
+			// Generate key jika kosong
 			agentKey := req.AgentKey
 			if agentKey == "" {
-				var genErr error
-				agentKey, genErr = generateAgentKey()
-				if genErr != nil {
-					return nil, fmt.Errorf("failed to generate agent key: %w", genErr)
+				agentKey, err = generateAgentKey()
+				if err != nil {
+					return nil, err
 				}
 			}
 
 			agent := &domain.Agent{
 				ID:           uuid.New(),
 				Name:         req.Name,
-				IPAddress:    "",        // Empty for key generation
-				Port:         0,         // Empty for key generation
-				Status:       "offline", // Set default status to offline
-				Capabilities: "",
+				IPAddress:    req.IPAddress,
+				Port:         req.Port,
+				Status:       "offline", // default offline
+				Capabilities: req.Capabilities,
 				AgentKey:     agentKey,
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
 			}
 
 			if err := u.agentRepo.Create(ctx, agent); err != nil {
-				return nil, fmt.Errorf("failed to create agent key: %w", err)
+				return nil, err
 			}
 
-			// ✅ Broadcast new agent key generation via WebSocket
 			if u.wsHub != nil {
-				log.Printf("📡 Broadcasting new agent key %s generation via WebSocket", agent.Name)
-				u.wsHub.BroadcastAgentStatus(
-					agent.ID.String(),
-					agent.Status,
-					agent.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
-				)
+				u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, "")
 			}
-
 			return agent, nil
 		}
-		// Other database errors
-		return nil, fmt.Errorf("failed to check existing agent: %w", err)
+		return nil, err
 	}
 
-	// Agent already exists, check if this is registration with key
+	// Update existing agent → tetap offline
 	if req.AgentKey != "" {
-		// Validate the agent key
 		if existingAgent.AgentKey != req.AgentKey {
 			return nil, fmt.Errorf("invalid agent key for agent '%s'", req.Name)
 		}
-
-		// Check if agent key is being used by a different agent name
-		if existingAgent.Name != req.Name {
-			return nil, fmt.Errorf("agent key '%s' is already registered with a different agent name '%s'", req.AgentKey, existingAgent.Name)
-		}
-
-		// Check if agent is already registered (has IP, port, and capabilities)
-		// If ALL fields are filled with actual values, then the agent is already registered
-		// Note: Port 0 means not set, so we check if Port is not 0
-		if existingAgent.IPAddress != "" && existingAgent.Port != 0 && existingAgent.Capabilities != "" {
-			return nil, &domain.AlreadyRegisteredAgentError{
-				Name:         req.Name,
-				IPAddress:    existingAgent.IPAddress,
-				Port:         existingAgent.Port,
-				Capabilities: existingAgent.Capabilities,
+		if req.IPAddress != "" && req.IPAddress != existingAgent.IPAddress {
+			if agentWithIP, err := u.agentRepo.GetByIPAddress(ctx, req.IPAddress); err == nil && agentWithIP != nil {
+				return nil, fmt.Errorf("already exists IP address %s", req.IPAddress)
+			} else if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
+				return nil, err
 			}
 		}
 
-		// If we reach here, the agent exists but is not fully registered
-		// We need to update it with the provided details
-
-		// Apply default port if needed
-		port := req.Port
-		if req.IPAddress != "" && port == 0 {
-			port = 8080 // Default port
-		}
-
-		// Update the agent with the provided details
 		existingAgent.IPAddress = req.IPAddress
-		existingAgent.Port = port
+		existingAgent.Port = req.Port
 		existingAgent.Capabilities = req.Capabilities
-		existingAgent.Status = "offline" // Reset status to offline when registering
+		existingAgent.Status = "offline" // tetap offline saat update
+		existingAgent.UpdatedAt = time.Now()
 
 		if err := u.agentRepo.Update(ctx, existingAgent); err != nil {
-			return nil, fmt.Errorf("failed to update agent: %w", err)
+			return nil, err
 		}
 
-		// ✅ Broadcast agent registration via WebSocket
 		if u.wsHub != nil {
-			log.Printf("📡 Broadcasting agent %s registration via WebSocket", existingAgent.Name)
-			u.wsHub.BroadcastAgentStatus(
-				existingAgent.ID.String(),
-				existingAgent.Status,
-				existingAgent.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
-			)
+			u.wsHub.BroadcastAgentStatus(existingAgent.ID.String(), existingAgent.Status, "")
 		}
-
 		return existingAgent, nil
 	}
 
-	// Agent already exists and no key provided - return duplicate error
 	return nil, &domain.DuplicateAgentError{
 		Name:      req.Name,
 		IPAddress: req.IPAddress,
@@ -187,68 +134,84 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 }
 
 func (u *agentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
-	agent, err := u.agentRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get agent: %w", err)
-	}
-	return agent, nil
+	return u.agentRepo.GetByID(ctx, id)
 }
 
 func (u *agentUsecase) GetAllAgents(ctx context.Context) ([]domain.Agent, error) {
-	agents, err := u.agentRepo.GetAll(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get agents: %w", err)
-	}
-	return agents, nil
+	return u.agentRepo.GetAll(ctx)
 }
 
 func (u *agentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error {
-	if err := u.agentRepo.UpdateStatus(ctx, id, status); err != nil {
-		return fmt.Errorf("failed to update agent status: %w", err)
-	}
-	return nil
+	return u.agentRepo.UpdateStatus(ctx, id, status)
 }
 
 func (u *agentUsecase) DeleteAgent(ctx context.Context, id uuid.UUID) error {
-	if err := u.agentRepo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete agent: %w", err)
-	}
-	return nil
+	return u.agentRepo.Delete(ctx, id)
 }
 
 func (u *agentUsecase) GetAvailableAgent(ctx context.Context) (*domain.Agent, error) {
 	agents, err := u.agentRepo.GetAll(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get agents: %w", err)
+		return nil, err
 	}
-
 	for _, agent := range agents {
 		if agent.Status == "online" {
 			return &agent, nil
 		}
 	}
-
 	return nil, fmt.Errorf("no available agents found")
 }
 
 func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error {
-	// Update last seen timestamp
-	if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil {
-		return fmt.Errorf("failed to update agent heartbeat: %w", err)
-	}
+    agent, err := u.agentRepo.GetByID(ctx, id)
+    if err != nil {
+        return err
+    }
 
-	// ✅ Get agent info and broadcast status update via WebSocket
-	if u.wsHub != nil {
-		agent, err := u.agentRepo.GetByID(ctx, id)
-		if err == nil {
-			log.Printf("📡 Broadcasting heartbeat for agent %s via WebSocket", agent.Name)
-			u.wsHub.BroadcastAgentStatus(
-				agent.ID.String(),
-				agent.Status,
-				agent.LastSeen.Format("2006-01-02T15:04:05Z07:00"), // RFC3339 format
-			)
+    // Kalau status masih offline, jangan ubah jadi online otomatis
+    if agent.Status != "offline" {
+        if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil {
+            return err
+        }
+    } else {
+        // Update last seen saja, biarkan status tetap offline
+        if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil {
+            return err
+        }
+    }
+
+    if u.wsHub != nil {
+        u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+    }
+    return nil
+}
+
+func (u *agentUsecase) ValidateUniqueIPForAgentKey(ctx context.Context, agentKey, ipAddress, agentName string) error {
+	if ipAddress == "" {
+		return nil
+	}
+	if agentWithIP, err := u.agentRepo.GetByIPAddress(ctx, ipAddress); err == nil && agentWithIP != nil {
+		if agentWithIP.AgentKey != agentKey {
+			return fmt.Errorf("IP address %s is already registered with a different agent key", ipAddress)
 		}
+		if agentWithIP.Name != agentName {
+			return fmt.Errorf("IP address %s is already used by another agent name %s", ipAddress, agentWithIP.Name)
+		}
+	} else if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
+		return err
 	}
-
 	return nil
+}
+
+
+func (u *agentUsecase) CreateAgent(ctx context.Context, agent *domain.Agent) error {
+	return u.agentRepo.CreateAgent(ctx, agent)
+}
+
+func (u *agentUsecase) UpdateAgent(ctx context.Context, agent *domain.Agent) error {
+	return u.agentRepo.UpdateAgent(ctx, agent)
+}
+
+func (u *agentUsecase) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
+	return u.agentRepo.GetByNameAndIPForStartup(ctx, name, ip, port)
 }

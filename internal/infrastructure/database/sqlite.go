@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -10,6 +11,18 @@ import (
 
 type SQLiteDB struct {
 	db *sql.DB
+}
+
+func (db *SQLiteDB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return db.db.ExecContext(ctx, query, args...)
+}
+
+func (db *SQLiteDB) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return db.db.QueryContext(ctx, query, args...)
+}
+
+func (db *SQLiteDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return db.db.QueryRowContext(ctx, query, args...)
 }
 
 func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {

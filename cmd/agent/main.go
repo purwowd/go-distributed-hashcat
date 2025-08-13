@@ -86,19 +86,35 @@ func runAgent(cmd *cobra.Command, args []string) {
 	uploadDir := viper.GetString("upload-dir")
 
 	if agentKey == "" {
-		log.Fatalf("Agent key is required. Please provide --agent-key parameter.")
+		log.Fatalf("❌ Agent key is required. Please provide --agent-key parameter.")
 	}
 
+	// Buat temporary agent client untuk cek agent key
+	tempAgent := &Agent{
+		ServerURL: serverURL,
+		Client:    &http.Client{Timeout: 30 * time.Second},
+	}
+
+	// ✅ Cek apakah agent key ada di database
+	info, lookupErr := getAgentByKeyOnly(tempAgent, agentKey)
+	if lookupErr != nil {
+		log.Fatalf("❌ Agent key '%s' not registered in the database. Agent failed to run.", agentKey)
+	}
+
+	// Jika name kosong, pakai hostname
 	if name == "" {
 		hostname, _ := os.Hostname()
 		name = fmt.Sprintf("agent-%s", hostname)
 	}
 
+	// Jika IP kosong, ambil otomatis
 	if ip == "" {
 		ip = getLocalIP()
 	}
 
+	// Buat object agent sesungguhnya
 	agent := &Agent{
+		ID:         info.ID,
 		Name:       name,
 		ServerURL:  serverURL,
 		Client:     &http.Client{Timeout: 30 * time.Second},
@@ -106,66 +122,54 @@ func runAgent(cmd *cobra.Command, args []string) {
 		LocalFiles: make(map[string]LocalFile),
 	}
 
+	// Inisialisasi direktori
 	if err := agent.initializeDirectories(); err != nil {
-		log.Fatalf("Failed to initialize directories: %v", err)
+		log.Fatalf("❌ Failed to initialize directories: %v", err)
 	}
 
 	if err := agent.scanLocalFiles(); err != nil {
-		log.Printf("Warning: Failed to scan local files: %v", err)
+		log.Printf("⚠️ Warning: Failed to scan local files: %v", err)
 	}
 
-	// if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil { // ← kirim agentKey
-	// 	log.Printf("Failed to register with server: %v", err)
-
-	// 	if strings.Contains(err.Error(), "already exists") {
-	// 		agentID, lookupErr := getAgentIDByName(agent, name)
-	// 		if lookupErr != nil {
-	// 			log.Fatalf("Failed to lookup existing agent ID: %v", lookupErr)
-	// 		}
-	// 		agent.ID = agentID
-	// 		log.Printf("Using existing agent ID: %s", agent.ID.String())
-	// 	} else {
-	// 		log.Fatalf("Failed to register and lookup agent: %v", err)
-	// 	}
-	// }
-	if err := agent.registerWithServer(name, ip, port, capabilities, agentKey); err != nil {
-		log.Printf("Failed to register with server: %v", err)
-
-		if strings.Contains(err.Error(), "already registered") {
-			info, lookupErr := getAgentByKeyOnly(agent, agentKey)
-			if lookupErr != nil {
-				log.Fatalf("❌ Agent key '%s' tidak terdaftar di database", agentKey)
-			}
-
-			// Pastikan agent key tidak digunakan agent lain
-			if info.Name != name {
-				log.Fatalf("❌ Agent key '%s' sudah dipakai oleh agent lain: %s", agentKey, info.Name)
-			}
-
-			agent.ID = info.ID
-
-			// Update jika ada data kosong
-			if info.IPAddress == "" || info.Port == 0 || info.Capabilities == "" {
-				log.Printf("⚠️ Data agent '%s' belum lengkap, mengupdate...", name)
-				if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
-					log.Fatalf("Gagal update agent info: %v", err)
-				}
-				log.Printf("✅ Agent '%s' berhasil diupdate dan online", name)
-			} else {
-				log.Printf("✅ Agent '%s' sudah lengkap, tetap online", name)
-				agent.updateStatus("online")
-			}
-		} else {
-			log.Fatalf("Failed to register and lookup agent: %v", err)
+	// Registrasi ke server
+	err := agent.registerWithServer(name, ip, port, capabilities, agentKey)
+	if err != nil && strings.Contains(err.Error(), "already registered") {
+		if info.Name != name {
+			log.Fatalf("❌ Agent key '%s' already used by another agent: %s", agentKey, info.Name)
 		}
+
+		// Jika IP, Port, atau Capabilities kosong → update data
+		if info.IPAddress == "" || info.Port == 0 || info.Capabilities == "" {
+			log.Printf("⚠️ Agent data '%s' is incomplete, being updated...", name)
+			if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
+				log.Fatalf("❌ Failed to update agent info: %v", err)
+			}
+			// Tetap gunakan log "registered successfully"
+			log.Printf("✅ Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
+			agent.updateStatus("online")
+		} else {
+			// Data lengkap → log already exists beserta datanya
+			log.Printf("ℹ️ Agent key already exists with complete data:")
+			log.Printf("    Name: %s", info.Name)
+			log.Printf("    ID: %s", info.ID.String())
+			log.Printf("    IP: %s", info.IPAddress)
+			log.Printf("    Port: %d", info.Port)
+			log.Printf("    Capabilities: %s", info.Capabilities)
+			log.Printf("✅ Agent %s (%s) is running", agent.Name, agent.ID.String())
+			agent.updateStatus("online")
+		}
+	} else if err != nil {
+		log.Fatalf("❌ Failed to register and lookup agent: %v", err)
+	} else {
+		// Registrasi baru sukses
+		log.Printf("✅ Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 	}
 
-	log.Printf("Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 	log.Printf("Local upload directory: %s", agent.UploadDir)
 	log.Printf("Found %d local files", len(agent.LocalFiles))
 
 	if err := agent.registerLocalFiles(); err != nil {
-		log.Printf("Warning: Failed to register local files: %v", err)
+		log.Printf("⚠️ Warning: Failed to register local files: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -184,36 +188,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 	log.Println("Agent exited")
 }
 
-// func getAgentIDByName(agent *Agent, name string) (uuid.UUID, error) {
-// 	url := fmt.Sprintf("%s/api/v1/agents?name=%s", agent.ServerURL, name)
-// 	resp, err := agent.Client.Get(url)
-// 	if err != nil {
-// 		return uuid.Nil, err
-// 	}
-// 	defer resp.Body.Close()
-
-// 	if resp.StatusCode != http.StatusOK {
-// 		body, _ := io.ReadAll(resp.Body)
-// 		return uuid.Nil, fmt.Errorf("failed to lookup agent: %s", string(body))
-// 	}
-
-// 	var response struct {
-// 		Data []struct {
-// 			ID   uuid.UUID `json:"id"`
-// 			Name string    `json:"name"`
-// 		} `json:"data"`
-// 	}
-// 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-// 		return uuid.Nil, err
-// 	}
-
-// 	for _, agentData := range response.Data {
-// 		if agentData.Name == name {
-// 			return agentData.ID, nil
-// 		}
-// 	}
-// 	return uuid.Nil, fmt.Errorf("agent with name %s not found", name)
-// }
 
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	var info AgentInfo
@@ -571,31 +545,44 @@ func (a *Agent) sendHeartbeat() error {
 	return nil
 }
 
-func (a *Agent) updateStatus(status string) error {
-	req := struct {
-		Status string `json:"status"`
-	}{Status: status}
+func (a *Agent) updateStatus(status string) {
+    if a.ID == uuid.Nil {
+        log.Printf("⚠️ Agent ID belum tersedia, tidak bisa update status")
+        return
+    }
 
-	jsonData, err := json.Marshal(req)
-	if err != nil {
-		return err
-	}
+    req := struct {
+        Status string `json:"status"`
+    }{
+        Status: status,
+    }
 
-	url := fmt.Sprintf("%s/api/v1/agents/%s/status", a.ServerURL, a.ID.String())
-	httpReq, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
+    jsonData, _ := json.Marshal(req)
+    url := fmt.Sprintf("%s/api/v1/agents/%s", a.ServerURL, a.ID.String())
 
-	resp, err := a.Client.Do(httpReq)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+    httpReq, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+    if err != nil {
+        log.Printf("⚠️ Gagal membuat request update status: %v", err)
+        return
+    }
+    httpReq.Header.Set("Content-Type", "application/json")
 
-	return nil
+    resp, err := a.Client.Do(httpReq)
+    if err != nil {
+        log.Printf("⚠️ Gagal update status agent: %v", err)
+        return
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        log.Printf("⚠️ Gagal update status agent: %s", string(body))
+        return
+    }
+
+    log.Printf("✅ Status agent '%s' berhasil diupdate menjadi '%s'", a.Name, status)
 }
+
 
 func (a *Agent) pollForJobs(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
