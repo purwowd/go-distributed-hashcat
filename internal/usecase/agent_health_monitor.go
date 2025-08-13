@@ -169,6 +169,22 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 	now := time.Now()
 	timeSinceLastSeen := now.Sub(agent.LastSeen)
 
+	// ✅ Kondisi baru: agent tanpa IPAddress selalu offline
+	if agent.IPAddress == "" {
+		log.Printf("⚠️  Agent %s (%s) has no IP address, forcing offline status",
+			agent.Name, agent.ID.String()[:8])
+		*offlineCount++
+		// Update status ke offline jika belum
+		if agent.Status != "offline" {
+			if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "offline"); err != nil {
+				log.Printf("❌ Failed to update agent %s status to offline: %v", agent.Name, err)
+			} else if h.wsHub != nil {
+				h.wsHub.BroadcastAgentStatus(agent.ID.String(), "offline", agent.LastSeen.Format(time.RFC3339))
+			}
+		}
+		return
+	}
+
 	// Determine if agent should be considered offline
 	shouldBeOffline := timeSinceLastSeen > h.config.AgentTimeout
 	wasRecentlyOnline := timeSinceLastSeen > h.config.AgentTimeout &&

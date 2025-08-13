@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
 	"go-distributed-hashcat/internal/domain"
 	"go-distributed-hashcat/internal/usecase"
 
@@ -25,11 +24,11 @@ func NewAgentHandler(agentUsecase usecase.AgentUsecase) *AgentHandler {
 	}
 }
 
+// RegisterAgent hanya membuat agent baru dengan status default "offline"
 func (h *AgentHandler) RegisterAgent(c *gin.Context) {
-	// Use a local DTO to relax validation rules for key generation flow
 	type registerAgentDTO struct {
 		Name         string `json:"name" binding:"required"`
-		IPAddress    string `json:"ip_address"` // optional for key generation
+		IPAddress    string `json:"ip_address"`
 		Port         int    `json:"port"`
 		Capabilities string `json:"capabilities"`
 		AgentKey     string `json:"agent_key"`
@@ -41,56 +40,31 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		return
 	}
 
-	// Map DTO to domain request
+	// Status default selalu offline saat pertama kali daftar
+	status := "offline"
+
 	req := domain.CreateAgentRequest{
 		Name:         dto.Name,
 		IPAddress:    dto.IPAddress,
 		Port:         dto.Port,
 		Capabilities: dto.Capabilities,
 		AgentKey:     dto.AgentKey,
-	}
-
-	// If no IP address (key generation flow), set default port to 0
-	if req.IPAddress == "" {
-		req.Port = 0
-	} else if req.Port == 0 {
-		req.Port = 8080
+		Status:       status,
 	}
 
 	agent, err := h.agentUsecase.RegisterAgent(c.Request.Context(), &req)
 	if err != nil {
-		// Check if it's a duplicate agent error
 		var duplicateErr *domain.DuplicateAgentError
 		if errors.As(err, &duplicateErr) {
-			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("already exists %s", duplicateErr.Name)})
+			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Agent already exists: %s", duplicateErr.Name)})
 			return
 		}
-		// Check if it's an already registered agent error
-		var alreadyRegisteredErr *domain.AlreadyRegisteredAgentError
-		if errors.As(err, &alreadyRegisteredErr) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		// Check for agent not found error
+
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		// Check for invalid agent key error
-		if strings.Contains(err.Error(), "invalid agent key") {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
-		// Check for agent key already registered with different agent name
-		if strings.Contains(err.Error(), "is already registered with a different agent name") {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		// Check for agent key not registered in database
-		if strings.Contains(err.Error(), "is not registered in database") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			return
-		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -116,7 +90,6 @@ func (h *AgentHandler) GetAgent(c *gin.Context) {
 }
 
 func (h *AgentHandler) GetAllAgents(c *gin.Context) {
-	// Server-side pagination & search (in-memory for now)
 	page := 1
 	pageSize := 10
 	if p := c.Query("page"); p != "" {
@@ -137,7 +110,6 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 		return
 	}
 
-	// Filter by search
 	if search != "" {
 		filtered := make([]domain.Agent, 0, len(agents))
 		for _, a := range agents {
@@ -152,7 +124,6 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 	}
 
 	total := len(agents)
-	// Pagination
 	start := (page - 1) * pageSize
 	if start < 0 {
 		start = 0
@@ -261,7 +232,6 @@ func (h *AgentHandler) RegisterAgentFiles(c *gin.Context) {
 	})
 }
 
-// LocalFile represents a local file on agent
 type LocalFile struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`

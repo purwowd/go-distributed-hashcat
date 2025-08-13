@@ -104,6 +104,7 @@ type CreateAgentRequest struct {
 	Port         int    `json:"port,omitempty"` // Optional, will default to 8080
 	Capabilities string `json:"capabilities,omitempty"`
 	AgentKey     string `json:"agent_key,omitempty"` // Agent key for validation
+	Status       string `json:"status,omitempty"`
 }
 
 // DuplicateAgentError represents an error when trying to create an agent that already exists

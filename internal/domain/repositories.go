@@ -17,6 +17,10 @@ type AgentRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateLastSeen(ctx context.Context, id uuid.UUID) error
+	GetByIPAddress(ctx context.Context, ip string) (*Agent, error)
+	CreateAgent(ctx context.Context, agent *Agent) error       // bisa panggil Create
+    UpdateAgent(ctx context.Context, agent *Agent) error       // bisa panggil Update
+    GetByNameAndIPForStartup(ctx context.Context, name, ip string, port int) (*Agent, error)
 }
 
 // JobRepository defines the interface for job data operations

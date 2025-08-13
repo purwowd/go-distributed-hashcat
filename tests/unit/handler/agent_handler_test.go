@@ -24,6 +24,11 @@ type MockAgentUsecase struct {
 	mock.Mock
 }
 
+func (m *MockAgentUsecase) ValidateUniqueIPForAgentKey(ctx context.Context, agentKey string, ip string, someOtherParam string) error {
+	args := m.Called(ctx, agentKey, ip, someOtherParam)
+	return args.Error(0)
+}
+
 func (m *MockAgentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -104,6 +109,7 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 					Capabilities: "gpu,cpu",
 					Status:       "online",
 				}
+				mockUsecase.On("ValidateUniqueIPForAgentKey", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 				mockUsecase.On("RegisterAgent", mock.Anything, mock.AnythingOfType("*domain.CreateAgentRequest")).Return(expectedAgent, nil)
 			},
 			expectedStatus: http.StatusCreated,

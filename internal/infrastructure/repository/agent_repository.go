@@ -19,6 +19,7 @@ type agentRepository struct {
 	getByIDStmt     *sql.Stmt
 	getByNameStmt   *sql.Stmt
 	getByNameIPStmt *sql.Stmt
+	getByIPAddressStmt *sql.Stmt
 	getAllStmt      *sql.Stmt
 	updateStmt      *sql.Stmt
 	deleteStmt      *sql.Stmt
@@ -33,6 +34,7 @@ func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository {
 	repo.prepareStatements()
 	return repo
 }
+
 
 func (r *agentRepository) prepareStatements() {
 	var err error
@@ -61,6 +63,14 @@ func (r *agentRepository) prepareStatements() {
 		panic(fmt.Sprintf("Failed to prepare getByNameIP statement: %v", err))
 	}
 
+	r.getByIPAddressStmt, err = r.db.DB().Prepare(`
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		FROM agents WHERE ip_address = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByIPAddress statement: %v", err))
+	}
+
 	r.getAllStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
 		FROM agents ORDER BY status DESC, updated_at DESC
@@ -87,10 +97,24 @@ func (r *agentRepository) prepareStatements() {
 }
 
 func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error {
+	// Status default selalu offline
+	agent.Status = "offline"
+
+	// Cek dulu apakah sudah ada agent dengan IP sama, hanya jika IP tidak kosong
+	if agent.IPAddress != "" {
+		existingAgent, err := r.GetByIPAddress(ctx, agent.IPAddress)
+		if err == nil && existingAgent != nil {
+			return fmt.Errorf("IP address %s is already used by agent %s", agent.IPAddress, existingAgent.Name)
+		}
+		if err != nil && !domain.IsNotFoundError(err) {
+			return err
+		}
+	}
+
 	query := `
-		INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
+        INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
 
 	now := time.Now()
 	agent.CreatedAt = now
@@ -102,7 +126,7 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 		agent.Name,
 		agent.IPAddress,
 		agent.Port,
-		agent.Status,
+		agent.Status, // offline by default
 		agent.Capabilities,
 		agent.AgentKey,
 		agent.LastSeen,
@@ -141,7 +165,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("agent not found")
+			return nil, domain.ErrAgentNotFound  // <-- pakai error khusus
 		}
 		return nil, err
 	}
@@ -175,7 +199,7 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("agent not found")
+			return nil, domain.ErrAgentNotFound  // <-- pakai error khusus
 		}
 		return nil, err
 	}
@@ -325,4 +349,62 @@ func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) erro
 	}
 
 	return err
+}
+
+
+func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domain.Agent, error) {
+	cacheKey := "agent:ip:" + ip
+
+	var agent domain.Agent
+	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		return &agent, nil
+	}
+
+	if r.getByIPAddressStmt == nil {
+		return nil, fmt.Errorf("getByIPAddressStmt is not prepared")
+	}
+
+	var idStr string
+	err := r.getByIPAddressStmt.QueryRowContext(ctx, ip).Scan(
+		&idStr,
+		&agent.Name,
+		&agent.IPAddress,
+		&agent.Port,
+		&agent.Status,
+		&agent.Capabilities,
+		&agent.AgentKey,
+		&agent.LastSeen,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrAgentNotFound  // <-- pakai error khusus
+		}
+		return nil, err
+	}
+
+	agent.ID = uuid.MustParse(idStr)
+	r.cache.Set(ctx, cacheKey, &agent)
+
+	return &agent, nil
+}
+
+func (r *agentRepository) CreateAgent(ctx context.Context, agent *domain.Agent) error {
+    return r.Create(ctx, agent)
+}
+
+func (r *agentRepository) UpdateAgent(ctx context.Context, agent *domain.Agent) error {
+    return r.Update(ctx, agent)
+}
+
+func (r *agentRepository) GetByNameAndIPForStartup(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
+    agent, err := r.GetByNameAndIP(ctx, name, ip, port)
+    if err != nil {
+        if err == domain.ErrAgentNotFound {
+            return nil, domain.ErrAgentNotFound
+        }
+        return nil, err
+    }
+    return agent, nil
 }
