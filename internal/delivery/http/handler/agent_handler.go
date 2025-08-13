@@ -178,13 +178,20 @@ func (h *AgentHandler) DeleteAgent(c *gin.Context) {
 		return
 	}
 
-	if err := h.agentUsecase.DeleteAgent(c.Request.Context(), id); err != nil {
+	err = h.agentUsecase.DeleteAgent(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrAgentNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Agent not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Agent deleted successfully"})
 }
+
+
 
 func (h *AgentHandler) Heartbeat(c *gin.Context) {
 	idStr := c.Param("id")
