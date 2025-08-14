@@ -34,6 +34,7 @@ type Agent struct {
 	CurrentJob *domain.Job
 	UploadDir  string
 	LocalFiles map[string]LocalFile // filename -> LocalFile
+	AgentKey   string               // Add agent key field
 }
 
 type LocalFile struct {
@@ -120,6 +121,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 		Client:     &http.Client{Timeout: 30 * time.Second},
 		UploadDir:  uploadDir,
 		LocalFiles: make(map[string]LocalFile),
+		AgentKey:   agentKey, // Initialize AgentKey
 	}
 
 	// Inisialisasi direktori
@@ -530,8 +532,22 @@ func (a *Agent) startHeartbeat(ctx context.Context) {
 }
 
 func (a *Agent) sendHeartbeat() error {
-	url := fmt.Sprintf("%s/api/v1/agents/%s/heartbeat", a.ServerURL, a.ID.String())
-	resp, err := a.Client.Post(url, "application/json", nil)
+	// Use new endpoint with agent key instead of agent ID
+	url := fmt.Sprintf("%s/api/v1/agents/heartbeat", a.ServerURL)
+	
+	// Create request body with agent key
+	reqBody := struct {
+		AgentKey string `json:"agent_key"`
+	}{
+		AgentKey: a.AgentKey,
+	}
+	
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal heartbeat request: %v", err)
+	}
+	
+	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
