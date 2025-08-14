@@ -125,6 +125,34 @@ class AgentStore {
             }
         },
 
+        // Generate new agent key
+        generateAgentKey: async (name: string): Promise<Agent | null> => {
+            this.setState({ loading: true, error: null })
+            
+            try {
+                const { agent, error } = await apiService.generateAgentKey(name)
+                if (agent) {
+                    this.setState({
+                        agents: [...this.state.agents, agent],
+                        loading: false
+                    })
+                    return agent
+                } else {
+                    this.setState({
+                        loading: false,
+                        error: error || 'Failed to generate agent key'
+                    })
+                    return null
+                }
+            } catch (error) {
+                this.setState({
+                    loading: false,
+                    error: error instanceof Error ? error.message : 'Failed to generate agent key'
+                })
+                return null
+            }
+        },
+
         // Update agent
         updateAgent: async (id: string, agentData: Partial<Agent>): Promise<Agent | null> => {
             try {

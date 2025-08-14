@@ -2,6 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"os"
+	"sort"
+	"strings"
 
 	"go-distributed-hashcat/internal/domain"
 	"go-distributed-hashcat/internal/usecase"
@@ -13,12 +16,16 @@ import (
 type JobHandler struct {
 	jobUsecase        usecase.JobUsecase
 	enrichmentService usecase.JobEnrichmentService
+	agentUsecase      usecase.AgentUsecase
+	wordlistUsecase   usecase.WordlistUsecase
 }
 
-func NewJobHandler(jobUsecase usecase.JobUsecase, enrichmentService usecase.JobEnrichmentService) *JobHandler {
+func NewJobHandler(jobUsecase usecase.JobUsecase, enrichmentService usecase.JobEnrichmentService, agentUsecase usecase.AgentUsecase, wordlistUsecase usecase.WordlistUsecase) *JobHandler {
 	return &JobHandler{
 		jobUsecase:        jobUsecase,
 		enrichmentService: enrichmentService,
+		agentUsecase:      agentUsecase,
+		wordlistUsecase:   wordlistUsecase,
 	}
 }
 
@@ -303,4 +310,100 @@ func (h *JobHandler) GetAvailableJobForAgent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": job})
+}
+
+func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
+	// Ambil hashfile dan wordlist dari request
+	var request struct {
+		HashFileID string `json:"hash_file_id"`
+		WordlistID string `json:"wordlist_id"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// Ambil daftar agent
+	agents, err := h.agentUsecase.GetAllAgents(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch agents"})
+		return
+	}
+
+	// Ambil detail wordlist
+	wordlistID, err := uuid.Parse(request.WordlistID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wordlist ID"})
+		return
+	}
+	wordlist, err := h.wordlistUsecase.GetWordlist(c.Request.Context(), wordlistID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch wordlist"})
+		return
+	}
+
+	// Baca konten wordlist
+	wordlistLines, err := readWordlistFile(wordlist.Path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read wordlist"})
+		return
+	}
+
+	// Analisis kecepatan agent berdasarkan resource
+	type AgentSpeed struct {
+		AgentID string
+		Speed   int
+	}
+	var agentSpeeds []AgentSpeed
+	for _, agent := range agents {
+		speed := 1 // Default untuk CPU
+		if strings.Contains(agent.Capabilities, "GPU") { // Ganti dengan field yang sesuai
+			speed = 5
+		}
+		agentSpeeds = append(agentSpeeds, AgentSpeed{AgentID: agent.ID.String(), Speed: speed})
+	}
+
+	// Urutkan agent berdasarkan kecepatan (descending)
+	sort.Slice(agentSpeeds, func(i, j int) bool {
+		return agentSpeeds[i].Speed > agentSpeeds[j].Speed
+	})
+
+	// Hitung total bobot kecepatan
+	totalSpeed := 0
+	for _, agentSpeed := range agentSpeeds {
+		totalSpeed += agentSpeed.Speed
+	}
+
+	// Bagi wordlist berdasarkan bobot kecepatan
+	wordlistParts := make(map[string][]string)
+	currentIndex := 0
+	for _, agentSpeed := range agentSpeeds {
+		partSize := len(wordlistLines) * agentSpeed.Speed / totalSpeed
+		wordlistParts[agentSpeed.AgentID] = wordlistLines[currentIndex : currentIndex+partSize]
+		currentIndex += partSize
+	}
+
+	// Buat job untuk setiap bagian
+	for agentID, words := range wordlistParts {
+		_, err := h.jobUsecase.CreateJob(c.Request.Context(), &domain.CreateJobRequest{
+			HashFileID: request.HashFileID,
+			Wordlist:   strings.Join(words, "\n"), // Gabungkan array menjadi string
+			AgentID:    agentID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create job"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Jobs created successfully"})
+}
+
+// Fungsi pembantu untuk membaca file wordlist
+func readWordlistFile(path string) ([]string, error) {
+    content, err := os.ReadFile(path)
+    if err != nil {
+        return nil, err
+    }
+    return strings.Split(string(content), "\n"), nil
 }

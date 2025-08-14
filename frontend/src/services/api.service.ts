@@ -206,6 +206,14 @@ class ApiService {
         }
     }
 
+    public async generateAgentKey(name: string): Promise<{agent: Agent | null, error: string | null}> {
+        const response = await this.post<{data: Agent}>('/api/v1/agents/generate-key', { name })
+        return {
+            agent: response.success ? response.data!.data : null,
+            error: response.error || null
+        }
+    }
+
     public async updateAgent(id: string, agentData: Partial<Agent>): Promise<Agent | null> {
         const response = await this.put<Agent>(`/api/v1/agents/${id}`, agentData)
         return response.success ? response.data! : null

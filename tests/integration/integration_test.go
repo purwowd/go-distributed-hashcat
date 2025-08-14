@@ -75,7 +75,7 @@ func (suite *APITestSuite) SetupTest() {
 
 	// Initialize handlers
 	suite.agentHandler = handler.NewAgentHandler(agentUsecase)
-	suite.jobHandler = handler.NewJobHandler(jobUsecase, jobEnrichmentService)
+	suite.jobHandler = handler.NewJobHandler(jobUsecase, jobEnrichmentService, nil, nil)
 
 	// Setup router
 	gin.SetMode(gin.TestMode)
@@ -107,7 +107,7 @@ func (suite *APITestSuite) setupRoutes() {
 			agents.GET("/:id", suite.agentHandler.GetAgent)
 			agents.PUT("/:id/status", suite.agentHandler.UpdateAgentStatus)
 			agents.DELETE("/:id", suite.agentHandler.DeleteAgent)
-			agents.POST("/:id/heartbeat", suite.agentHandler.Heartbeat)
+			agents.POST("/:id/heartbeat", suite.agentHandler.UpdateAgentHeartbeat)
 		}
 
 		// Job routes
@@ -174,12 +174,17 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	agents := listResponse["data"].([]interface{})
 	assert.Len(t, agents, 0)
 
-	// 2. Create first agent
+	// 2. Create agent keys first (this would normally be done by admin)
+	agentKey1 := suite.createTestAgentKey("GPU-Agent-01")
+	agentKey2 := suite.createTestAgentKey("CPU-Agent-02")
+
+	// 3. Create first agent
 	agentReq1 := domain.CreateAgentRequest{
 		Name:         "GPU-Agent-01",
 		IPAddress:    "192.168.1.100",
 		Port:         8080,
 		Capabilities: "NVIDIA RTX 4090, 24GB VRAM",
+		AgentKey:     agentKey1,
 	}
 
 	recorder = suite.makeRequest("POST", "/api/v1/agents/", agentReq1)
@@ -193,14 +198,15 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	assert.Equal(t, agentReq1.Name, agent1Data["name"])
 	assert.Equal(t, agentReq1.IPAddress, agent1Data["ip_address"])
 	assert.Equal(t, float64(agentReq1.Port), agent1Data["port"])
-	assert.Equal(t, "online", agent1Data["status"])
+	assert.Equal(t, "offline", agent1Data["status"]) // Default status is offline
 
-	// 3. Create second agent
+	// 4. Create second agent
 	agentReq2 := domain.CreateAgentRequest{
 		Name:         "CPU-Agent-02",
 		IPAddress:    "192.168.1.101",
 		Port:         8081,
 		Capabilities: "64-core AMD EPYC, 256GB RAM",
+		AgentKey:     agentKey2,
 	}
 
 	recorder = suite.makeRequest("POST", "/api/v1/agents/", agentReq2)
@@ -210,7 +216,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	agent2Data := createResponse["data"].(map[string]interface{})
 	suite.agent2ID = agent2Data["id"].(string)
 
-	// 4. List all agents (should have 2)
+	// 5. List all agents (should have 2)
 	recorder = suite.makeRequest("GET", "/api/v1/agents/", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
@@ -218,7 +224,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	agents = listResponse["data"].([]interface{})
 	assert.Len(t, agents, 2)
 
-	// 5. Get specific agent
+	// 6. Get specific agent
 	recorder = suite.makeRequest("GET", fmt.Sprintf("/api/v1/agents/%s", suite.agent1ID), nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
@@ -228,18 +234,41 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	assert.Equal(t, suite.agent1ID, agentData["id"])
 	assert.Equal(t, agentReq1.Name, agentData["name"])
 
-	// 6. Update agent status
+	// 7. Update agent status
 	statusUpdate := map[string]string{"status": "busy"}
 	recorder = suite.makeRequest("PUT", fmt.Sprintf("/api/v1/agents/%s/status", suite.agent1ID), statusUpdate)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
-	// 7. Send heartbeat
+	// 8. Send heartbeat
 	recorder = suite.makeRequest("POST", fmt.Sprintf("/api/v1/agents/%s/heartbeat", suite.agent1ID), nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
-	// 8. Invalid agent ID should return 400
+	// 9. Invalid agent ID should return 400
 	recorder = suite.makeRequest("GET", "/api/v1/agents/invalid-uuid", nil)
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
+// createTestAgentKey creates a test agent key in the database for integration tests
+func (suite *APITestSuite) createTestAgentKey(name string) string {
+	agentRepo := repository.NewAgentRepository(suite.db)
+
+	// Create an agent key entry (this would normally be done by admin)
+	agentKey := &domain.Agent{
+		ID:           uuid.New(),
+		Name:         name,
+		IPAddress:    "",
+		Port:         0,
+		Status:       "offline",
+		Capabilities: "",
+		AgentKey:     fmt.Sprintf("test_key_%s_%d", name, time.Now().UnixNano()),
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	err := agentRepo.Create(context.Background(), agentKey)
+	suite.Require().NoError(err)
+
+	return agentKey.AgentKey
 }
 
 // createTestHashFile creates a test hash file for integration tests
@@ -289,7 +318,7 @@ func (suite *APITestSuite) TestJobWorkflow() {
 		AttackMode: 0,                     // Dictionary attack
 		HashFileID: hashFile1.ID.String(), // Use real hash file ID
 		Wordlist:   "rockyou.txt",
-		WordlistID: uuid.New().String(), // Mock wordlist ID
+		// WordlistID is optional, so we'll omit it
 	}
 
 	recorder = suite.makeRequest("POST", "/api/v1/jobs/", jobReq1)
@@ -312,8 +341,8 @@ func (suite *APITestSuite) TestJobWorkflow() {
 		AttackMode: 3,                     // Brute force
 		HashFileID: hashFile2.ID.String(), // Use real hash file ID
 		Wordlist:   "custom.txt",
-		WordlistID: uuid.New().String(),
-		AgentID:    suite.agent2ID, // Manual assignment to agent2 (not agent1)
+		// WordlistID is optional, so we'll omit it
+		AgentID: suite.agent2ID, // Manual assignment to agent2 (not agent1)
 	}
 
 	recorder = suite.makeRequest("POST", "/api/v1/jobs/", jobReq2)
@@ -448,6 +477,12 @@ func (suite *APITestSuite) TestErrorHandling() {
 func (suite *APITestSuite) TestConcurrentRequests() {
 	t := suite.T()
 
+	// Create agent keys first for concurrent tests
+	agentKeys := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		agentKeys[i] = suite.createTestAgentKey(fmt.Sprintf("Concurrent-Agent-%d", i))
+	}
+
 	// Create multiple agents concurrently
 	done := make(chan bool, 5)
 
@@ -458,6 +493,7 @@ func (suite *APITestSuite) TestConcurrentRequests() {
 				IPAddress:    fmt.Sprintf("192.168.1.%d", 200+index),
 				Port:         8080 + index,
 				Capabilities: fmt.Sprintf("Test GPU %d", index),
+				AgentKey:     agentKeys[index],
 			}
 
 			recorder := suite.makeRequest("POST", "/api/v1/agents/", agentReq)

@@ -14,15 +14,16 @@ import (
 )
 
 type agentRepository struct {
-	db              *database.SQLiteDB
-	cache           cache.Cache
-	getByIDStmt     *sql.Stmt
-	getByNameStmt   *sql.Stmt
-	getByNameIPStmt *sql.Stmt
+	db                 *database.SQLiteDB
+	cache              cache.Cache
+	getByIDStmt        *sql.Stmt
+	getByNameStmt      *sql.Stmt
+	getByNameIPStmt    *sql.Stmt
 	getByIPAddressStmt *sql.Stmt
-	getAllStmt      *sql.Stmt
-	updateStmt      *sql.Stmt
-	deleteStmt      *sql.Stmt
+	getAllStmt         *sql.Stmt
+	updateStmt         *sql.Stmt
+	deleteStmt         *sql.Stmt
+	getByAgentKeyStmt  *sql.Stmt
 }
 
 func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository {
@@ -34,7 +35,6 @@ func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository {
 	repo.prepareStatements()
 	return repo
 }
-
 
 func (r *agentRepository) prepareStatements() {
 	var err error
@@ -73,7 +73,7 @@ func (r *agentRepository) prepareStatements() {
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
-		FROM agents ORDER BY status DESC, updated_at DESC
+		FROM agents ORDER BY created_at DESC, id ASC
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getAll statement: %v", err))
@@ -81,7 +81,7 @@ func (r *agentRepository) prepareStatements() {
 
 	r.updateStmt, err = r.db.DB().Prepare(`
 		UPDATE agents SET
-		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, updated_at = ?
+		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, agent_key = ?, last_seen = ?, updated_at = ?
 		WHERE id = ?
 	`)
 	if err != nil {
@@ -94,39 +94,43 @@ func (r *agentRepository) prepareStatements() {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare delete statement: %v", err))
 	}
+
+	r.getByAgentKeyStmt, err = r.db.DB().Prepare(`
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		FROM agents WHERE agent_key = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByAgentKey statement: %v", err))
+	}
 }
 
 func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error {
-	// Status default selalu offline
-	agent.Status = "offline"
-
-	// Cek dulu apakah sudah ada agent dengan IP sama, hanya jika IP tidak kosong
+	// Invalidate cache for IP address if it exists
 	if agent.IPAddress != "" {
-		existingAgent, err := r.GetByIPAddress(ctx, agent.IPAddress)
-		if err == nil && existingAgent != nil {
-			return fmt.Errorf("IP address %s is already used by agent %s", agent.IPAddress, existingAgent.Name)
-		}
-		if err != nil && !domain.IsNotFoundError(err) {
-			return err
-		}
+		cacheKey := "agent:ip:" + agent.IPAddress
+		r.cache.Delete(ctx, cacheKey)
 	}
+
+	// Invalidate cache for agent key if it exists
+	if agent.AgentKey != "" {
+		cacheKey := "agent:key:" + agent.AgentKey
+		r.cache.Delete(ctx, cacheKey)
+	}
+
+	// Invalidate cache for all agents list
+	r.cache.Delete(ctx, "agents:all")
 
 	query := `
         INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
 
-	now := time.Now()
-	agent.CreatedAt = now
-	agent.UpdatedAt = now
-	agent.LastSeen = now
-
 	_, err := r.db.DB().ExecContext(ctx, query,
 		agent.ID.String(),
 		agent.Name,
 		agent.IPAddress,
 		agent.Port,
-		agent.Status, // offline by default
+		agent.Status,
 		agent.Capabilities,
 		agent.AgentKey,
 		agent.LastSeen,
@@ -134,12 +138,11 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 		agent.UpdatedAt,
 	)
 
-	if err == nil {
-		r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
-		r.cache.Delete(ctx, "agents:all")
+	if err != nil {
+		return fmt.Errorf("failed to create agent: %w", err)
 	}
 
-	return err
+	return nil
 }
 
 func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
@@ -165,7 +168,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrAgentNotFound  // <-- pakai error khusus
+			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
 		}
 		return nil, err
 	}
@@ -199,7 +202,7 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrAgentNotFound  // <-- pakai error khusus
+			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
 		}
 		return nil, err
 	}
@@ -289,7 +292,25 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 }
 
 func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error {
-	agent.UpdatedAt = time.Now()
+	// Invalidate cache before update
+	if agent.IPAddress != "" {
+		cacheKey := "agent:ip:" + agent.IPAddress
+		r.cache.Delete(ctx, cacheKey)
+	}
+
+	// Invalidate cache for agent key
+	if agent.AgentKey != "" {
+		cacheKey := "agent:key:" + agent.AgentKey
+		r.cache.Delete(ctx, cacheKey)
+	}
+
+	// Invalidate cache for agent ID
+	cacheKey := "agent:id:" + agent.ID.String()
+	r.cache.Delete(ctx, cacheKey)
+
+	if r.updateStmt == nil {
+		return fmt.Errorf("updateStmt is not prepared")
+	}
 
 	_, err := r.updateStmt.ExecContext(ctx,
 		agent.Name,
@@ -297,17 +318,17 @@ func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error
 		agent.Port,
 		agent.Status,
 		agent.Capabilities,
+		agent.AgentKey,
+		agent.LastSeen,
 		agent.UpdatedAt,
-		agent.ID.String(),
+		agent.ID,
 	)
 
-	if err == nil {
-		r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
-		r.cache.Set(ctx, "agent:name_ip:"+agent.Name+":"+agent.IPAddress, agent)
-		r.cache.Delete(ctx, "agents:all")
+	if err != nil {
+		return fmt.Errorf("failed to update agent: %w", err)
 	}
 
-	return err
+	return nil
 }
 
 func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) error {
@@ -351,7 +372,6 @@ func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) erro
 	return err
 }
 
-
 func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domain.Agent, error) {
 	cacheKey := "agent:ip:" + ip
 
@@ -379,7 +399,45 @@ func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domai
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrAgentNotFound  // <-- pakai error khusus
+			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
+		}
+		return nil, err
+	}
+
+	agent.ID = uuid.MustParse(idStr)
+	r.cache.Set(ctx, cacheKey, &agent)
+
+	return &agent, nil
+}
+
+func (r *agentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
+	cacheKey := "agent:key:" + agentKey
+
+	var agent domain.Agent
+	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		return &agent, nil
+	}
+
+	if r.getByAgentKeyStmt == nil {
+		return nil, fmt.Errorf("getByAgentKeyStmt is not prepared")
+	}
+
+	var idStr string
+	err := r.getByAgentKeyStmt.QueryRowContext(ctx, agentKey).Scan(
+		&idStr,
+		&agent.Name,
+		&agent.IPAddress,
+		&agent.Port,
+		&agent.Status,
+		&agent.Capabilities,
+		&agent.AgentKey,
+		&agent.LastSeen,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrAgentNotFound
 		}
 		return nil, err
 	}
@@ -391,20 +449,20 @@ func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domai
 }
 
 func (r *agentRepository) CreateAgent(ctx context.Context, agent *domain.Agent) error {
-    return r.Create(ctx, agent)
+	return r.Create(ctx, agent)
 }
 
 func (r *agentRepository) UpdateAgent(ctx context.Context, agent *domain.Agent) error {
-    return r.Update(ctx, agent)
+	return r.Update(ctx, agent)
 }
 
 func (r *agentRepository) GetByNameAndIPForStartup(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
-    agent, err := r.GetByNameAndIP(ctx, name, ip, port)
-    if err != nil {
-        if err == domain.ErrAgentNotFound {
-            return nil, domain.ErrAgentNotFound
-        }
-        return nil, err
-    }
-    return agent, nil
+	agent, err := r.GetByNameAndIP(ctx, name, ip, port)
+	if err != nil {
+		if err == domain.ErrAgentNotFound {
+			return nil, domain.ErrAgentNotFound
+		}
+		return nil, err
+	}
+	return agent, nil
 }
