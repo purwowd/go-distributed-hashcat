@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -396,6 +397,174 @@ func (h *AgentHandler) DeleteAgent(c *gin.Context) {
 		"message": "Agent deleted successfully",
 		"data": gin.H{
 			"id": id.String(),
+		},
+	})
+}
+
+// AgentStartup handles agent startup and validation
+func (h *AgentHandler) AgentStartup(c *gin.Context) {
+	var req struct {
+		Name         string `json:"name" binding:"required"`
+		IPAddress    string `json:"ip_address" binding:"required"`
+		Port         int    `json:"port"`
+		Capabilities string `json:"capabilities"`
+		AgentKey     string `json:"agent_key" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request body",
+			"code":    "INVALID_REQUEST",
+			"message": "The request body is invalid.",
+		})
+		return
+	}
+
+	// Validate agent key exists
+	existingAgentByKey, err := h.agentUsecase.GetByAgentKey(c.Request.Context(), req.AgentKey)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Agent key not found",
+			"code":    "AGENT_KEY_NOT_FOUND",
+			"message": "The provided agent key does not exist in the database.",
+		})
+		return
+	}
+
+	// Validate agent name matches
+	if existingAgentByKey.Name != req.Name {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Agent name mismatch",
+			"code":    "AGENT_NAME_MISMATCH",
+			"message": "Agent name does not match the name associated with the provided agent key.",
+		})
+		return
+	}
+
+	// Check if agent already has IP, port, and capabilities
+	hasExistingData := existingAgentByKey.IPAddress != "" &&
+		existingAgentByKey.Port != 0 &&
+		existingAgentByKey.Capabilities != ""
+
+	if hasExistingData {
+		// Agent already exists with data, just update status to online
+		if err := h.agentUsecase.UpdateAgentStatus(c.Request.Context(), existingAgentByKey.ID, "online"); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to update agent status",
+				"code":    "UPDATE_STATUS_FAILED",
+				"message": "Failed to update agent status to online.",
+			})
+			return
+		}
+
+		// Update last seen
+		if err := h.agentUsecase.UpdateAgentLastSeen(c.Request.Context(), existingAgentByKey.ID); err != nil {
+			// Log error but don't fail the request
+			log.Printf("Failed to update agent last seen: %v", err)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Agent already exists, status updated to online",
+			"code":    "AGENT_ALREADY_EXISTS",
+			"data": gin.H{
+				"id":           existingAgentByKey.ID.String(),
+				"name":         existingAgentByKey.Name,
+				"ip_address":   existingAgentByKey.IPAddress,
+				"port":         existingAgentByKey.Port,
+				"capabilities": existingAgentByKey.Capabilities,
+				"agent_key":    existingAgentByKey.AgentKey,
+				"status":       "online",
+			},
+		})
+		return
+	}
+
+	// Agent exists but no data, update with new data
+	// Set default port if not provided
+	if req.Port == 0 {
+		req.Port = 8080
+	}
+
+	// Update agent with new data
+	existingAgentByKey.IPAddress = req.IPAddress
+	existingAgentByKey.Port = req.Port
+	existingAgentByKey.Capabilities = req.Capabilities
+	existingAgentByKey.Status = "online"
+	existingAgentByKey.UpdatedAt = time.Now()
+
+	if err := h.agentUsecase.UpdateAgent(c.Request.Context(), existingAgentByKey); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update agent data",
+			"code":    "UPDATE_AGENT_FAILED",
+			"message": "Failed to update agent with new data.",
+		})
+		return
+	}
+
+	// Update last seen
+	if err := h.agentUsecase.UpdateAgentLastSeen(c.Request.Context(), existingAgentByKey.ID); err != nil {
+		// Log error but don't fail the request
+		log.Printf("Failed to update agent last seen: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Agent data updated and status set to online",
+		"code":    "AGENT_UPDATED",
+		"data": gin.H{
+			"id":           existingAgentByKey.ID.String(),
+			"name":         existingAgentByKey.Name,
+			"ip_address":   existingAgentByKey.IPAddress,
+			"port":         existingAgentByKey.Port,
+			"capabilities": existingAgentByKey.Capabilities,
+			"agent_key":    existingAgentByKey.AgentKey,
+			"status":       "online",
+		},
+	})
+}
+
+// AgentHeartbeat handles agent heartbeat using agent key
+func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
+	var req struct {
+		AgentKey string `json:"agent_key" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request body",
+			"code":    "INVALID_REQUEST",
+			"message": "The request body is invalid.",
+		})
+		return
+	}
+
+	// Get agent by agent key
+	agent, err := h.agentUsecase.GetByAgentKey(c.Request.Context(), req.AgentKey)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Agent not found",
+			"code":    "AGENT_NOT_FOUND",
+			"message": "The agent with the provided key was not found.",
+		})
+		return
+	}
+
+	// Update last seen
+	if err := h.agentUsecase.UpdateAgentLastSeen(c.Request.Context(), agent.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update agent heartbeat",
+			"code":    "UPDATE_HEARTBEAT_FAILED",
+			"message": "Failed to update agent heartbeat.",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Agent heartbeat updated successfully",
+		"data": gin.H{
+			"id":         agent.ID.String(),
+			"name":       agent.Name,
+			"status":     agent.Status,
+			"updated_at": time.Now().Format(time.RFC3339),
 		},
 	})
 }
