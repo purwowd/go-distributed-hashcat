@@ -44,7 +44,7 @@ func NewRouter(
 
 	// Initialize handlers
 	agentHandler := handler.NewAgentHandler(agentUsecase)
-	jobHandler := handler.NewJobHandler(jobUsecase, jobEnrichmentService)
+	jobHandler := handler.NewJobHandler(jobUsecase, jobEnrichmentService, agentUsecase, wordlistUsecase)
 	hashFileHandler := handler.NewHashFileHandler(hashFileUsecase)
 	wordlistHandler := handler.NewWordlistHandler(wordlistUsecase)
 	cacheHandler := handler.NewCacheHandler(jobEnrichmentService)
@@ -81,11 +81,12 @@ func NewRouter(
 		// Agent routes
 		agents := v1.Group("/agents")
 		{
+			agents.POST("/generate-key", agentHandler.GenerateAgentKey) // New route for generating agent keys
 			agents.POST("/", agentHandler.RegisterAgent)
 			agents.GET("/", agentHandler.GetAllAgents)
 			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
-			agents.POST("/:id/heartbeat", agentHandler.Heartbeat)
+			agents.PUT("/:id/heartbeat", agentHandler.UpdateAgentHeartbeat)
 			agents.POST("/:id/files", agentHandler.RegisterAgentFiles)
 			agents.GET("/:id/jobs", jobHandler.GetJobsByAgentID)
 			agents.GET("/:id/jobs/next", jobHandler.GetAvailableJobForAgent)
@@ -107,6 +108,7 @@ func NewRouter(
 			jobs.POST("/:id/stop", jobHandler.StopJob)
 			jobs.DELETE("/:id", jobHandler.DeleteJob)
 			jobs.POST("/assign", jobHandler.AssignJobs)
+			jobs.POST("/auto", jobHandler.CreateParallelJobs)
 		}
 
 		// Hash file routes

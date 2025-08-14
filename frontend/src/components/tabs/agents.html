@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <!-- Agents Tab - Modern & Compact -->
 <section x-show="currentTab === 'agents'" class="section-modern animate-fade-in">
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
@@ -60,7 +59,7 @@
                 </div>
                 
                 <div class="flex space-x-2">
-                    <button @click="openDeleteAgentModal(item)" 
+                    <button @click="deleteAgent(item.id)" 
                             class="btn-danger flex-1 text-xs py-2">
                         <i class="fas fa-trash mr-1"></i>Remove
                     </button>

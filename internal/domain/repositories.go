@@ -18,6 +18,7 @@ type AgentRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateLastSeen(ctx context.Context, id uuid.UUID) error
 	GetByIPAddress(ctx context.Context, ip string) (*Agent, error)
+	GetByAgentKey(ctx context.Context, agentKey string) (*Agent, error)
 	CreateAgent(ctx context.Context, agent *Agent) error       // bisa panggil Create
     UpdateAgent(ctx context.Context, agent *Agent) error       // bisa panggil Update
     GetByNameAndIPForStartup(ctx context.Context, name, ip string, port int) (*Agent, error)

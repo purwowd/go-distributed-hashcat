@@ -400,7 +400,7 @@ class DashboardApplication {
             // Modal states
             showAgentModal: false,
             showAgentKeyModal: false,
-            showDeleteAgentModal: false,
+            showDeleteModal: false,
             showAgentKeys: false,
             showJobModal: false,
             showFileModal: false,
@@ -411,7 +411,7 @@ class DashboardApplication {
             agentKeyForm: { name: '', agent_key: '' },
             createdAgent: null as any,
             createdAgentKey: null as any,
-            deleteTargetAgent: null as any,
+            deleteModalConfig: { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null as any },
             jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' },
             fileForm: { file: null },
             wordlistForm: { file: null },
@@ -530,10 +530,24 @@ class DashboardApplication {
                 // Subscribe to agent store changes
                 agentStore.subscribe(() => {
                     const state = agentStore.getState()
+                    
+                    // ✅ Implement stable sorting to maintain card positions
+                    const agents = state.agents || []
+                    // Sort by created_at DESC, then by ID ASC for stable ordering
+                    const stableSortedAgents = agents.sort((a, b) => {
+                        // First sort by created_at DESC (newest first)
+                        const dateComparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                        if (dateComparison !== 0) {
+                            return dateComparison
+                        }
+                        // If dates are equal, sort by ID ASC for stable ordering
+                        return a.id.localeCompare(b.id)
+                    })
+                    
                     // ✅ Force Alpine.js reactivity by creating new array reference
-                    this.reactiveAgents = [...(state.agents || [])]
+                    this.reactiveAgents = [...stableSortedAgents]
                     // Also update agentKeys with agents that have no IP address (these are just keys)
-                    this.reactiveAgentKeys = [...(state.agents || [])].filter(agent => !agent.ip_address || agent.ip_address === '')
+                    this.reactiveAgentKeys = [...stableSortedAgents].filter(agent => !agent.ip_address || agent.ip_address === '')
                     console.log('🔄 Agent store updated:', this.reactiveAgents.length, 'agents')
 
                     // Sync pagination (if available)
@@ -1097,71 +1111,73 @@ class DashboardApplication {
                 this.createdAgentKey = null
             },
 
-            // Delete Agent Modal actions
-            openDeleteAgentModal(agent: any) {
-                this.deleteTargetAgent = agent
-                this.showDeleteAgentModal = true
-            },
-            closeDeleteAgentModal() {
-                this.showDeleteAgentModal = false
-                this.deleteTargetAgent = null
-            },
-            async confirmDeleteAgent() {
-                const id = this.deleteTargetAgent?.id
-                if (!id) {
-                    this.showNotification('Error: No agent ID provided', 'error')
-                    return
+            // Generic Delete Modal actions
+            openDeleteModal(entityType: string, entity: any, confirmAction: any) {
+                const configs = {
+                    'agent': {
+                        entityType: 'Agent',
+                        entityName: entity?.name || 'agent',
+                        description: 'This action will remove the agent from the list. This operation cannot be undone.',
+                        warning: 'This will permanently remove the agent and all associated data.'
+                    },
+                    'job': {
+                        entityType: 'Job',
+                        entityName: entity?.name || 'job',
+                        description: 'This action will permanently delete the job and all associated data. This operation cannot be undone.',
+                        warning: 'This will remove the job from the system permanently.'
+                    },
+                    'file': {
+                        entityType: 'Hash File',
+                        entityName: entity?.orig_name || entity?.name || 'file',
+                        description: 'This action will permanently delete the hash file. This operation cannot be undone.',
+                        warning: 'This will remove the file and all associated data permanently.'
+                    },
+                    'wordlist': {
+                        entityType: 'Wordlist',
+                        entityName: entity?.orig_name || entity?.name || 'wordlist',
+                        description: 'This action will permanently delete the wordlist. This operation cannot be undone.',
+                        warning: 'This will remove the wordlist and all associated data permanently.'
+                    }
                 }
-                const success = await agentStore.actions.deleteAgent(id)
-                if (success) {
-                    this.showNotification('Agent deleted successfully!', 'success')
-                } else {
-                    this.showNotification('Failed to delete agent', 'error')
+                
+                this.deleteModalConfig = {
+                    ...configs[entityType as keyof typeof configs],
+                    entityId: entity?.id,
+                    confirmAction: confirmAction
                 }
-                this.closeDeleteAgentModal()
+                this.showDeleteModal = true
+            },
+            closeDeleteModal() {
+                this.showDeleteModal = false
+                this.deleteModalConfig = { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null }
+            },
+            async confirmDelete() {
+                if (this.deleteModalConfig.confirmAction) {
+                    await this.deleteModalConfig.confirmAction()
+                }
+                this.closeDeleteModal()
             },
 
             async createAgent(agentData: any) {
-                // Handle empty port - convert to number or omit if empty
-                const processedData = { ...agentData }
-                if (processedData.port === '' || processedData.port === null || processedData.port === undefined || processedData.port === 0) {
-                    delete processedData.port // Let backend handle default
-                } else if (typeof processedData.port === 'string') {
-                    const portStr = processedData.port.trim()
-                    if (portStr === '') {
-                        delete processedData.port // Empty string, let backend handle default
+                try {
+                    this.isLoading = true
+                    
+                    // Validate required fields
+                    if (!agentData.name || !agentData.agent_key) {
+                        if (!agentData.name) {
+                            this.showNotification('Agent name is required. Please enter an agent name.', 'error')
                     } else {
-                        const portNum = parseInt(portStr)
-                        if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-                            this.showNotification('Invalid port number. Please enter a number between 1-65535 or leave empty for default.', 'error')
-                            return
-                        } else {
-                            processedData.port = portNum
+                            this.showNotification('Agent key is required. Please enter an agent key.', 'error')
                         }
-                    }
-                } else if (typeof processedData.port === 'number') {
-                    // For number input, validate range
-                    if (processedData.port < 1 || processedData.port > 65535) {
-                        this.showNotification('Invalid port number. Please enter a number between 1-65535 or leave empty for default.', 'error')
                         return
                     }
-                    // Number is valid, keep as is
-                }
-                
-                // Check if agent name is provided
-                if (!processedData.name || processedData.name.trim() === '') {
-                    this.showNotification('Agent name is required. Please enter an agent name.', 'error')
-                    return
-                }
-                
-                // Check if agent key is provided
-                if (!processedData.agent_key || processedData.agent_key.trim() === '') {
-                    this.showNotification('Agent key is required. Please enter an agent key.', 'error')
-                    return
-                }
-                
-                // Note: IP address and capabilities are not required for registration
-                // The backend will handle validation based on existing database records
+
+                    // Set default port 8080 if port is empty or null
+                    const processedData = { ...agentData }
+                    if (!processedData.port || processedData.port === '' || processedData.port === null || processedData.port === undefined) {
+                        processedData.port = 8080
+                        console.log('🔧 Setting default port 8080 for agent:', processedData.name)
+                    }
                 
                 const result = await agentStore.actions.createAgent(processedData)
                 if (result) {
@@ -1176,11 +1192,43 @@ class DashboardApplication {
                         this.showNotification(state.error, 'error')
                     } else if (state.error && state.error.includes('invalid agent key')) {
                         this.showNotification('Invalid agent key. Please check the agent key and try again.', 'error')
+                        } else if (state.error && state.error.includes('IP address') && state.error.includes('already used')) {
+                            // Handle IP address conflict specifically
+                            let userMessage = String(state.error);
+                            
+                            // Remove HTTP status prefix if present
+                            if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                                userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
+                            } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                                userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
+                            } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                                userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
+                            }
+                            
+                            this.showNotification(userMessage, 'error')
                     } else if (state.error) {
-                        this.showNotification(state.error, 'error')
+                            // Try to extract user-friendly message from error
+                            let userMessage = state.error;
+                            
+                            // Remove HTTP status prefix if present
+                            if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                                userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
+                            } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                                userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
+                            } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                                userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
+                            }
+                            
+                            this.showNotification(userMessage, 'error')
                     } else {
                         this.showNotification('Failed to register agent', 'error')
                     }
+                    }
+                } catch (error) {
+                    console.error('Error creating agent:', error)
+                    this.showNotification('Failed to register agent', 'error')
+                } finally {
+                    this.isLoading = false
                 }
             },
 
@@ -1196,11 +1244,8 @@ class DashboardApplication {
             },
             
             async createAgentKey(agentKeyData: any) {
-                // For agent key generation, we don't need to provide agent details
-                // Important: send only name so backend either creates a new key or returns duplicate with
-                // a clean "already exists <name>" message (no 401 invalid key)
-                const keyData = { name: agentKeyData.name }
-                const result = await agentStore.actions.createAgent(keyData)
+                // Use the new generateAgentKey action for creating agent keys
+                const result = await agentStore.actions.generateAgentKey(agentKeyData.name)
                 if (result) {
                     this.showNotification('Agent Key Generated Successfully!', 'success')
                     this.createdAgentKey = result
@@ -1218,11 +1263,21 @@ class DashboardApplication {
                     if (err.includes('already exists')) {
                         // Extract agent name if present: "already exists <name>"
                         const namePart = rawError.split('already exists')[1]?.trim() || agentKeyData.name
-                        this.showNotification(`already exists ${namePart}`, 'error')
-                    } else if (err.includes('unauthorized') || err.includes('invalid agent key')) {
-                        this.showNotification(`HTTP 401: Unauthorized - invalid agent key for agent '${agentKeyData.name}'`, 'error')
+                        this.showNotification(`Agent name '${namePart}' already exists`, 'error')
                     } else if (state.error != null && String(state.error).trim() !== '') {
-                        this.showNotification(String(state.error), 'error')
+                        // Try to extract user-friendly message from error
+                        let userMessage = String(state.error);
+                        
+                        // Remove HTTP status prefix if present
+                        if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                            userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
+                        } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                            userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
+                        } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                            userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
+                        }
+                        
+                        this.showNotification(userMessage, 'error')
                     } else {
                         this.showNotification('Failed to generate agent key', 'error')
                     }
@@ -1498,13 +1553,16 @@ class DashboardApplication {
                     this.showNotification('Error: No agent ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this agent?')) {
+                const agent = this.agents.find((a: any) => a.id === id)
+                if (agent) {
+                    this.openDeleteModal('agent', agent, async () => {
                     const success = await agentStore.actions.deleteAgent(id)
                     if (success) {
                         this.showNotification('Agent deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete agent', 'error')
                     }
+                    })
                 }
             },
 
@@ -1513,13 +1571,16 @@ class DashboardApplication {
                     this.showNotification('Error: No job ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this job?')) {
+                const job = this.jobs.find((j: any) => j.id === id)
+                if (job) {
+                    this.openDeleteModal('job', job, async () => {
                     const success = await jobStore.actions.deleteJob(id)
                     if (success) {
                         this.showNotification('Job deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete job', 'error')
                     }
+                    })
                 }
             },
 
@@ -1528,13 +1589,16 @@ class DashboardApplication {
                     this.showNotification('Error: No file ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this hash file?')) {
+                const file = this.hashFiles.find((f: any) => f.id === id)
+                if (file) {
+                    this.openDeleteModal('file', file, async () => {
                     const success = await fileStore.actions.deleteHashFile(id)
                     if (success) {
                         this.showNotification('Hash file deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete hash file', 'error')
                     }
+                    })
                 }
             },
 
@@ -1543,13 +1607,16 @@ class DashboardApplication {
                     this.showNotification('Error: No wordlist ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this wordlist?')) {
+                const wordlist = this.wordlists.find((w: any) => w.id === id)
+                if (wordlist) {
+                    this.openDeleteModal('wordlist', wordlist, async () => {
                     const success = await wordlistStore.actions.deleteWordlist(id)
                     if (success) {
                         this.showNotification('Wordlist deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete wordlist', 'error')
                     }
+                    })
                 }
             },
 

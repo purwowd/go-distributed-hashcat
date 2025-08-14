@@ -78,7 +78,7 @@
                             </td>
                             <td class="px-4 py-3 text-gray-700" x-text="formatDate(item.last_seen)"></td>
                             <td class="px-4 py-3">
-                                <button class="btn-danger px-2 py-1 text-xs" @click="openDeleteAgentModal(item)">
+                                <button class="btn-danger px-2 py-1 text-xs" @click="deleteAgent(item.id)">
                                     <i class="fas fa-trash mr-1"></i>Delete
                                 </button>
                             </td>
