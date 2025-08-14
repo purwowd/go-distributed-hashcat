@@ -76,6 +76,14 @@ func (m *MockAgentUsecase) UpdateAgentLastSeen(ctx context.Context, id uuid.UUID
 	return args.Error(0)
 }
 
+func (m *MockAgentUsecase) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
+	args := m.Called(ctx, agentKey)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Agent), args.Error(1)
+}
+
 func (m *MockAgentUsecase) SetWebSocketHub(wsHub usecase.WebSocketHub) {
 	m.Called(wsHub)
 }

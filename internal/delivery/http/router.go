@@ -82,6 +82,8 @@ func NewRouter(
 		agents := v1.Group("/agents")
 		{
 			agents.POST("/generate-key", agentHandler.GenerateAgentKey) // New route for generating agent keys
+			agents.POST("/startup", agentHandler.AgentStartup)          // New route for agent startup
+			agents.POST("/heartbeat", agentHandler.AgentHeartbeat)      // New route for agent heartbeat
 			agents.POST("/", agentHandler.RegisterAgent)
 			agents.GET("/", agentHandler.GetAllAgents)
 			agents.GET("/:id", agentHandler.GetAgent)

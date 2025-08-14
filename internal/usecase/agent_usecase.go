@@ -30,6 +30,7 @@ type AgentUsecase interface {
 	GetAvailableAgent(ctx context.Context) (*domain.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error
 	UpdateAgentLastSeen(ctx context.Context, id uuid.UUID) error
+	GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error)
 	SetWebSocketHub(wsHub WebSocketHub)
 	ValidateUniqueIPForAgentKey(ctx context.Context, agentKey, ipAddress, agentName string) error
 	GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error)
@@ -205,6 +206,10 @@ func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) e
 
 func (u *agentUsecase) UpdateAgentLastSeen(ctx context.Context, id uuid.UUID) error {
 	return u.agentRepo.UpdateLastSeen(ctx, id)
+}
+
+func (u *agentUsecase) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
+	return u.agentRepo.GetByAgentKey(ctx, agentKey)
 }
 
 func (u *agentUsecase) ValidateUniqueIPForAgentKey(ctx context.Context, agentKey, ipAddress, agentName string) error {
