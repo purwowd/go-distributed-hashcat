@@ -201,6 +201,14 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Printf("✅ Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 	}
 
+	// ✅ Update status to online and port to 8081 when agent starts running
+	log.Printf("🔄 Updating agent status to online and port to 8081...")
+	if err := agent.updateAgentInfo(agent.ID, ip, 8081, capabilities, "online"); err != nil {
+		log.Printf("⚠️ Warning: Failed to update agent status to online: %v", err)
+	} else {
+		log.Printf("✅ Agent status updated to online with port 8081")
+	}
+
 	log.Printf("Local upload directory: %s", agent.UploadDir)
 	log.Printf("Found %d local files", len(agent.LocalFiles))
 
@@ -221,12 +229,19 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	log.Println("Shutting down agent...")
 
-	// ✅ Restore original port before shutdown
+	// ✅ Update status to offline and restore original port 8080 before shutdown
+	log.Printf("🔄 Updating agent status to offline and restoring port to 8080...")
+	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, "offline"); err != nil {
+		log.Printf("⚠️ Warning: Failed to update agent status to offline: %v", err)
+	} else {
+		log.Printf("✅ Agent status updated to offline with port 8080")
+	}
+
+	// ✅ Restore original port before shutdown (legacy function)
 	if err := agent.restoreOriginalPort(); err != nil {
 		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
 	}
 
-	agent.updateStatus("offline")
 	log.Println("Agent exited")
 }
 
