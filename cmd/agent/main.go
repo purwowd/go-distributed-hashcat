@@ -1190,18 +1190,22 @@ func detectCapabilitiesWithHashcat() string {
 	outputStr := string(output)
 	lines := strings.Split(outputStr, "\n")
 
+	log.Printf("🔍 Hashcat -I output lines count: %d", len(lines))
+
 	var deviceTypes []string
 
-	for _, line := range lines {
+	for i, line := range lines {
 		line = strings.TrimSpace(line)
 
 		// Look for device section headers
 		if strings.Contains(line, "Backend Device ID #") {
+			log.Printf("🔍 Found device section header at line %d: %s", i+1, line)
 			continue
 		}
 
 		// Look for Type line
 		if strings.HasPrefix(line, "Type...........:") {
+			log.Printf("🔍 Found Type line at line %d: %s", i+1, line)
 			parts := strings.Split(line, ":")
 			if len(parts) >= 2 {
 				deviceType := strings.TrimSpace(parts[1])
@@ -1213,6 +1217,9 @@ func detectCapabilitiesWithHashcat() string {
 		}
 	}
 
+	log.Printf("🔍 Total device types found: %d", len(deviceTypes))
+	log.Printf("🔍 Device types: %v", deviceTypes)
+
 	// Determine capabilities based on detected devices
 	if len(deviceTypes) == 0 {
 		log.Printf("⚠️ No device types found in hashcat -I output, falling back to basic detection")
@@ -1221,6 +1228,7 @@ func detectCapabilitiesWithHashcat() string {
 
 	// Check if any GPU devices are found
 	for _, deviceType := range deviceTypes {
+		log.Printf("🔍 Checking device type for GPU: %s", deviceType)
 		if strings.Contains(strings.ToUpper(deviceType), "GPU") {
 			log.Printf("✅ GPU device detected: %s", deviceType)
 			return "GPU"
@@ -1229,6 +1237,7 @@ func detectCapabilitiesWithHashcat() string {
 
 	// If no GPU, check for CPU
 	for _, deviceType := range deviceTypes {
+		log.Printf("🔍 Checking device type for CPU: %s", deviceType)
 		if strings.Contains(strings.ToUpper(deviceType), "CPU") {
 			log.Printf("✅ CPU device detected: %s", deviceType)
 			return "CPU"
@@ -1254,26 +1263,68 @@ func detectCapabilitiesBasic() string {
 
 // hasGPU checks if GPU is available on the system
 func hasGPU() bool {
+	log.Printf("🔍 Starting GPU detection...")
+
 	// Check for NVIDIA GPU
 	if _, err := exec.LookPath("nvidia-smi"); err == nil {
+		log.Printf("🔍 nvidia-smi command found, checking if GPU is working...")
 		// Try to run nvidia-smi to verify GPU is working
 		cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits")
 		if output, err := cmd.Output(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
-			log.Printf("🔍 Detected NVIDIA GPU: %s", strings.TrimSpace(string(output)))
+			gpuName := strings.TrimSpace(string(output))
+			log.Printf("✅ Detected NVIDIA GPU: %s", gpuName)
 			return true
+		} else {
+			log.Printf("⚠️ nvidia-smi found but failed to run or no output: %v", err)
 		}
+	} else {
+		log.Printf("🔍 nvidia-smi command not found")
 	}
 
 	// Check for AMD GPU
 	if _, err := exec.LookPath("rocm-smi"); err == nil {
-		log.Printf("🔍 Detected AMD GPU (ROCm)")
-		return true
+		log.Printf("🔍 rocm-smi command found, checking if GPU is working...")
+		cmd := exec.Command("rocm-smi", "--list-gpus")
+		if output, err := cmd.Output(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			log.Printf("✅ Detected AMD GPU (ROCm): %s", strings.TrimSpace(string(output)))
+			return true
+		} else {
+			log.Printf("⚠️ rocm-smi found but failed to run or no output: %v", err)
+		}
+	} else {
+		log.Printf("🔍 rocm-smi command not found")
 	}
 
 	// Check for Intel GPU
 	if _, err := exec.LookPath("intel_gpu_top"); err == nil {
-		log.Printf("🔍 Detected Intel GPU")
+		log.Printf("🔍 intel_gpu_top command found, checking if GPU is working...")
+		cmd := exec.Command("intel_gpu_top", "-J", "-s", "1")
+		if output, err := cmd.Output(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			log.Printf("✅ Detected Intel GPU: %s", strings.TrimSpace(string(output)))
+			return true
+		} else {
+			log.Printf("⚠️ intel_gpu_top found but failed to run or no output: %v", err)
+		}
+	} else {
+		log.Printf("🔍 intel_gpu_top command not found")
+	}
+
+	// Additional check: look for GPU devices in /proc
+	if _, err := os.Stat("/proc/driver/nvidia"); err == nil {
+		log.Printf("✅ Found NVIDIA driver in /proc/driver/nvidia")
 		return true
+	}
+
+	if _, err := os.Stat("/sys/class/drm"); err == nil {
+		// Check if there are GPU devices
+		if files, err := os.ReadDir("/sys/class/drm"); err == nil {
+			for _, file := range files {
+				if strings.HasPrefix(file.Name(), "card") && file.Name() != "card0" {
+					log.Printf("✅ Found GPU device: %s", file.Name())
+					return true
+				}
+			}
+		}
 	}
 
 	log.Printf("🔍 No GPU detected, using CPU")
