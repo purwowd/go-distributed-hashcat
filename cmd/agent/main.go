@@ -68,7 +68,7 @@ func main() {
 	rootCmd.Flags().String("name", "", "Agent name")
 	rootCmd.Flags().String("ip", "", "Agent IP address")
 	rootCmd.Flags().Int("port", 8081, "Agent port")
-	rootCmd.Flags().String("capabilities", "GPU", "Agent capabilities")
+	rootCmd.Flags().String("capabilities", "auto", "Agent capabilities (auto, CPU, GPU, or custom)")
 	rootCmd.Flags().String("agent-key", "", "Agent key")
 	rootCmd.Flags().String("upload-dir", "/root/uploads", "Local uploads directory")
 
@@ -117,8 +117,11 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	// ✅ Auto-detect capabilities menggunakan hashcat -I jika tidak dispecify atau kosong
 	if capabilities == "" || capabilities == "auto" {
+		log.Printf("🔍 Auto-detection mode: Running hashcat -I to detect capabilities...")
 		capabilities = detectCapabilitiesWithHashcat()
 		log.Printf("🔍 Auto-detected capabilities using hashcat -I: %s", capabilities)
+	} else {
+		log.Printf("ℹ️ Using manually specified capabilities: %s", capabilities)
 	}
 
 	// ✅ Update capabilities di database jika berbeda dengan yang terdeteksi
@@ -1213,11 +1216,16 @@ func validateLocalIP(providedIP string) error {
 
 // detectCapabilitiesWithHashcat detects server capabilities using hashcat -I command
 func detectCapabilitiesWithHashcat() string {
+	log.Printf("🔍 Starting hashcat -I capabilities detection...")
+
 	// Check if hashcat is available
 	if _, err := exec.LookPath("hashcat"); err != nil {
 		log.Printf("⚠️ Warning: hashcat not found, falling back to basic detection")
+		log.Printf("🔍 Error details: %v", err)
 		return detectCapabilitiesBasic()
 	}
+
+	log.Printf("✅ hashcat command found, executing hashcat -I...")
 
 	// Run hashcat -I to get device information
 	cmd := exec.Command("hashcat", "-I")
@@ -1228,11 +1236,17 @@ func detectCapabilitiesWithHashcat() string {
 		return detectCapabilitiesBasic()
 	}
 
+	log.Printf("✅ hashcat -I executed successfully")
+
 	// Parse output to find device types
 	outputStr := string(output)
 	lines := strings.Split(outputStr, "\n")
 
 	log.Printf("🔍 Hashcat -I output lines count: %d", len(lines))
+	log.Printf("🔍 Raw output preview (first 10 lines):")
+	for i, line := range lines[:min(10, len(lines))] {
+		log.Printf("   Line %d: %s", i+1, line)
+	}
 
 	var deviceTypes []string
 
@@ -1290,6 +1304,14 @@ func detectCapabilitiesWithHashcat() string {
 	log.Printf("⚠️ Could not determine capabilities from device types: %v", deviceTypes)
 	log.Printf("⚠️ Falling back to basic detection")
 	return detectCapabilitiesBasic()
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // detectCapabilitiesBasic is the fallback detection method
