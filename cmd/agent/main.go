@@ -241,10 +241,9 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Printf("✅ Agent status updated to offline with port 8080 and capabilities preserved")
 	}
 
-	// ✅ Restore original port before shutdown (legacy function - now preserves capabilities)
-	if err := agent.restoreOriginalPort(); err != nil {
-		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
-	}
+	// ✅ Note: restoreOriginalPort() is no longer needed since we already updated everything above
+	// The single updateAgentInfo call above handles both status and port updates
+	log.Printf("ℹ️ Skipping restoreOriginalPort() to avoid capabilities override")
 
 	log.Println("Agent exited")
 }
@@ -1394,31 +1393,6 @@ func hasGPU() bool {
 
 	log.Printf("🔍 No GPU detected, using CPU")
 	return false
-}
-
-// restoreOriginalPort restores the original port from database
-func (a *Agent) restoreOriginalPort() error {
-	log.Printf("🔄 Restoring original port from %d to %d", a.OriginalPort, a.OriginalPort)
-
-	// Get current agent info to preserve capabilities
-	agentInfo, err := getAgentByKeyOnly(a, a.AgentKey)
-	if err != nil {
-		log.Printf("⚠️ Warning: Failed to get agent info for port restoration: %v", err)
-		// Fallback: use empty capabilities if we can't get current info
-		err = a.updateAgentInfo(a.ID, a.ServerIP, a.OriginalPort, "", "offline")
-	} else {
-		// Preserve current capabilities while updating port and status
-		log.Printf("🔄 Preserving current capabilities: %s", agentInfo.Capabilities)
-		err = a.updateAgentInfo(a.ID, a.ServerIP, a.OriginalPort, agentInfo.Capabilities, "offline")
-	}
-
-	if err != nil {
-		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
-		return err
-	}
-
-	log.Printf("✅ Original port %d restored successfully with capabilities preserved", a.OriginalPort)
-	return nil
 }
 
 // updateAgentCapabilities updates agent capabilities in the database
