@@ -27,14 +27,16 @@ import (
 )
 
 type Agent struct {
-	ID         uuid.UUID
-	Name       string
-	ServerURL  string
-	Client     *http.Client
-	CurrentJob *domain.Job
-	UploadDir  string
-	LocalFiles map[string]LocalFile // filename -> LocalFile
-	AgentKey   string               // Add agent key field
+	ID           uuid.UUID
+	Name         string
+	ServerURL    string
+	Client       *http.Client
+	CurrentJob   *domain.Job
+	UploadDir    string
+	LocalFiles   map[string]LocalFile // filename -> LocalFile
+	AgentKey     string               // Add agent key field
+	OriginalPort int                  // Store original port from database
+	ServerIP     string               // Store server IP for validation
 }
 
 type LocalFile struct {
@@ -102,26 +104,61 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Fatalf("❌ Agent key '%s' not registered in the database. Agent failed to run.", agentKey)
 	}
 
+	// ✅ Validasi IP address dengan server
+	if ip != "" {
+		if err := validateServerIP(ip, serverURL); err != nil {
+			log.Fatalf("%v", err)
+		}
+	} else {
+		// Jika IP kosong, ambil otomatis
+		ip = getLocalIP()
+		log.Printf("🔍 Auto-detected local IP: %s", ip)
+		
+		// Validasi IP yang auto-detected
+		if err := validateServerIP(ip, serverURL); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}
+
+	// ✅ Auto-detect capabilities jika tidak dispecify atau kosong
+	if capabilities == "" || capabilities == "auto" {
+		capabilities = detectCapabilities()
+		log.Printf("🔍 Auto-detected capabilities: %s", capabilities)
+	}
+
+	// ✅ Update capabilities di database jika berbeda atau kosong
+	if info.Capabilities == "" || info.Capabilities != capabilities {
+		log.Printf("🔄 Updating capabilities from '%s' to '%s'", info.Capabilities, capabilities)
+		if err := updateAgentCapabilities(tempAgent, agentKey, capabilities); err != nil {
+			log.Printf("⚠️ Warning: Failed to update capabilities: %v", err)
+		} else {
+			log.Printf("✅ Capabilities updated successfully")
+		}
+	}
+
 	// Jika name kosong, pakai hostname
 	if name == "" {
 		hostname, _ := os.Hostname()
 		name = fmt.Sprintf("agent-%s", hostname)
 	}
 
-	// Jika IP kosong, ambil otomatis
-	if ip == "" {
-		ip = getLocalIP()
+	// Simpan port asli dari database untuk restoration
+	originalPort := info.Port
+	if originalPort == 0 {
+		originalPort = 8080 // Default port
 	}
 
 	// Buat object agent sesungguhnya
 	agent := &Agent{
-		ID:         info.ID,
-		Name:       name,
-		ServerURL:  serverURL,
-		Client:     &http.Client{Timeout: 30 * time.Second},
-		UploadDir:  uploadDir,
-		LocalFiles: make(map[string]LocalFile),
-		AgentKey:   agentKey, // Initialize AgentKey
+		ID:           info.ID,
+		Name:         name,
+		ServerURL:    serverURL,
+		Client:       &http.Client{Timeout: 30 * time.Second},
+		UploadDir:    uploadDir,
+		LocalFiles:   make(map[string]LocalFile),
+		AgentKey:     agentKey,
+		OriginalPort: originalPort, // Store original port from database
+		ServerIP:     ip,           // Store server IP for validation
 	}
 
 	// Inisialisasi direktori
@@ -186,10 +223,15 @@ func runAgent(cmd *cobra.Command, args []string) {
 	<-quit
 
 	log.Println("Shutting down agent...")
+	
+	// ✅ Restore original port before shutdown
+	if err := agent.restoreOriginalPort(); err != nil {
+		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
+	}
+	
 	agent.updateStatus("offline")
 	log.Println("Agent exited")
 }
-
 
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	var info AgentInfo
@@ -534,19 +576,19 @@ func (a *Agent) startHeartbeat(ctx context.Context) {
 func (a *Agent) sendHeartbeat() error {
 	// Use new endpoint with agent key instead of agent ID
 	url := fmt.Sprintf("%s/api/v1/agents/heartbeat", a.ServerURL)
-	
+
 	// Create request body with agent key
 	reqBody := struct {
 		AgentKey string `json:"agent_key"`
 	}{
 		AgentKey: a.AgentKey,
 	}
-	
+
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal heartbeat request: %v", err)
 	}
-	
+
 	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
@@ -562,43 +604,42 @@ func (a *Agent) sendHeartbeat() error {
 }
 
 func (a *Agent) updateStatus(status string) {
-    if a.ID == uuid.Nil {
-        log.Printf("⚠️ Agent ID belum tersedia, tidak bisa update status")
-        return
-    }
+	if a.ID == uuid.Nil {
+		log.Printf("⚠️ Agent ID belum tersedia, tidak bisa update status")
+		return
+	}
 
-    req := struct {
-        Status string `json:"status"`
-    }{
-        Status: status,
-    }
+	req := struct {
+		Status string `json:"status"`
+	}{
+		Status: status,
+	}
 
-    jsonData, _ := json.Marshal(req)
-    url := fmt.Sprintf("%s/api/v1/agents/%s", a.ServerURL, a.ID.String())
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/agents/%s", a.ServerURL, a.ID.String())
 
-    httpReq, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
-    if err != nil {
-        log.Printf("⚠️ Gagal membuat request update status: %v", err)
-        return
-    }
-    httpReq.Header.Set("Content-Type", "application/json")
+	httpReq, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("⚠️ Gagal membuat request update status: %v", err)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
 
-    resp, err := a.Client.Do(httpReq)
-    if err != nil {
-        log.Printf("⚠️ Gagal update status agent: %v", err)
-        return
-    }
-    defer resp.Body.Close()
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		log.Printf("⚠️ Gagal update status agent: %v", err)
+		return
+	}
+	defer resp.Body.Close()
 
-    if resp.StatusCode != http.StatusOK {
-        body, _ := io.ReadAll(resp.Body)
-        log.Printf("⚠️ Gagal update status agent: %s", string(body))
-        return
-    }
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("⚠️ Gagal update status agent: %s", string(body))
+		return
+	}
 
-    log.Printf("✅ Status agent '%s' berhasil diupdate menjadi '%s'", a.Name, status)
+	log.Printf("✅ Status agent '%s' berhasil diupdate menjadi '%s'", a.Name, status)
 }
-
 
 func (a *Agent) pollForJobs(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
@@ -1085,6 +1126,120 @@ func (a *Agent) failJob(jobID uuid.UUID, reason string) {
 func getLocalIP() string {
 	// Simple implementation - could be enhanced
 	return "127.0.0.1"
+}
+
+// validateServerIP checks if the provided IP matches the server's IP
+func validateServerIP(providedIP, serverURL string) error {
+	// Extract server IP from server URL
+	serverIP := extractIPFromURL(serverURL)
+	if serverIP == "" {
+		log.Printf("⚠️ Warning: Could not extract server IP from URL: %s", serverURL)
+		return nil // Skip validation if we can't extract IP
+	}
+
+	if providedIP != serverIP {
+		return fmt.Errorf("❌ IP address mismatch: provided IP '%s' does not match server IP '%s'", providedIP, serverIP)
+	}
+
+	log.Printf("✅ IP address validation passed: %s matches server IP", providedIP)
+	return nil
+}
+
+// extractIPFromURL extracts IP address from server URL
+func extractIPFromURL(serverURL string) string {
+	// Remove protocol prefix
+	url := strings.TrimPrefix(serverURL, "http://")
+	url = strings.TrimPrefix(url, "https://")
+	
+	// Extract IP:port
+	if colonIndex := strings.Index(url, ":"); colonIndex != -1 {
+		return url[:colonIndex]
+	}
+	return url
+}
+
+// detectCapabilities detects server capabilities (CPU/GPU)
+func detectCapabilities() string {
+	// Try to detect GPU first
+	if hasGPU() {
+		return "GPU"
+	}
+	
+	// Fallback to CPU
+	return "CPU"
+}
+
+// hasGPU checks if GPU is available on the system
+func hasGPU() bool {
+	// Check for NVIDIA GPU
+	if _, err := exec.LookPath("nvidia-smi"); err == nil {
+		// Try to run nvidia-smi to verify GPU is working
+		cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits")
+		if output, err := cmd.Output(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
+			log.Printf("🔍 Detected NVIDIA GPU: %s", strings.TrimSpace(string(output)))
+			return true
+		}
+	}
+
+	// Check for AMD GPU
+	if _, err := exec.LookPath("rocm-smi"); err == nil {
+		log.Printf("🔍 Detected AMD GPU (ROCm)")
+		return true
+	}
+
+	// Check for Intel GPU
+	if _, err := exec.LookPath("intel_gpu_top"); err == nil {
+		log.Printf("🔍 Detected Intel GPU")
+		return true
+	}
+
+	log.Printf("🔍 No GPU detected, using CPU")
+	return false
+}
+
+// restoreOriginalPort restores the original port from database
+func (a *Agent) restoreOriginalPort() error {
+	log.Printf("🔄 Restoring original port from %d to %d", a.OriginalPort, a.OriginalPort)
+	
+	// Update agent info with original port
+	err := a.updateAgentInfo(a.ID, a.ServerIP, a.OriginalPort, "", "offline")
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
+		return err
+	}
+	
+	log.Printf("✅ Original port %d restored successfully", a.OriginalPort)
+	return nil
+}
+
+// updateAgentCapabilities updates agent capabilities in the database
+func updateAgentCapabilities(a *Agent, agentKey, capabilities string) error {
+	req := struct {
+		AgentKey     string `json:"agent_key"`
+		Capabilities string `json:"capabilities"`
+	}{
+		AgentKey:     agentKey,
+		Capabilities: capabilities,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/agents/update-data", a.ServerURL)
+
+	httpReq, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update capabilities: %s", string(body))
+	}
+
+	return nil
 }
 
 func formatFileSize(bytes int64) string {
