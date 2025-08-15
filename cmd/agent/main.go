@@ -274,33 +274,60 @@ func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 }
 
 func (a *Agent) updateAgentInfo(agentID uuid.UUID, ip string, port int, capabilities string, status string) error {
+	// Use the correct endpoint for updating agent data
 	req := struct {
+		AgentKey     string `json:"agent_key"`
 		IPAddress    string `json:"ip_address"`
 		Port         int    `json:"port"`
 		Capabilities string `json:"capabilities"`
-		Status       string `json:"status"`
 	}{
+		AgentKey:     a.AgentKey,
 		IPAddress:    ip,
 		Port:         port,
 		Capabilities: capabilities,
-		Status:       status,
 	}
 
 	jsonData, _ := json.Marshal(req)
-	url := fmt.Sprintf("%s/api/v1/agents/%s", a.ServerURL, agentID.String())
+	url := fmt.Sprintf("%s/api/v1/agents/update-data", a.ServerURL)
 
-	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update agent data: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("gagal update agent info: %s", string(body))
+		return fmt.Errorf("failed to update agent data: %s", string(body))
+	}
+
+	// If status needs to be updated, use the status endpoint
+	if status != "" {
+		statusReq := struct {
+			Status string `json:"status"`
+		}{
+			Status: status,
+		}
+
+		statusData, _ := json.Marshal(statusReq)
+		statusURL := fmt.Sprintf("%s/api/v1/agents/%s/status", a.ServerURL, agentID.String())
+
+		statusHttpReq, _ := http.NewRequest(http.MethodPut, statusURL, bytes.NewBuffer(statusData))
+		statusHttpReq.Header.Set("Content-Type", "application/json")
+
+		statusResp, err := a.Client.Do(statusHttpReq)
+		if err != nil {
+			return fmt.Errorf("failed to update agent status: %w", err)
+		}
+		defer statusResp.Body.Close()
+
+		if statusResp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(statusResp.Body)
+			return fmt.Errorf("failed to update agent status: %s", string(body))
+		}
 	}
 
 	return nil
