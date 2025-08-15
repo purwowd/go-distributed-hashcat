@@ -234,13 +234,14 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	// ✅ Update status to offline and restore original port 8080 before shutdown
 	log.Printf("🔄 Updating agent status to offline and restoring port to 8080...")
+	log.Printf("🔄 Preserving capabilities: %s", capabilities)
 	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, "offline"); err != nil {
 		log.Printf("⚠️ Warning: Failed to update agent status to offline: %v", err)
 	} else {
-		log.Printf("✅ Agent status updated to offline with port 8080")
+		log.Printf("✅ Agent status updated to offline with port 8080 and capabilities preserved")
 	}
 
-	// ✅ Restore original port before shutdown (legacy function)
+	// ✅ Restore original port before shutdown (legacy function - now preserves capabilities)
 	if err := agent.restoreOriginalPort(); err != nil {
 		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
 	}
@@ -1399,14 +1400,24 @@ func hasGPU() bool {
 func (a *Agent) restoreOriginalPort() error {
 	log.Printf("🔄 Restoring original port from %d to %d", a.OriginalPort, a.OriginalPort)
 
-	// Update agent info with original port
-	err := a.updateAgentInfo(a.ID, a.ServerIP, a.OriginalPort, "", "offline")
+	// Get current agent info to preserve capabilities
+	agentInfo, err := getAgentByKeyOnly(a, a.AgentKey)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for port restoration: %v", err)
+		// Fallback: use empty capabilities if we can't get current info
+		err = a.updateAgentInfo(a.ID, a.ServerIP, a.OriginalPort, "", "offline")
+	} else {
+		// Preserve current capabilities while updating port and status
+		log.Printf("🔄 Preserving current capabilities: %s", agentInfo.Capabilities)
+		err = a.updateAgentInfo(a.ID, a.ServerIP, a.OriginalPort, agentInfo.Capabilities, "offline")
+	}
+
 	if err != nil {
 		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Original port %d restored successfully", a.OriginalPort)
+	log.Printf("✅ Original port %d restored successfully with capabilities preserved", a.OriginalPort)
 	return nil
 }
 
