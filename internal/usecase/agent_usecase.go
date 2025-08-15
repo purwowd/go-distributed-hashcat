@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
@@ -36,6 +37,7 @@ type AgentUsecase interface {
 	GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error)
 	CreateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgent(ctx context.Context, agent *domain.Agent) error
+	UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error
 	GenerateAgentKey(ctx context.Context, name string) (*domain.Agent, error)
 }
 
@@ -99,16 +101,22 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 			existingAgentByName.IPAddress = req.IPAddress
 			existingAgentByName.Port = port // Use processed port
 			existingAgentByName.Capabilities = req.Capabilities
-			existingAgentByName.Status = "offline" // tetap offline saat update
+			existingAgentByName.Status = "offline"    // tetap offline saat update
+			existingAgentByName.LastSeen = time.Now() // Update LastSeen to current time
 			existingAgentByName.UpdatedAt = time.Now()
 
 			if err := u.agentRepo.Update(ctx, existingAgentByName); err != nil {
 				return nil, err
 			}
 
-			if u.wsHub != nil {
-				u.wsHub.BroadcastAgentStatus(existingAgentByName.ID.String(), existingAgentByName.Status, "")
+			// Update last seen to ensure consistency
+			if err := u.agentRepo.UpdateLastSeen(ctx, existingAgentByName.ID); err != nil {
+				// Log error but don't fail the request
+				log.Printf("Failed to update agent last seen: %v", err)
 			}
+
+			// Don't broadcast status update when creating/updating agent
+			// Status should remain as set (offline) until agent actually connects
 			return existingAgentByName, nil
 		} else {
 			// Nama sama tapi agent key berbeda
@@ -145,9 +153,8 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 		return nil, err
 	}
 
-	if u.wsHub != nil {
-		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, "")
-	}
+	// Don't broadcast status update when creating agent
+	// Status should remain as set (offline) until agent actually connects
 	return agent, nil
 }
 
@@ -248,6 +255,54 @@ func (u *agentUsecase) UpdateAgent(ctx context.Context, agent *domain.Agent) err
 	return u.agentRepo.UpdateAgent(ctx, agent)
 }
 
+// UpdateAgentData updates only the data fields (ip_address, port, capabilities) without changing status
+func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error {
+	// Get agent by agent key
+	agent, err := u.agentRepo.GetByAgentKey(ctx, agentKey)
+	if err != nil {
+		if errors.Is(err, domain.ErrAgentNotFound) {
+			return fmt.Errorf("AGENT_KEY_NOT_FOUND: agent key %s not found in database", agentKey)
+		}
+		return fmt.Errorf("failed to get agent by key %s: %w", agentKey, err)
+	}
+
+	log.Printf("🔍 Debug: Found agent: %+v", agent)
+
+	// Validate IP address uniqueness if provided
+	if ipAddress != "" {
+		if err := u.ValidateUniqueIPForAgentKey(ctx, agentKey, ipAddress, agent.Name); err != nil {
+			return err
+		}
+	}
+
+	// Set default port 8080 if port is empty or 0
+	if port == 0 {
+		port = 8080
+	}
+
+	// Update only data fields, keep status unchanged
+	agent.IPAddress = ipAddress
+	agent.Port = port
+	agent.Capabilities = capabilities
+	agent.UpdatedAt = time.Now()
+	// Note: Status remains unchanged (stays offline until agent binary runs)
+
+	log.Printf("🔍 Debug: Updated agent data: IP=%s, Port=%d, Capabilities=%s, UpdatedAt=%v",
+		agent.IPAddress, agent.Port, agent.Capabilities, agent.UpdatedAt)
+
+	// Update in database
+	if err := u.agentRepo.Update(ctx, agent); err != nil {
+		log.Printf("❌ Debug: Failed to update agent in database: %v", err)
+		return fmt.Errorf("failed to update agent data: %w", err)
+	}
+
+	log.Printf("✅ Debug: Agent updated successfully in database")
+
+	// Don't broadcast status update - status should remain offline
+	// until agent binary actually starts running
+	return nil
+}
+
 func (u *agentUsecase) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
 	return u.agentRepo.GetByNameAndIPForStartup(ctx, name, ip, port)
 }
@@ -279,13 +334,32 @@ func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name string) (*doma
 		Status:       "offline",
 		Capabilities: "", // Will be filled when agent registers
 		AgentKey:     agentKey,
+		LastSeen:     time.Now(), // Set LastSeen to current time like created_at and updated_at
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
 
+	// Debug logging
+	log.Printf("🔍 Debug: Creating agent with LastSeen: %v", agent.LastSeen)
+	log.Printf("🔍 Debug: LastSeen.IsZero(): %v", agent.LastSeen.IsZero())
+	log.Printf("🔍 Debug: LastSeen.Format(time.RFC3339): %v", agent.LastSeen.Format(time.RFC3339))
+	log.Printf("🔍 Debug: Agent struct: %+v", agent)
+
 	// Save to database
 	if err := u.agentRepo.Create(ctx, agent); err != nil {
+		log.Printf("❌ Debug: Failed to save agent: %v", err)
 		return nil, fmt.Errorf("failed to save agent key: %w", err)
+	}
+
+	log.Printf("✅ Debug: Agent saved successfully with ID: %s", agent.ID.String())
+
+	// Verify the saved agent
+	savedAgent, err := u.agentRepo.GetByID(ctx, agent.ID)
+	if err != nil {
+		log.Printf("⚠️ Debug: Could not retrieve saved agent: %v", err)
+	} else {
+		log.Printf("🔍 Debug: Retrieved saved agent LastSeen: %v", savedAgent.LastSeen)
+		log.Printf("🔍 Debug: Retrieved saved agent LastSeen.IsZero(): %v", savedAgent.LastSeen.IsZero())
 	}
 
 	return agent, nil

@@ -206,6 +206,16 @@ class ApiService {
         }
     }
 
+    public async updateAgentData(agentData: { agent_key: string; ip_address?: string; port?: number; capabilities?: string }): Promise<{success: boolean, message?: string, code?: string, error?: string}> {
+        const response = await this.post<{message: string, code: string}>('/api/v1/agents/update-data', agentData)
+        return {
+            success: response.success,
+            message: response.data?.message,
+            code: response.data?.code,
+            error: response.error
+        }
+    }
+
     public async generateAgentKey(name: string): Promise<{agent: Agent | null, error: string | null}> {
         const response = await this.post<{data: Agent}>('/api/v1/agents/generate-key', { name })
         return {

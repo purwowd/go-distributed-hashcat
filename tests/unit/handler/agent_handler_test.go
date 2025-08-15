@@ -119,6 +119,11 @@ func (m *MockAgentUsecase) GenerateAgentKey(ctx context.Context, name string) (*
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error {
+	args := m.Called(ctx, agentKey, ipAddress, port, capabilities)
+	return args.Error(0)
+}
+
 func setupTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -143,6 +148,18 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 				"agent_key":    "test_key_123",
 			},
 			mockSetup: func(mockUsecase *MockAgentUsecase) {
+				// Setup GetByAgentKey mock for agent key validation
+				existingAgent := &domain.Agent{
+					ID:           uuid.New(),
+					Name:         "test-agent",
+					IPAddress:    "",
+					Port:         0,
+					Capabilities: "",
+					Status:       "offline",
+					AgentKey:     "test_key_123",
+				}
+				mockUsecase.On("GetByAgentKey", mock.Anything, "test_key_123").Return(existingAgent, nil)
+
 				expectedAgent := &domain.Agent{
 					ID:           uuid.New(),
 					Name:         "test-agent",
@@ -193,7 +210,7 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				assert.NoError(t, err)
-				assert.Contains(t, response["error"], "agent key is required")
+				assert.Contains(t, response["error"], "Field validation for 'AgentKey' failed on the 'required' tag")
 			},
 		},
 		{
@@ -206,6 +223,18 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 				"agent_key":    "test_key_123",
 			},
 			mockSetup: func(mockUsecase *MockAgentUsecase) {
+				// Setup GetByAgentKey mock for agent key validation
+				existingAgent := &domain.Agent{
+					ID:           uuid.New(),
+					Name:         "test-agent",
+					IPAddress:    "",
+					Port:         0,
+					Capabilities: "",
+					Status:       "offline",
+					AgentKey:     "test_key_123",
+				}
+				mockUsecase.On("GetByAgentKey", mock.Anything, "test_key_123").Return(existingAgent, nil)
+
 				mockUsecase.On("RegisterAgent", mock.Anything, mock.AnythingOfType("*domain.CreateAgentRequest")).Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -629,7 +658,7 @@ func TestAgentHandler_HeartbeatAgent(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				assert.NoError(t, err)
-				assert.Equal(t, "Agent heartbeat updated successfully", response["message"])
+				assert.Equal(t, "heartbeat updated", response["message"])
 			},
 		},
 		{
@@ -643,7 +672,7 @@ func TestAgentHandler_HeartbeatAgent(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				assert.NoError(t, err)
-				assert.Contains(t, response["error"], "Invalid agent ID")
+				assert.Contains(t, response["error"], "invalid agent ID")
 			},
 		},
 		{
@@ -657,7 +686,7 @@ func TestAgentHandler_HeartbeatAgent(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				assert.NoError(t, err)
-				assert.Contains(t, response["error"], "Failed to update agent heartbeat")
+				assert.Contains(t, response["error"], "heartbeat failed")
 			},
 		},
 	}

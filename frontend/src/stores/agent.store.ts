@@ -172,6 +172,54 @@ class AgentStore {
             }
         },
 
+        // Update agent data (ip_address, port, capabilities) without changing status
+        updateAgentData: async (agentData: { agent_key: string; ip_address?: string; port?: number; capabilities?: string }): Promise<{success: boolean, message?: string, error?: string}> => {
+            this.setState({ loading: true, error: null })
+            
+            try {
+                const result = await apiService.updateAgentData(agentData)
+                if (result.success) {
+                    // Refresh agents list to get updated data
+                    await this.actions.fetchAgents()
+                    this.setState({ loading: false })
+                    return {
+                        success: true,
+                        message: result.message || 'Agent data updated successfully'
+                    }
+                } else {
+                    // Handle specific error types
+                    let errorMessage = 'Failed to update agent data'
+                    
+                    if (result.code === 'AGENT_KEY_NOT_FOUND') {
+                        errorMessage = result.error || 'Agent key not found. Please generate a valid agent key first.'
+                    } else if (result.code === 'IP_ADDRESS_CONFLICT') {
+                        errorMessage = result.error || 'IP address is already in use by another agent.'
+                    } else if (result.error) {
+                        errorMessage = result.error
+                    }
+                    
+                    this.setState({
+                        loading: false,
+                        error: errorMessage
+                    })
+                    return {
+                        success: false,
+                        error: errorMessage
+                    }
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to update agent data'
+                this.setState({
+                    loading: false,
+                    error: errorMessage
+                })
+                return {
+                    success: false,
+                    error: errorMessage
+                }
+            }
+        },
+
         // Delete agent
         deleteAgent: async (id: string): Promise<boolean> => {
             try {
