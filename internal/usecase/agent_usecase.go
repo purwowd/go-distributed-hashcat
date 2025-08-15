@@ -167,7 +167,27 @@ func (u *agentUsecase) GetAllAgents(ctx context.Context) ([]domain.Agent, error)
 }
 
 func (u *agentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error {
-	return u.agentRepo.UpdateStatus(ctx, id, status)
+	// Update status in database
+	if err := u.agentRepo.UpdateStatus(ctx, id, status); err != nil {
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the status update if broadcast fails
+	}
+
+	// Broadcast real-time status update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("✅ Real-time agent status broadcast: %s -> %s", agent.Name, status)
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
 }
 
 func (u *agentUsecase) DeleteAgent(ctx context.Context, id uuid.UUID) error {
@@ -207,12 +227,36 @@ func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) e
 
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("✅ Real-time agent heartbeat broadcast: %s -> %s (LastSeen: %s)",
+			agent.Name, agent.Status, agent.LastSeen.Format(time.RFC3339))
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
 	}
 	return nil
 }
 
 func (u *agentUsecase) UpdateAgentLastSeen(ctx context.Context, id uuid.UUID) error {
-	return u.agentRepo.UpdateLastSeen(ctx, id)
+	// Update last seen in database
+	if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil {
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the last seen update if broadcast fails
+	}
+
+	// Broadcast real-time last seen update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("✅ Real-time agent last seen broadcast: %s -> %s", agent.Name, agent.LastSeen.Format(time.RFC3339))
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
 }
 
 func (u *agentUsecase) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
@@ -297,6 +341,15 @@ func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipA
 	}
 
 	log.Printf("✅ Debug: Agent updated successfully in database")
+
+	// Broadcast real-time agent data update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("✅ Real-time agent data broadcast: %s (IP=%s, Port=%d, Capabilities=%s)",
+			agent.Name, agent.IPAddress, agent.Port, agent.Capabilities)
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+	}
 
 	// Don't broadcast status update - status should remain offline
 	// until agent binary actually starts running
