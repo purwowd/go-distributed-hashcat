@@ -104,20 +104,15 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Fatalf("❌ Agent key '%s' not registered in the database. Agent failed to run.", agentKey)
 	}
 
-	// ✅ Validasi IP address dengan server
+	// ✅ Validasi IP address dengan IP lokal
 	if ip != "" {
-		if err := validateServerIP(ip, serverURL); err != nil {
+		if err := validateLocalIP(ip); err != nil {
 			log.Fatalf("%v", err)
 		}
 	} else {
 		// Jika IP kosong, ambil otomatis
 		ip = getLocalIP()
 		log.Printf("🔍 Auto-detected local IP: %s", ip)
-		
-		// Validasi IP yang auto-detected
-		if err := validateServerIP(ip, serverURL); err != nil {
-			log.Fatalf("%v", err)
-		}
 	}
 
 	// ✅ Auto-detect capabilities jika tidak dispecify atau kosong
@@ -223,12 +218,12 @@ func runAgent(cmd *cobra.Command, args []string) {
 	<-quit
 
 	log.Println("Shutting down agent...")
-	
+
 	// ✅ Restore original port before shutdown
 	if err := agent.restoreOriginalPort(); err != nil {
 		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
 	}
-	
+
 	agent.updateStatus("offline")
 	log.Println("Agent exited")
 }
@@ -1124,38 +1119,52 @@ func (a *Agent) failJob(jobID uuid.UUID, reason string) {
 }
 
 func getLocalIP() string {
-	// Simple implementation - could be enhanced
+	// Use hostname -I to get local IP addresses
+	cmd := exec.Command("hostname", "-I")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get local IP using hostname -I: %v", err)
+		return "127.0.0.1" // Fallback to localhost
+	}
+
+	// Parse output and get first non-localhost IP
+	ips := strings.Fields(string(output))
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		// Skip localhost and loopback addresses
+		if ip != "127.0.0.1" && ip != "::1" && ip != "" {
+			log.Printf("🔍 Found local IP: %s", ip)
+			return ip
+		}
+	}
+
+	log.Printf("⚠️ Warning: No valid local IP found, using fallback")
 	return "127.0.0.1"
 }
 
-// validateServerIP checks if the provided IP matches the server's IP
-func validateServerIP(providedIP, serverURL string) error {
-	// Extract server IP from server URL
-	serverIP := extractIPFromURL(serverURL)
-	if serverIP == "" {
-		log.Printf("⚠️ Warning: Could not extract server IP from URL: %s", serverURL)
-		return nil // Skip validation if we can't extract IP
+// validateLocalIP validates if the provided IP is a valid local IP address
+func validateLocalIP(providedIP string) error {
+	// Get actual local IPs using hostname -I
+	cmd := exec.Command("hostname", "-I")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get local IP using hostname -I: %v", err)
+		// If we can't validate, allow the IP to pass
+		return nil
 	}
 
-	if providedIP != serverIP {
-		return fmt.Errorf("❌ IP address mismatch: provided IP '%s' does not match server IP '%s'", providedIP, serverIP)
+	// Parse output and check if provided IP exists in local IPs
+	localIPs := strings.Fields(string(output))
+	for _, localIP := range localIPs {
+		localIP = strings.TrimSpace(localIP)
+		if localIP == providedIP {
+			log.Printf("✅ IP address validation passed: %s is a valid local IP", providedIP)
+			return nil
+		}
 	}
 
-	log.Printf("✅ IP address validation passed: %s matches server IP", providedIP)
-	return nil
-}
-
-// extractIPFromURL extracts IP address from server URL
-func extractIPFromURL(serverURL string) string {
-	// Remove protocol prefix
-	url := strings.TrimPrefix(serverURL, "http://")
-	url = strings.TrimPrefix(url, "https://")
-	
-	// Extract IP:port
-	if colonIndex := strings.Index(url, ":"); colonIndex != -1 {
-		return url[:colonIndex]
-	}
-	return url
+	// IP not found in local IPs
+	return fmt.Errorf("❌ IP address validation failed: provided IP '%s' is not a valid local IP address. Local IPs: %v", providedIP, localIPs)
 }
 
 // detectCapabilities detects server capabilities (CPU/GPU)
@@ -1164,7 +1173,7 @@ func detectCapabilities() string {
 	if hasGPU() {
 		return "GPU"
 	}
-	
+
 	// Fallback to CPU
 	return "CPU"
 }
@@ -1200,14 +1209,14 @@ func hasGPU() bool {
 // restoreOriginalPort restores the original port from database
 func (a *Agent) restoreOriginalPort() error {
 	log.Printf("🔄 Restoring original port from %d to %d", a.OriginalPort, a.OriginalPort)
-	
+
 	// Update agent info with original port
 	err := a.updateAgentInfo(a.ID, a.ServerIP, a.OriginalPort, "", "offline")
 	if err != nil {
 		log.Printf("⚠️ Warning: Failed to restore original port: %v", err)
 		return err
 	}
-	
+
 	log.Printf("✅ Original port %d restored successfully", a.OriginalPort)
 	return nil
 }
