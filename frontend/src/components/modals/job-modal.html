@@ -94,39 +94,98 @@
                         <label class="block text-sm font-semibold text-gray-700 mb-1">
                             <i class="fas fa-server text-blue-500 mr-1"></i>Agent Assignment <span class="text-red-500">*</span>
                         </label>
-                        <select x-model="jobForm.agent_id" required class="select-modern">
-                            <option value="">Select agent</option>
-                            <template x-for="agent in onlineAgents" :key="agent.id">
-                                <option :value="agent.id" 
-                                        x-text="`${agent.name} (${agent.ip_address}) - ${agent.capabilities || 'Unknown GPU'}`">
-                                </option>
-                            </template>
+                        
+                        <!-- Select All Checkbox -->
+                        <div class="mb-2">
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" 
+                                           @change="toggleSelectAllAgents($event.target.checked)"
+                                           :checked="areAllAgentsSelected()"
+                                           class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2">
+                                    <span class="text-sm font-medium text-gray-700">Select All Available Agents</span>
+                                    <span class="text-xs text-gray-500">(<span x-text="onlineAgents.length"></span> total)</span>
+                                </label>
+                                <!-- Compact Mode Toggle -->
+                                <button type="button" 
+                                        @click="toggleCompactMode()"
+                                        class="text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1">
+                                    <i class="fas fa-compress-alt" x-show="!isCompactMode"></i>
+                                    <i class="fas fa-expand-alt" x-show="isCompactMode"></i>
+                                    <span x-text="isCompactMode ? 'Expand' : 'Compact'"></span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Multiple Agent Selection -->
+                        <div :class="isCompactMode ? 'max-h-24' : 'max-h-32'" 
+                             class="overflow-y-auto border border-gray-200 rounded-lg bg-white scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 transition-all duration-200">
                             <template x-if="onlineAgents.length === 0">
-                                <option value="" disabled>No online agents available</option>
+                                <div class="text-center py-3 text-gray-500">
+                                    <i class="fas fa-exclamation-triangle text-yellow-500 text-sm mb-1"></i>
+                                    <p class="text-xs">No online agents available</p>
+                                </div>
                             </template>
-                        </select>
+                            
+                            <template x-for="agent in onlineAgents" :key="agent.id">
+                                <label class="flex items-center space-x-2 py-1.5 px-2 hover:bg-gray-50 rounded cursor-pointer border-b border-gray-100 last:border-b-0">
+                                    <input type="checkbox" 
+                                           :value="agent.id"
+                                           x-model="jobForm.agent_ids"
+                                           class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 flex-shrink-0">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between">
+                                            <span class="font-medium text-gray-900 truncate text-sm" x-text="agent.name"></span>
+                                            <div class="flex items-center space-x-1.5 flex-shrink-0">
+                                                <!-- Status Badge -->
+                                                <span class="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                                      :class="{
+                                                          'bg-green-100 text-green-800': agent.status === 'online',
+                                                          'bg-red-100 text-red-800': agent.status === 'offline',
+                                                          'bg-yellow-100 text-yellow-800': agent.status === 'busy'
+                                                      }"
+                                                      x-text="agent.status.charAt(0).toUpperCase() + agent.status.slice(1)">
+                                                </span>
+                                                <!-- Capabilities Badge -->
+                                                <span class="text-xs text-gray-500 bg-blue-100 px-1.5 py-0.5 rounded" x-text="agent.capabilities || 'Unknown GPU'"></span>
+                                            </div>
+                                        </div>
+                                        <div class="text-xs text-gray-600 truncate" x-text="agent.ip_address"></div>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                        
                         <p class="text-xs text-gray-500 mt-1">
                             <span x-show="onlineAgents.length === 0" class="text-red-600">
                                 <i class="fas fa-times-circle mr-1"></i>No online agents available. Start an agent first.
                             </span>
-                            <span x-show="onlineAgents.length > 0 && !jobForm.agent_id" class="text-red-600">
-                                <i class="fas fa-exclamation-circle mr-1"></i>Please select an agent to run this job
+                            <span x-show="onlineAgents.length > 0 && (!jobForm.agent_ids || jobForm.agent_ids.length === 0)" class="text-red-600">
+                                <i class="fas fa-exclamation-circle mr-1"></i>Please select at least one agent to run this job
                             </span>
-                            <span x-show="jobForm.agent_id" class="text-green-600">
-                                <i class="fas fa-thumbtack mr-1"></i>Job will be assigned to the selected agent specifically
+                            <span x-show="jobForm.agent_ids && jobForm.agent_ids.length > 0" class="text-green-600">
+                                <i class="fas fa-thumbtack mr-1"></i>Job will be distributed to <span x-text="jobForm.agent_ids.length"></span> selected agent(s)
+                            </span>
+                            <!-- Agent Count Info -->
+                            <span x-show="onlineAgents.length > 0" class="text-gray-500 ml-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                <span x-text="`${onlineAgents.length} agents available`"></span>
+                                <span x-show="isCompactMode" class="text-blue-600">
+                                    <i class="fas fa-compress-alt mr-1"></i>Compact mode active
+                                </span>
                             </span>
                         </p>
                     </div>
                     
                     <!-- Command Preview -->
-                    <div x-show="jobForm.hash_type && jobForm.attack_mode && jobForm.hash_file_id && jobForm.wordlist_id" 
+                    <div x-show="jobForm.hash_type && jobForm.attack_mode && jobForm.hash_file_id && jobForm.wordlist_id && jobForm.agent_ids && jobForm.agent_ids.length > 0" 
                          class="bg-gray-50 rounded-lg p-3 border">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             <i class="fas fa-terminal text-blue-600 mr-1"></i>Command Preview
                         </label>
                         <code class="block text-xs bg-gray-900 text-green-400 p-2 rounded font-mono whitespace-pre-wrap" 
                               x-text="commandTemplate">hashcat command will appear here...</code>
-                        <p class="text-xs text-gray-500 mt-1">This command will be executed on the assigned agent</p>
+                        <p class="text-xs text-gray-500 mt-1">This command will be executed on <span x-text="jobForm.agent_ids.length"></span> selected agent(s)</p>
                     </div>
                 </div>
                 
@@ -136,8 +195,8 @@
                         <i class="fas fa-times mr-2"></i>Cancel
                     </button>
                     <button type="submit" 
-                            :disabled="!jobForm.agent_id || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0"
-                            :class="(!jobForm.agent_id || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0) ? 'btn-disabled' : 'btn-primary'"
+                            :disabled="!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0"
+                            :class="(!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0) ? 'btn-disabled' : 'btn-primary'"
                             class="order-1 sm:order-2">
                         <i class="fas fa-plus mr-2"></i>Create Job
                     </button>
