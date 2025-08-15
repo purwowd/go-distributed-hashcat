@@ -115,13 +115,13 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Printf("🔍 Auto-detected local IP: %s", ip)
 	}
 
-	// ✅ Auto-detect capabilities jika tidak dispecify atau kosong
+	// ✅ Auto-detect capabilities menggunakan hashcat -I jika tidak dispecify atau kosong
 	if capabilities == "" || capabilities == "auto" {
-		capabilities = detectCapabilities()
-		log.Printf("🔍 Auto-detected capabilities: %s", capabilities)
+		capabilities = detectCapabilitiesWithHashcat()
+		log.Printf("🔍 Auto-detected capabilities using hashcat -I: %s", capabilities)
 	}
 
-	// ✅ Update capabilities di database jika berbeda atau kosong
+	// ✅ Update capabilities di database jika berbeda dengan yang terdeteksi
 	if info.Capabilities == "" || info.Capabilities != capabilities {
 		log.Printf("🔄 Updating capabilities from '%s' to '%s'", info.Capabilities, capabilities)
 		if err := updateAgentCapabilities(tempAgent, agentKey, capabilities); err != nil {
@@ -129,6 +129,8 @@ func runAgent(cmd *cobra.Command, args []string) {
 		} else {
 			log.Printf("✅ Capabilities updated successfully")
 		}
+	} else {
+		log.Printf("ℹ️ Capabilities already up-to-date: %s", capabilities)
 	}
 
 	// Jika name kosong, pakai hostname
@@ -1167,8 +1169,80 @@ func validateLocalIP(providedIP string) error {
 	return fmt.Errorf("❌ IP address validation failed: provided IP '%s' is not a valid local IP address. Local IPs: %v", providedIP, localIPs)
 }
 
-// detectCapabilities detects server capabilities (CPU/GPU)
-func detectCapabilities() string {
+// detectCapabilitiesWithHashcat detects server capabilities using hashcat -I command
+func detectCapabilitiesWithHashcat() string {
+	// Check if hashcat is available
+	if _, err := exec.LookPath("hashcat"); err != nil {
+		log.Printf("⚠️ Warning: hashcat not found, falling back to basic detection")
+		return detectCapabilitiesBasic()
+	}
+
+	// Run hashcat -I to get device information
+	cmd := exec.Command("hashcat", "-I")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to run hashcat -I: %v", err)
+		log.Printf("⚠️ Falling back to basic detection")
+		return detectCapabilitiesBasic()
+	}
+
+	// Parse output to find device types
+	outputStr := string(output)
+	lines := strings.Split(outputStr, "\n")
+
+	var deviceTypes []string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Look for device section headers
+		if strings.Contains(line, "Backend Device ID #") {
+			continue
+		}
+
+		// Look for Type line
+		if strings.HasPrefix(line, "Type...........:") {
+			parts := strings.Split(line, ":")
+			if len(parts) >= 2 {
+				deviceType := strings.TrimSpace(parts[1])
+				if deviceType != "" {
+					deviceTypes = append(deviceTypes, deviceType)
+					log.Printf("🔍 Detected device type: %s", deviceType)
+				}
+			}
+		}
+	}
+
+	// Determine capabilities based on detected devices
+	if len(deviceTypes) == 0 {
+		log.Printf("⚠️ No device types found in hashcat -I output, falling back to basic detection")
+		return detectCapabilitiesBasic()
+	}
+
+	// Check if any GPU devices are found
+	for _, deviceType := range deviceTypes {
+		if strings.Contains(strings.ToUpper(deviceType), "GPU") {
+			log.Printf("✅ GPU device detected: %s", deviceType)
+			return "GPU"
+		}
+	}
+
+	// If no GPU, check for CPU
+	for _, deviceType := range deviceTypes {
+		if strings.Contains(strings.ToUpper(deviceType), "CPU") {
+			log.Printf("✅ CPU device detected: %s", deviceType)
+			return "CPU"
+		}
+	}
+
+	// If we can't determine, log all found types and fallback
+	log.Printf("⚠️ Could not determine capabilities from device types: %v", deviceTypes)
+	log.Printf("⚠️ Falling back to basic detection")
+	return detectCapabilitiesBasic()
+}
+
+// detectCapabilitiesBasic is the fallback detection method
+func detectCapabilitiesBasic() string {
 	// Try to detect GPU first
 	if hasGPU() {
 		return "GPU"
