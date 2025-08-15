@@ -406,13 +406,16 @@ class DashboardApplication {
             showFileModal: false,
             showWordlistModal: false,
             
+            // Compact mode for agent selection
+            isCompactMode: false,
+            
             // Form states
             agentForm: { ip_address: '', port: null as number | null, capabilities: '', agent_key: '' },
             agentKeyForm: { name: '', agent_key: '' },
             createdAgent: null as any,
             createdAgentKey: null as any,
             deleteModalConfig: { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null as any },
-            jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' },
+            jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [] as string[], hash_type: '', attack_mode: '' },
             fileForm: { file: null },
             wordlistForm: { file: null },
             
@@ -1269,7 +1272,7 @@ class DashboardApplication {
                 }
                 
                 this.showJobModal = true
-                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
+                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
             },
             
             closeJobModal() {
@@ -1292,7 +1295,7 @@ class DashboardApplication {
                         hash_file_id: jobData.hash_file_id,
                         wordlist: wordlistName,                    // Required field for backend
                         wordlist_id: jobData.wordlist_id,         // Optional reference ID
-                        agent_id: jobData.agent_id || undefined   // Include agent assignment if specified
+                        agent_ids: jobData.agent_ids || []        // Include multiple agent assignments
                     }
                     
                     // Validate required fields before sending
@@ -1303,20 +1306,22 @@ class DashboardApplication {
                     }
                     
                     // Validate agent assignment is required
-                    if (!jobPayload.agent_id) {
-                        this.showNotification('Please select an agent to run this job', 'error')
+                    if (!jobPayload.agent_ids || jobPayload.agent_ids.length === 0) {
+                        this.showNotification('Please select at least one agent to run this job', 'error')
                         return
                     }
                     
-                    // Validate selected agent is online
-                    const selectedAgent = this.agents.find((a: any) => a.id === jobPayload.agent_id)
-                    if (!selectedAgent) {
-                        this.showNotification('Selected agent not found', 'error')
+                    // Validate all selected agents are online
+                    const selectedAgents = this.agents.filter((a: any) => jobPayload.agent_ids.includes(a.id))
+                    if (selectedAgents.length !== jobPayload.agent_ids.length) {
+                        this.showNotification('Some selected agents were not found', 'error')
                         return
                     }
                     
-                    if (selectedAgent.status !== 'online') {
-                        this.showNotification(`Cannot create job: Agent "${selectedAgent.name}" is ${selectedAgent.status}`, 'error')
+                    const offlineAgents = selectedAgents.filter((a: any) => a.status !== 'online')
+                    if (offlineAgents.length > 0) {
+                        const agentNames = offlineAgents.map((a: any) => a.name).join(', ')
+                        this.showNotification(`Cannot create job: Agents "${agentNames}" are offline`, 'error')
                         return
                     }
                     
@@ -1326,7 +1331,7 @@ class DashboardApplication {
                     if (result) {
                         this.showNotification('Job created successfully!', 'success')
                         this.showJobModal = false
-                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
+                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
                         
                         // Refresh jobs list to show the new job
                         await this.refreshJobsTable()
@@ -1370,7 +1375,7 @@ class DashboardApplication {
                     this.jobForm.attack_mode = '0'
                 }
                 
-                if (!this.jobForm.hash_file_id || !this.jobForm.wordlist_id) {
+                if (!this.jobForm.hash_file_id || !this.jobForm.wordlist_id || !this.jobForm.agent_ids || this.jobForm.agent_ids.length === 0) {
                     this.commandTemplate = 'hashcat command will appear here...'
                     return
                 }
@@ -1396,6 +1401,40 @@ class DashboardApplication {
                 
                 // Add outfile for WPA/WPA2
                 this.commandTemplate += ' --outfile=cracked.txt --outfile-format=2'
+                
+                // Add agent information
+                const selectedAgentCount = this.jobForm.agent_ids.length
+                this.commandTemplate += `\n\nThis job will be distributed to ${selectedAgentCount} agent(s):`
+                this.jobForm.agent_ids.forEach((agentId: string) => {
+                    const agent = this.agents.find((a: any) => a.id === agentId)
+                    if (agent) {
+                        const statusColor = agent.status === 'online' ? '🟢' : agent.status === 'busy' ? '🟡' : '🔴'
+                        this.commandTemplate += `\n- ${agent.name} (${agent.ip_address}) [${statusColor} ${agent.status}]`
+                    }
+                })
+            },
+
+            // Toggle select all agents
+            toggleSelectAllAgents(checked: boolean) {
+                if (checked) {
+                    // Select all online agents
+                    this.jobForm.agent_ids = this.onlineAgents.map((agent: any) => agent.id)
+                } else {
+                    // Deselect all agents
+                    this.jobForm.agent_ids = []
+                }
+            },
+
+            // Check if all agents are selected
+            areAllAgentsSelected(): boolean {
+                return this.onlineAgents.length > 0 && 
+                       this.jobForm.agent_ids.length === this.onlineAgents.length &&
+                       this.onlineAgents.every((agent: any) => this.jobForm.agent_ids.includes(agent.id))
+            },
+
+            // Toggle compact mode for agent selection
+            toggleCompactMode() {
+                this.isCompactMode = !this.isCompactMode
             },
 
             async startJob(jobId: string) {
