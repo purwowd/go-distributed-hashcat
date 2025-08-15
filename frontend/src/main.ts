@@ -407,7 +407,7 @@ class DashboardApplication {
             showWordlistModal: false,
             
             // Form states
-            agentForm: { name: '', ip_address: '', port: null as number | null, capabilities: '', agent_key: '' },
+            agentForm: { ip_address: '', port: null as number | null, capabilities: '', agent_key: '' },
             agentKeyForm: { name: '', agent_key: '' },
             createdAgent: null as any,
             createdAgentKey: null as any,
@@ -1089,7 +1089,7 @@ class DashboardApplication {
             // Modal actions
             async openAgentModal() {
                 this.showAgentModal = true
-                this.agentForm = { name: '', ip_address: '', port: null as number | null, capabilities: '', agent_key: '' }
+                this.agentForm = { ip_address: '', port: null as number | null, capabilities: '', agent_key: '' }
                 this.createdAgent = null
             },
             
@@ -1162,68 +1162,45 @@ class DashboardApplication {
                 try {
                     this.isLoading = true
                     
-                    // Validate required fields
-                    if (!agentData.name || !agentData.agent_key) {
-                        if (!agentData.name) {
-                            this.showNotification('Agent name is required. Please enter an agent name.', 'error')
-                    } else {
-                            this.showNotification('Agent key is required. Please enter an agent key.', 'error')
-                        }
-                        return
-                    }
-
+                    // Validate required fields - only agent_key is required now
+                    if (!agentData.agent_key) {
+                    this.showNotification('Agent key is required. Please enter an agent key.', 'error')
+                    return
+                }
+                
                     // Set default port 8080 if port is empty or null
                     const processedData = { ...agentData }
                     if (!processedData.port || processedData.port === '' || processedData.port === null || processedData.port === undefined) {
                         processedData.port = 8080
-                        console.log('🔧 Setting default port 8080 for agent:', processedData.name)
+                        console.log('🔧 Setting default port 8080 for agent')
                     }
                 
-                const result = await agentStore.actions.createAgent(processedData)
-                if (result) {
-                    this.showNotification('Agent registered successfully!', 'success')
+                // Use updateAgentData instead of createAgent to only update data without changing status
+                const result = await agentStore.actions.updateAgentData(processedData)
+                if (result.success) {
+                    // Agent data updated successfully, show success notification and close modal
+                    this.showNotification(result.message || 'Agent data updated successfully!', 'success')
                     this.closeAgentModal() // Close modal after success
                 } else {
-                    // Check if it's a duplicate agent error
-                    const state = agentStore.getState();
-                    if (state.error && state.error.includes('already exists')) {
-                        this.showNotification(state.error, 'error')
-                    } else if (state.error && state.error.includes('not found')) {
-                        this.showNotification(state.error, 'error')
-                    } else if (state.error && state.error.includes('invalid agent key')) {
-                        this.showNotification('Invalid agent key. Please check the agent key and try again.', 'error')
-                        } else if (state.error && state.error.includes('IP address') && state.error.includes('already used')) {
-                            // Handle IP address conflict specifically
-                            let userMessage = String(state.error);
-                            
-                            // Remove HTTP status prefix if present
-                            if (userMessage.includes('HTTP 400: Bad Request - ')) {
-                                userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
-                            } else if (userMessage.includes('HTTP 409: Conflict - ')) {
-                                userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
-                            } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
-                                userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
-                            }
-                            
-                            this.showNotification(userMessage, 'error')
-                    } else if (state.error) {
-                            // Try to extract user-friendly message from error
-                            let userMessage = state.error;
-                            
-                            // Remove HTTP status prefix if present
-                            if (userMessage.includes('HTTP 400: Bad Request - ')) {
-                                userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
-                            } else if (userMessage.includes('HTTP 409: Conflict - ')) {
-                                userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
-                            } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
-                                userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
-                            }
-                            
-                            this.showNotification(userMessage, 'error')
+                    // Show specific error message
+                    if (result.error) {
+                        // Remove HTTP status prefix if present for better user experience
+                        let userMessage = result.error
+                        
+                        // Remove HTTP status prefix if present
+                        if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                            userMessage = userMessage.replace('HTTP 400: Bad Request - ', '')
+                        } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                            userMessage = userMessage.replace('HTTP 409: Conflict - ', '')
+                        } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                            userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '')
+                        }
+                        
+                        this.showNotification(userMessage, 'error')
                     } else {
-                        this.showNotification('Failed to register agent', 'error')
+                        this.showNotification('Failed to update agent data', 'error')
                     }
-                    }
+                }
                 } catch (error) {
                     console.error('Error creating agent:', error)
                     this.showNotification('Failed to register agent', 'error')

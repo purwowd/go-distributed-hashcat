@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -28,11 +29,11 @@ func NewAgentHandler(agentUsecase usecase.AgentUsecase) *AgentHandler {
 // RegisterAgent hanya membuat agent baru dengan status default "offline"
 func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 	type registerAgentDTO struct {
-		Name         string `json:"name" binding:"required"`
+		Name         string `json:"name"` // Name is optional now, will be retrieved from database based on agent key
 		IPAddress    string `json:"ip_address"`
 		Port         int    `json:"port"`
 		Capabilities string `json:"capabilities"`
-		AgentKey     string `json:"agent_key"`
+		AgentKey     string `json:"agent_key" binding:"required"`
 	}
 
 	var dto registerAgentDTO
@@ -54,8 +55,34 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		return
 	}
 
+	// Get agent name from database based on agent key
+	existingAgentByKey, err := h.agentUsecase.GetByAgentKey(c.Request.Context(), dto.AgentKey)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "agent key not found",
+				"code":    "AGENT_KEY_NOT_FOUND",
+				"message": "The provided agent key does not exist in the database. Please generate a valid agent key first.",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Use agent name from database, or use provided name if it matches
+	agentName := existingAgentByKey.Name
+	if dto.Name != "" && dto.Name != agentName {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "agent name mismatch",
+			"code":    "AGENT_NAME_MISMATCH",
+			"message": "The provided agent name does not match the name associated with the provided agent key.",
+		})
+		return
+	}
+
 	req := domain.CreateAgentRequest{
-		Name:         dto.Name,
+		Name:         agentName, // Use name from database
 		IPAddress:    dto.IPAddress,
 		Port:         dto.Port,
 		Capabilities: dto.Capabilities,
@@ -273,33 +300,71 @@ func (h *AgentHandler) UpdateAgentStatus(c *gin.Context) {
 
 // UpdateAgentHeartbeat updates the heartbeat of an agent
 func (h *AgentHandler) UpdateAgentHeartbeat(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
+	id := c.Param("id")
+	agentID, err := uuid.Parse(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid agent ID",
-			"code":    "INVALID_AGENT_ID",
-			"message": "The provided agent ID is not valid.",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid agent ID"})
 		return
 	}
 
-	// Update last seen
-	if err := h.agentUsecase.UpdateAgentLastSeen(c.Request.Context(), id); err != nil {
+	if err := h.agentUsecase.UpdateAgentLastSeen(c.Request.Context(), agentID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "heartbeat updated"})
+}
+
+// UpdateAgentData updates only the data fields (ip_address, port, capabilities) without changing status
+func (h *AgentHandler) UpdateAgentData(c *gin.Context) {
+	type updateAgentDataDTO struct {
+		AgentKey     string `json:"agent_key" binding:"required"`
+		IPAddress    string `json:"ip_address"`
+		Port         int    `json:"port"`
+		Capabilities string `json:"capabilities"`
+	}
+
+	var dto updateAgentDataDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update only data fields, keep status unchanged (offline)
+	if err := h.agentUsecase.UpdateAgentData(c.Request.Context(), dto.AgentKey, dto.IPAddress, dto.Port, dto.Capabilities); err != nil {
+		// Handle specific validation errors
+		if strings.Contains(err.Error(), "AGENT_KEY_NOT_FOUND:") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   fmt.Sprintf("Agent key %s not found in database", dto.AgentKey),
+				"code":    "AGENT_KEY_NOT_FOUND",
+				"message": fmt.Sprintf("The provided agent key '%s' does not exist in the database. Please generate a valid agent key first.", dto.AgentKey),
+			})
+			return
+		}
+
+		// Handle IP address conflicts
+		if strings.Contains(err.Error(), "IP address") && strings.Contains(err.Error(), "already used") {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":   fmt.Sprintf("IP address %s already in use", dto.IPAddress),
+				"code":    "IP_ADDRESS_CONFLICT",
+				"message": err.Error(),
+			})
+			return
+		}
+
+		// Handle other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to update agent heartbeat",
-			"code":    "UPDATE_HEARTBEAT_FAILED",
-			"message": "Failed to update agent heartbeat.",
+			"error":   "Failed to update agent data",
+			"code":    "UPDATE_FAILED",
+			"message": err.Error(),
 		})
 		return
 	}
 
+	// Success - no notification, just close modal
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Agent heartbeat updated successfully",
-		"data": gin.H{
-			"id":         id.String(),
-			"updated_at": time.Now().Format(time.RFC3339),
-		},
+		"message": "Agent data updated successfully",
+		"code":    "UPDATE_SUCCESS",
 	})
 }
 
@@ -490,6 +555,7 @@ func (h *AgentHandler) AgentStartup(c *gin.Context) {
 	existingAgentByKey.Port = req.Port
 	existingAgentByKey.Capabilities = req.Capabilities
 	existingAgentByKey.Status = "online"
+	existingAgentByKey.LastSeen = time.Now() // Update LastSeen to current time
 	existingAgentByKey.UpdatedAt = time.Now()
 
 	if err := h.agentUsecase.UpdateAgent(c.Request.Context(), existingAgentByKey); err != nil {
@@ -501,7 +567,7 @@ func (h *AgentHandler) AgentStartup(c *gin.Context) {
 		return
 	}
 
-	// Update last seen
+	// Update last seen (this will also update the database)
 	if err := h.agentUsecase.UpdateAgentLastSeen(c.Request.Context(), existingAgentByKey.ID); err != nil {
 		// Log error but don't fail the request
 		log.Printf("Failed to update agent last seen: %v", err)
