@@ -76,8 +76,39 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		job.WordlistID = &wordlistID
 	}
 
-	// Handle manual agent assignment
-	if req.AgentID != "" {
+	// Handle agent assignment (single or multiple)
+	if len(req.AgentIDs) > 0 {
+		// Multiple agent assignment for distributed jobs
+		agentIDs := make([]uuid.UUID, 0, len(req.AgentIDs))
+
+		for _, agentIDStr := range req.AgentIDs {
+			agentID, err := uuid.Parse(agentIDStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid agent ID %s: %w", agentIDStr, err)
+			}
+
+			// Verify agent exists and is available
+			agent, err := u.agentRepo.GetByID(ctx, agentID)
+			if err != nil {
+				return nil, fmt.Errorf("agent not found: %w", err)
+			}
+
+			if agent.Status != "online" {
+				return nil, fmt.Errorf("agent %s is not available (status: %s)", agent.Name, agent.Status)
+			}
+
+			agentIDs = append(agentIDs, agentID)
+		}
+
+		// For now, assign to first agent (legacy compatibility)
+		// TODO: Implement proper distributed job creation
+		job.AgentID = &agentIDs[0]
+
+		// Store all agent IDs for future use
+		job.AgentIDs = agentIDs
+
+	} else if req.AgentID != "" {
+		// Single agent assignment (legacy)
 		agentID, err := uuid.Parse(req.AgentID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid agent ID: %w", err)
@@ -94,6 +125,9 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		}
 
 		job.AgentID = &agentID
+	} else {
+		// No agent assigned - job will be in "unassigned" state
+		// This is valid for job queuing systems
 	}
 
 	if err := u.jobRepo.Create(ctx, job); err != nil {

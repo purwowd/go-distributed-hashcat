@@ -403,6 +403,7 @@ class DashboardApplication {
             showDeleteModal: false,
             showAgentKeys: false,
             showJobModal: false,
+            currentStep: 1, // 1: Basic Config, 2: Distribution Preview
             showFileModal: false,
             showWordlistModal: false,
             showDistributedJobModal: false,
@@ -1372,11 +1373,45 @@ class DashboardApplication {
                 }
                 
                 this.showJobModal = true
+                this.currentStep = 1
                 this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
             },
             
             closeJobModal() {
                 this.showJobModal = false
+                this.currentStep = 1
+            },
+
+            // Step management functions
+            goToStep(step: number) {
+                if (step === 2 && !this.canProceedToStep2()) {
+                    this.showNotification('Please complete all required fields before proceeding', 'warning')
+                    return
+                }
+                this.currentStep = step
+                if (step === 2) {
+                    this.updateCommandTemplate()
+                }
+            },
+
+            canProceedToStep2(): boolean {
+                return !!(this.jobForm.name && 
+                         this.jobForm.hash_file_id && 
+                         this.jobForm.wordlist_id &&
+                         this.jobForm.agent_ids && 
+                         this.jobForm.agent_ids.length > 0)
+            },
+
+            getSelectedHashFileName(): string {
+                if (!this.jobForm.hash_file_id) return 'Not selected'
+                const hashFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                return hashFile ? (hashFile.orig_name || hashFile.name) : 'Not selected'
+            },
+
+            getSelectedWordlistName(): string {
+                if (!this.jobForm.wordlist_id) return 'Not selected'
+                const wordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                return wordlist ? (wordlist.orig_name || wordlist.name) : 'Not selected'
             },
 
             async createJob(jobData: any) {
