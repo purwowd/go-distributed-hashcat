@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dynamic Hash Type</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        .file-select { padding: 8px; margin: 10px 0; width: 300px; }
+        .hash-type-display { background: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .hash-type-name { font-weight: bold; color: #1f2937; }
+        .description { font-style: italic; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <h1>Test Dynamic Hash Type Feature</h1>
+    
+    <div class="test-section" x-data="hashTypeTest()">
+        <h2>Test Dynamic Hash Type Detection</h2>
+        
+        <label>Select Hash File:</label>
+        <select x-model="selectedFileId" @change="updateDisplay()" class="file-select">
+            <option value="">Select hash file</option>
+            <template x-for="file in hashFiles" :key="file.id">
+                <option :value="file.id" x-text="file.orig_name || file.name"></option>
+            </template>
+        </select>
+        
+        <div style="margin: 20px 0;">
+            <strong>Selected File:</strong> 
+            <span x-text="selectedFileName || 'None'"></span>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <strong>File Type:</strong> 
+            <span x-text="selectedFileType || 'Unknown'"></span>
+        </div>
+        
+        <!-- Hash Type Display -->
+        <div style="margin: 20px 0; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
+            <h3>Hash Type Information</h3>
+            
+            <div style="margin: 10px 0;">
+                <strong>Hash Type Name:</strong> 
+                <span class="hash-type-name" x-text="selectedHashTypeName">WPA/WPA2</span>
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <strong>Hash Type Value:</strong> 
+                <span class="hash-type-display" x-text="selectedHashTypeValue">2500</span>
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <strong>Description:</strong> 
+                <span class="description" x-text="selectedHashTypeDescription">This system is specialized for WPA/WPA2 cracking</span>
+            </div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <strong>Debug Info:</strong>
+            <pre x-text="JSON.stringify(debugInfo, null, 2)"></pre>
+        </div>
+    </div>
+
+    <script>
+        function hashTypeTest() {
+            return {
+                selectedFileId: '',
+                hashFiles: [
+                    {
+                        id: '1',
+                        name: 'wifi-handshake.hccapx',
+                        orig_name: 'wifi-handshake.hccapx',
+                        type: 'hccapx',
+                        size: 1024000,
+                        created_at: '2024-01-01T00:00:00Z'
+                    },
+                    {
+                        id: '2',
+                        name: 'legacy-handshake.hccap',
+                        orig_name: 'legacy-handshake.hccap',
+                        type: 'hccap',
+                        size: 512000,
+                        created_at: '2024-01-01T00:00:00Z'
+                    },
+                    {
+                        id: '3',
+                        name: 'capture.cap',
+                        orig_name: 'capture.cap',
+                        type: 'cap',
+                        size: 2048000,
+                        created_at: '2024-01-01T00:00:00Z'
+                    },
+                    {
+                        id: '4',
+                        name: 'packet-capture.pcap',
+                        orig_name: 'packet-capture.pcap',
+                        type: 'pcap',
+                        size: 3072000,
+                        created_at: '2024-01-01T00:00:00Z'
+                    },
+                    {
+                        id: '5',
+                        name: 'generic-hash.txt',
+                        orig_name: 'generic-hash.txt',
+                        type: 'hash',
+                        size: 256000,
+                        created_at: '2024-01-01T00:00:00Z'
+                    }
+                ],
+                
+                get selectedFileName() {
+                    if (!this.selectedFileId) return null;
+                    const file = this.hashFiles.find(f => f.id === this.selectedFileId);
+                    return file ? (file.orig_name || file.name) : null;
+                },
+                
+                get selectedFileType() {
+                    if (!this.selectedFileId) return null;
+                    const file = this.hashFiles.find(f => f.id === this.selectedFileId);
+                    return file ? file.type : null;
+                },
+                
+                get debugInfo() {
+                    return {
+                        selectedFileId: this.selectedFileId,
+                        selectedFile: this.hashFiles.find(f => f.id === this.selectedFileId),
+                        allFiles: this.hashFiles
+                    };
+                },
+                
+                // Computed properties for hash type
+                get selectedHashTypeValue() {
+                    if (!this.selectedFileId) {
+                        return '2500' // Default for WPA/WPA2
+                    }
+                    
+                    const selectedFile = this.hashFiles.find(f => f.id === this.selectedFileId);
+                    if (!selectedFile) {
+                        return '2500'
+                    }
+                    
+                    // Determine hash type based on file type
+                    const fileType = selectedFile.type?.toLowerCase() || '';
+                    switch (fileType) {
+                        case 'hccapx':
+                        case 'hccap':
+                        case 'cap':
+                        case 'pcap':
+                            return '2500'; // WPA/WPA2
+                        case 'hash':
+                        default:
+                            return '0'; // Generic hash
+                    }
+                },
+                
+                get selectedHashTypeName() {
+                    if (!this.selectedFileId) {
+                        return 'WPA/WPA2'
+                    }
+                    
+                    const selectedFile = this.hashFiles.find(f => f.id === this.selectedFileId);
+                    if (!selectedFile) {
+                        return 'WPA/WPA2'
+                    }
+                    
+                    // Determine hash type name based on file type
+                    const fileType = selectedFile.type?.toLowerCase() || '';
+                    switch (fileType) {
+                        case 'hccapx':
+                        case 'hccap':
+                        case 'cap':
+                        case 'pcap':
+                            return 'WPA/WPA2';
+                        case 'hash':
+                        default:
+                            return 'Generic Hash';
+                    }
+                },
+                
+                get selectedHashTypeDescription() {
+                    if (!this.selectedFileId) {
+                        return 'This system is specialized for WPA/WPA2 cracking'
+                    }
+                    
+                    const selectedFile = this.hashFiles.find(f => f.id === this.selectedFileId);
+                    if (!selectedFile) {
+                        return 'This system is specialized for WPA/WPA2 cracking'
+                    }
+                    
+                    // Determine description based on file type
+                    const fileType = selectedFile.type?.toLowerCase() || '';
+                    switch (fileType) {
+                        case 'hccapx':
+                            return 'WiFi handshake file (.hccapx) - WPA/WPA2 cracking';
+                        case 'hccap':
+                            return 'Legacy WiFi handshake file (.hccap) - WPA/WPA2 cracking';
+                        case 'cap':
+                        case 'pcap':
+                            return 'WiFi packet capture file - WPA/WPA2 cracking';
+                        case 'hash':
+                        default:
+                            return 'Generic hash file - various hash types supported';
+                    }
+                },
+                
+                updateDisplay() {
+                    // Force Alpine to re-evaluate
+                    this.$nextTick(() => {
+                        console.log('File changed to:', this.selectedFileId);
+                        console.log('Hash Type Value:', this.selectedHashTypeValue);
+                        console.log('Hash Type Name:', this.selectedHashTypeName);
+                        console.log('Description:', this.selectedHashTypeDescription);
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -53,3 +53,9 @@ type WordlistRepository interface {
 	GetAll(ctx context.Context) ([]Wordlist, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
+
+// DistributedJobUsecase defines the interface for distributed job operations
+type DistributedJobUsecase interface {
+	CreateDistributedJobs(ctx context.Context, req *DistributedJobRequest) (*DistributedJobResult, error)
+	GetDistributedJobStatus(ctx context.Context, masterJobID uuid.UUID) (*DistributedJobResult, error)
+}

@@ -97,6 +97,47 @@ type EnrichedJob struct {
 	HashFileName string `json:"hash_file_name,omitempty"`
 }
 
+// AgentPerformance represents agent performance metrics
+type AgentPerformance struct {
+	AgentID      uuid.UUID `json:"agent_id"`
+	Name         string    `json:"name"`
+	Capabilities string    `json:"capabilities"`
+	Speed        int64     `json:"speed"`        // Hash rate (H/s)
+	ResourceType string    `json:"resource_type"` // "GPU" or "CPU"
+	Performance  float64   `json:"performance"`  // Normalized performance score (0-1)
+	WordCount    int64     `json:"word_count"`   // Assigned word count for this job
+}
+
+// DistributedJobRequest represents request to create distributed jobs
+type DistributedJobRequest struct {
+	Name         string `json:"name" binding:"required"`
+	HashType     int    `json:"hash_type" binding:"gte=0"`
+	AttackMode   int    `json:"attack_mode" binding:"gte=0"`
+	HashFileID   string `json:"hash_file_id" binding:"required"`
+	WordlistID   string `json:"wordlist_id" binding:"required"`
+	Rules        string `json:"rules,omitempty"`
+	AutoDistribute bool `json:"auto_distribute"` // Whether to auto-distribute to all agents
+}
+
+// WordlistSegment represents a segment of wordlist for distribution
+type WordlistSegment struct {
+	StartIndex int64  `json:"start_index"`
+	EndIndex   int64  `json:"end_index"`
+	WordCount  int64  `json:"word_count"`
+	Content    string `json:"content,omitempty"` // For small segments
+	FilePath   string `json:"file_path,omitempty"` // For large segments
+}
+
+// DistributedJobResult represents the result of distributed job creation
+type DistributedJobResult struct {
+	MasterJobID    uuid.UUID           `json:"master_job_id"`
+	SubJobs        []Job               `json:"sub_jobs"`
+	AgentAssignments []AgentPerformance `json:"agent_assignments"`
+	TotalWords     int64               `json:"total_words"`
+	DistributedWords int64             `json:"distributed_words"`
+	Message        string              `json:"message"`
+}
+
 // CreateAgentRequest represents the request to register a new agent
 type CreateAgentRequest struct {
 	Name         string `json:"name" binding:"required"`

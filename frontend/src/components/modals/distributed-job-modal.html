@@ -1,0 +1,179 @@
+<!-- Distributed Job Creation Modal -->
+<div x-show="showDistributedJobModal" 
+     x-transition:enter="transition ease-out duration-300" 
+     x-transition:enter-start="opacity-0 scale-90" 
+     x-transition:enter-end="opacity-100 scale-100" 
+     x-transition:leave="transition ease-in duration-200" 
+     x-transition:leave-start="opacity-100 scale-100" 
+     x-transition:leave-end="opacity-0 scale-90" 
+     class="modal-modern">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="modal-backdrop" @click="closeDistributedJobModal()"></div>
+        <div class="modal-content animate-scale-in max-w-4xl">
+            <form @submit.prevent="createDistributedJob()">
+                <!-- Header -->
+                <div class="p-6 border-b border-gray-100/50">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="icon-modern icon-primary">
+                            <i class="fas fa-network-wired text-sm"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">Create Distributed Job</h3>
+                    </div>
+                    <p class="text-gray-600 text-sm">Automatically divide wordlist among available agents based on performance</p>
+                </div>
+                
+                <!-- Form Content -->
+                <div class="p-6 space-y-6">
+                    <!-- Job Name -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Job Name <span class="text-red-500">*</span></label>
+                        <input type="text" 
+                               x-model="distributedJobForm.name" 
+                               required 
+                               class="input-modern" 
+                               placeholder="WiFi Password Crack - Distributed">
+                        <p class="text-xs text-gray-500 mt-1">Descriptive name for the distributed job</p>
+                    </div>
+                    
+                    <!-- File Selection Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">WiFi Handshake File <span class="text-red-500">*</span></label>
+                            <select x-model="distributedJobForm.hash_file_id" 
+                                    @change="updateDistributedCommandTemplate()" 
+                                    required 
+                                    class="select-modern">
+                                <option value="">Select handshake file (.hccapx)</option>
+                                <template x-for="file in hashFiles" :key="file.id">
+                                    <option :value="file.id" x-text="file.orig_name || file.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Wordlist <span class="text-red-500">*</span></label>
+                            <select x-model="distributedJobForm.wordlist_id" 
+                                    @change="updateDistributedCommandTemplate(); updateDistributionPreview()" 
+                                    required 
+                                    class="select-modern">
+                                <option value="">Select wordlist</option>
+                                <template x-for="wordlist in wordlists" :key="wordlist.id">
+                                    <option :value="wordlist.id" x-text="wordlist.orig_name || wordlist.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Hash Type & Attack Mode Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Hash Type</label>
+                            <div class="input-modern bg-gray-50 cursor-not-allowed flex items-center justify-between">
+                                <span class="text-gray-700" x-text="selectedHashTypeName">WPA/WPA2</span>
+                                <span class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded" x-text="selectedHashTypeValue">2500</span>
+                            </div>
+                            <input type="hidden" x-model="distributedJobForm.hash_type" :value="selectedHashTypeValue">
+                            <p class="text-xs text-gray-500 mt-1" x-text="selectedHashTypeDescription">This system is specialized for WPA/WPA2 cracking</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Attack Mode</label>
+                            <div class="input-modern bg-gray-50 cursor-not-allowed flex items-center justify-between">
+                                <span class="text-gray-700">Dictionary Attack</span>
+                                <span class="text-xs text-gray-500 bg-green-100 px-2 py-1 rounded" x-text="selectedWordlistCount"></span>
+                            </div>
+                            <input type="hidden" x-model="distributedJobForm.attack_mode" value="0">
+                            <p class="text-xs text-gray-500 mt-1">Uses wordlist to attempt password combinations</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Distribution Preview -->
+                    <div x-show="distributedJobForm.wordlist_id && onlineAgents.length > 0">
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Distribution Preview</label>
+                        <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-blue-800">Wordlist Distribution</h4>
+                                <span class="text-xs bg-blue-600 text-white px-2 py-1 rounded" x-text="`${onlineAgents.length} agents available`"></span>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <template x-for="(agent, index) in onlineAgents" :key="agent.id">
+                                    <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-100">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold" x-text="index + 1"></div>
+                                            <div>
+                                                <div class="font-medium text-gray-900" x-text="agent.name"></div>
+                                                <div class="text-xs text-gray-500" x-text="agent.ip_address"></div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-center space-x-3">
+                                            <!-- Resource Type Badge -->
+                                            <span class="text-xs px-2 py-1 rounded-full font-medium"
+                                                  :class="{
+                                                      'bg-green-100 text-green-800': isGPUAgent(agent),
+                                                      'bg-blue-100 text-blue-800': !isGPUAgent(agent)
+                                                  }"
+                                                  x-text="isGPUAgent(agent) ? 'GPU' : 'CPU'">
+                                            </span>
+                                            
+                                            <!-- Performance Score -->
+                                            <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded" 
+                                                  x-text="`${getAgentPerformanceScore(agent)}%`">
+                                            </span>
+                                            
+                                            <!-- Assigned Words -->
+                                            <span class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded" 
+                                                  x-text="`${getAssignedWordCount(agent)} words`">
+                                            </span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            
+                            <div class="mt-4 p-3 bg-blue-100 rounded-lg">
+                                <div class="text-sm text-blue-800">
+                                    <strong>Total Words:</strong> <span x-text="selectedWordlistCount"></span> |
+                                    <strong>Distribution:</strong> <span x-text="getDistributionMethod()"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Command Template -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Distributed Hashcat Commands</label>
+                        <div class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                            <pre x-text="distributedCommandTemplate">hashcat commands will appear here...</pre>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Each agent will receive a portion of the wordlist for parallel processing</p>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="p-6 border-t border-gray-100/50 flex items-center justify-between">
+                    <button type="button" 
+                            @click="closeDistributedJobModal()"
+                            class="btn-secondary">
+                        Cancel
+                    </button>
+                    
+                    <div class="flex items-center space-x-3">
+                        <button type="button" 
+                                @click="previewDistribution()"
+                                x-show="distributedJobForm.wordlist_id && onlineAgents.length > 0"
+                                class="btn-outline">
+                            <i class="fas fa-eye mr-2"></i>Preview Distribution
+                        </button>
+                        
+                        <button type="submit" 
+                                :disabled="!canCreateDistributedJob()"
+                                class="btn-primary">
+                            <i class="fas fa-rocket mr-2"></i>Create Distributed Jobs
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

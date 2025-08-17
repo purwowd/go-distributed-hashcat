@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Wordlist Count</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        .wordlist-select { padding: 8px; margin: 10px 0; width: 300px; }
+        .count-display { background: #10b981; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>Test Wordlist Count Function</h1>
+    
+    <div class="test-section" x-data="wordlistTest()">
+        <h2>Test getSelectedWordlistCount()</h2>
+        
+        <label>Select Wordlist:</label>
+        <select x-model="selectedWordlistId" @change="updateDisplay()" class="wordlist-select">
+            <option value="">Select wordlist</option>
+            <template x-for="wordlist in wordlists" :key="wordlist.id">
+                <option :value="wordlist.id" x-text="wordlist.orig_name || wordlist.name"></option>
+            </template>
+        </select>
+        
+        <div style="margin: 20px 0;">
+            <strong>Selected Wordlist:</strong> 
+            <span x-text="selectedWordlistName || 'None'"></span>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <strong>Word Count:</strong> 
+            <span class="count-display" x-text="getSelectedWordlistCount()"></span>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <strong>Debug Info:</strong>
+            <pre x-text="JSON.stringify(debugInfo, null, 2)"></pre>
+        </div>
+    </div>
+
+    <script>
+        function wordlistTest() {
+            return {
+                selectedWordlistId: '',
+                wordlists: [
+                    {
+                        id: '1',
+                        name: 'rockyou.txt',
+                        orig_name: 'rockyou.txt',
+                        size: 14344384,
+                        word_count: 14344384,
+                        created_at: '2024-01-01T00:00:00Z'
+                    },
+                    {
+                        id: '2',
+                        name: '10k-most-common.txt',
+                        orig_name: '10k-most-common.txt',
+                        size: 102400,
+                        word_count: 10000,
+                        created_at: '2024-01-01T00:00:00Z'
+                    },
+                    {
+                        id: '3',
+                        name: 'custom-wordlist.txt',
+                        orig_name: 'custom-wordlist.txt',
+                        size: 51200,
+                        word_count: null,
+                        created_at: '2024-01-01T00:00:00Z'
+                    }
+                ],
+                
+                get selectedWordlistName() {
+                    if (!this.selectedWordlistId) return null;
+                    const wordlist = this.wordlists.find(w => w.id === this.selectedWordlistId);
+                    return wordlist ? (wordlist.orig_name || wordlist.name) : null;
+                },
+                
+                get debugInfo() {
+                    return {
+                        selectedWordlistId: this.selectedWordlistId,
+                        selectedWordlist: this.wordlists.find(w => w.id === this.selectedWordlistId),
+                        allWordlists: this.wordlists
+                    };
+                },
+                
+                getSelectedWordlistCount() {
+                    if (!this.selectedWordlistId) {
+                        return '0';
+                    }
+                    
+                    const selectedWordlist = this.wordlists.find(w => w.id === this.selectedWordlistId);
+                    if (!selectedWordlist) {
+                        return '0';
+                    }
+                    
+                    // Return word count if available, otherwise return size in KB
+                    if (selectedWordlist.word_count && selectedWordlist.word_count > 0) {
+                        return selectedWordlist.word_count.toLocaleString();
+                    } else if (selectedWordlist.size) {
+                        const sizeKB = Math.round(selectedWordlist.size / 1024);
+                        return `${sizeKB} KB`;
+                    }
+                    
+                    return '0';
+                },
+                
+                updateDisplay() {
+                    // Force Alpine to re-evaluate
+                    this.$nextTick(() => {
+                        console.log('Wordlist changed to:', this.selectedWordlistId);
+                        console.log('Count:', this.getSelectedWordlistCount());
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
