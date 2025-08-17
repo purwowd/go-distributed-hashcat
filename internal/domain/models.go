@@ -23,25 +23,26 @@ type Agent struct {
 
 // Job represents a cracking job
 type Job struct {
-	ID          uuid.UUID  `json:"id" db:"id"`
-	Name        string     `json:"name" db:"name"`
-	Status      string     `json:"status" db:"status"` // pending, running, completed, failed, paused
-	HashType    int        `json:"hash_type" db:"hash_type"`
-	AttackMode  int        `json:"attack_mode" db:"attack_mode"`
-	HashFile    string     `json:"hash_file" db:"hash_file"`
-	HashFileID  *uuid.UUID `json:"hash_file_id" db:"hash_file_id"`
-	Wordlist    string     `json:"wordlist" db:"wordlist"`
-	WordlistID  *uuid.UUID `json:"wordlist_id" db:"wordlist_id"`
-	Rules       string     `json:"rules" db:"rules"`
-	AgentID     *uuid.UUID `json:"agent_id" db:"agent_id"`
-	Progress    float64    `json:"progress" db:"progress"`
-	Speed       int64      `json:"speed" db:"speed"`
-	ETA         *time.Time `json:"eta" db:"eta"`
-	Result      string     `json:"result" db:"result"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
-	StartedAt   *time.Time `json:"started_at" db:"started_at"`
-	CompletedAt *time.Time `json:"completed_at" db:"completed_at"`
+	ID          uuid.UUID   `json:"id" db:"id"`
+	Name        string      `json:"name" db:"name"`
+	Status      string      `json:"status" db:"status"` // pending, running, completed, failed, paused
+	HashType    int         `json:"hash_type" db:"hash_type"`
+	AttackMode  int         `json:"attack_mode" db:"attack_mode"`
+	HashFile    string      `json:"hash_file" db:"hash_file"`
+	HashFileID  *uuid.UUID  `json:"hash_file_id" db:"hash_file_id"`
+	Wordlist    string      `json:"wordlist" db:"wordlist"`
+	WordlistID  *uuid.UUID  `json:"wordlist_id" db:"wordlist_id"`
+	Rules       string      `json:"rules" db:"rules"`
+	AgentID     *uuid.UUID  `json:"agent_id" db:"agent_id"`     // Single agent (legacy)
+	AgentIDs    []uuid.UUID `json:"agent_ids,omitempty" db:"-"` // Multiple agents (not stored in DB, computed)
+	Progress    float64     `json:"progress" db:"progress"`
+	Speed       int64       `json:"speed" db:"speed"`
+	ETA         *time.Time  `json:"eta" db:"eta"`
+	Result      string      `json:"result" db:"result"`
+	CreatedAt   time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at" db:"updated_at"`
+	StartedAt   *time.Time  `json:"started_at" db:"started_at"`
+	CompletedAt *time.Time  `json:"completed_at" db:"completed_at"`
 }
 
 // HashFile represents uploaded hash files
@@ -79,14 +80,15 @@ type JobStatus struct {
 
 // CreateJobRequest represents the request to create a new job
 type CreateJobRequest struct {
-	Name       string `json:"name" binding:"required"`
-	HashType   int    `json:"hash_type" binding:"gte=0"`
-	AttackMode int    `json:"attack_mode" binding:"gte=0"`
-	HashFileID string `json:"hash_file_id" binding:"required"`
-	Wordlist   string `json:"wordlist" binding:"required"`
-	WordlistID string `json:"wordlist_id,omitempty"`
-	AgentID    string `json:"agent_id,omitempty"` // Optional manual agent assignment
-	Rules      string `json:"rules,omitempty"`
+	Name       string   `json:"name" binding:"required"`
+	HashType   int      `json:"hash_type" binding:"gte=0"`
+	AttackMode int      `json:"attack_mode" binding:"gte=0"`
+	HashFileID string   `json:"hash_file_id" binding:"required"`
+	Wordlist   string   `json:"wordlist" binding:"required"`
+	WordlistID string   `json:"wordlist_id,omitempty"`
+	AgentID    string   `json:"agent_id,omitempty"`  // Optional single agent assignment (legacy)
+	AgentIDs   []string `json:"agent_ids,omitempty"` // Multiple agent assignment for distributed jobs
+	Rules      string   `json:"rules,omitempty"`
 }
 
 // EnrichedJob extends Job with readable names for frontend display
@@ -102,21 +104,21 @@ type AgentPerformance struct {
 	AgentID      uuid.UUID `json:"agent_id"`
 	Name         string    `json:"name"`
 	Capabilities string    `json:"capabilities"`
-	Speed        int64     `json:"speed"`        // Hash rate (H/s)
+	Speed        int64     `json:"speed"`         // Hash rate (H/s)
 	ResourceType string    `json:"resource_type"` // "GPU" or "CPU"
-	Performance  float64   `json:"performance"`  // Normalized performance score (0-1)
-	WordCount    int64     `json:"word_count"`   // Assigned word count for this job
+	Performance  float64   `json:"performance"`   // Normalized performance score (0-1)
+	WordCount    int64     `json:"word_count"`    // Assigned word count for this job
 }
 
 // DistributedJobRequest represents request to create distributed jobs
 type DistributedJobRequest struct {
-	Name         string `json:"name" binding:"required"`
-	HashType     int    `json:"hash_type" binding:"gte=0"`
-	AttackMode   int    `json:"attack_mode" binding:"gte=0"`
-	HashFileID   string `json:"hash_file_id" binding:"required"`
-	WordlistID   string `json:"wordlist_id" binding:"required"`
-	Rules        string `json:"rules,omitempty"`
-	AutoDistribute bool `json:"auto_distribute"` // Whether to auto-distribute to all agents
+	Name           string `json:"name" binding:"required"`
+	HashType       int    `json:"hash_type" binding:"gte=0"`
+	AttackMode     int    `json:"attack_mode" binding:"gte=0"`
+	HashFileID     string `json:"hash_file_id" binding:"required"`
+	WordlistID     string `json:"wordlist_id" binding:"required"`
+	Rules          string `json:"rules,omitempty"`
+	AutoDistribute bool   `json:"auto_distribute"` // Whether to auto-distribute to all agents
 }
 
 // WordlistSegment represents a segment of wordlist for distribution
@@ -124,18 +126,18 @@ type WordlistSegment struct {
 	StartIndex int64  `json:"start_index"`
 	EndIndex   int64  `json:"end_index"`
 	WordCount  int64  `json:"word_count"`
-	Content    string `json:"content,omitempty"` // For small segments
+	Content    string `json:"content,omitempty"`   // For small segments
 	FilePath   string `json:"file_path,omitempty"` // For large segments
 }
 
 // DistributedJobResult represents the result of distributed job creation
 type DistributedJobResult struct {
-	MasterJobID    uuid.UUID           `json:"master_job_id"`
-	SubJobs        []Job               `json:"sub_jobs"`
+	MasterJobID      uuid.UUID          `json:"master_job_id"`
+	SubJobs          []Job              `json:"sub_jobs"`
 	AgentAssignments []AgentPerformance `json:"agent_assignments"`
-	TotalWords     int64               `json:"total_words"`
-	DistributedWords int64             `json:"distributed_words"`
-	Message        string              `json:"message"`
+	TotalWords       int64              `json:"total_words"`
+	DistributedWords int64              `json:"distributed_words"`
+	Message          string             `json:"message"`
 }
 
 // CreateAgentRequest represents the request to register a new agent
