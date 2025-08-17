@@ -82,6 +82,7 @@ export class ComponentLoader {
                 'wordlists': '/components/tabs/wordlists.html',
                 'docs': '/components/tabs/docs.html',
                 'modals': '/components/modals/all-modals.html',
+                'distributed-job-modal': '/components/modals/distributed-job-modal.html',
                 'notifications': '/components/ui/notifications.html',
                 'loading': '/components/ui/loading.html'
             }

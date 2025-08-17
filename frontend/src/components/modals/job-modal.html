@@ -55,7 +55,7 @@
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-1">Wordlist <span class="text-red-500">*</span></label>
                             <select x-model="jobForm.wordlist_id" 
-                                    @change="updateCommandTemplate()" 
+                                    @change="updateCommandTemplate(); $nextTick(() => {})" 
                                     required 
                                     class="select-modern">
                                 <option value="">Select wordlist</option>
@@ -71,18 +71,18 @@
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-1">Hash Type</label>
                             <div class="input-modern bg-gray-50 cursor-not-allowed flex items-center justify-between">
-                                <span class="text-gray-700">WPA/WPA2</span>
-                                <span class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">2500</span>
+                                <span class="text-gray-700" x-text="selectedHashTypeName">WPA/WPA2</span>
+                                <span class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded" x-text="selectedHashTypeValue">2500</span>
                             </div>
-                            <input type="hidden" x-model="jobForm.hash_type" value="2500">
-                            <p class="text-xs text-gray-500 mt-1">This system is specialized for WPA/WPA2 cracking</p>
+                            <input type="hidden" x-model="jobForm.hash_type" :value="selectedHashTypeValue">
+                            <p class="text-xs text-gray-500 mt-1" x-text="selectedHashTypeDescription">This system is specialized for WPA/WPA2 cracking</p>
                         </div>
                         
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-1">Attack Mode</label>
                             <div class="input-modern bg-gray-50 cursor-not-allowed flex items-center justify-between">
                                 <span class="text-gray-700">Dictionary Attack</span>
-                                <span class="text-xs text-gray-500 bg-green-100 px-2 py-1 rounded">0</span>
+                                <span class="text-xs text-gray-500 bg-green-100 px-2 py-1 rounded" x-text="selectedWordlistCount"></span>
                             </div>
                             <input type="hidden" x-model="jobForm.attack_mode" value="0">
                             <p class="text-xs text-gray-500 mt-1">Uses wordlist to attempt password combinations</p>
@@ -163,8 +163,11 @@
                             <span x-show="onlineAgents.length > 0 && (!jobForm.agent_ids || jobForm.agent_ids.length === 0)" class="text-red-600">
                                 <i class="fas fa-exclamation-circle mr-1"></i>Please select at least one agent to run this job
                             </span>
-                            <span x-show="jobForm.agent_ids && jobForm.agent_ids.length > 0" class="text-green-600">
-                                <i class="fas fa-thumbtack mr-1"></i>Job will be distributed to <span x-text="jobForm.agent_ids.length"></span> selected agent(s)
+                            <span x-show="jobForm.agent_ids && jobForm.agent_ids.length === 1" class="text-green-600">
+                                <i class="fas fa-thumbtack mr-1"></i>Single job will be created for 1 selected agent
+                            </span>
+                            <span x-show="jobForm.agent_ids && jobForm.agent_ids.length > 1" class="text-green-600">
+                                <i class="fas fa-network-wired mr-1"></i><span x-text="jobForm.agent_ids.length"></span> jobs will be created with distributed wordlists
                             </span>
                             <!-- Agent Count Info -->
                             <span x-show="onlineAgents.length > 0" class="text-gray-500 ml-2">
@@ -177,6 +180,62 @@
                         </p>
                     </div>
                     
+                    <!-- Distribution Preview -->
+                    <div x-show="jobForm.hash_type && jobForm.attack_mode && jobForm.hash_file_id && jobForm.wordlist_id && jobForm.agent_ids && jobForm.agent_ids.length > 1" 
+                         class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
+                        <label class="block text-sm font-semibold text-blue-800 mb-3">
+                            <i class="fas fa-network-wired text-blue-600 mr-1"></i>Wordlist Distribution Preview
+                        </label>
+                        
+                        <div class="space-y-3 mb-4">
+                            <template x-for="(agent, index) in getSelectedAgents()" :key="agent.id">
+                                <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-100">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold" x-text="index + 1"></div>
+                                        <div>
+                                            <div class="font-medium text-gray-900 text-sm" x-text="agent.name"></div>
+                                            <div class="text-xs text-gray-500" x-text="agent.ip_address"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex items-center space-x-3">
+                                        <!-- Resource Type Badge -->
+                                        <span class="text-xs px-2 py-1 rounded-full font-medium"
+                                              :class="{
+                                                  'bg-green-100 text-green-800': isGPUAgent(agent),
+                                                  'bg-blue-100 text-blue-800': !isGPUAgent(agent)
+                                              }"
+                                              x-text="isGPUAgent(agent) ? 'GPU' : 'CPU'">
+                                        </span>
+                                        
+                                        <!-- Performance Score -->
+                                        <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded" 
+                                              x-text="`${getAgentPerformanceScore(agent)}%`">
+                                        </span>
+                                        
+                                        <!-- Assigned Words -->
+                                        <span class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded" 
+                                              x-text="`${getAssignedWordCountForSelected(agent)} words`">
+                                        </span>
+                                        
+                                        <!-- Job Name Preview -->
+                                        <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded font-mono" 
+                                              x-text="`${jobForm.name} - ${agent.name}`">
+                                        </span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <div class="p-3 bg-blue-100 rounded-lg">
+                            <div class="text-sm text-blue-800">
+                                <strong>Total Words:</strong> <span x-text="selectedWordlistCount"></span> |
+                                <strong>Distribution:</strong> <span x-text="getDistributionMethodForSelected()"></span> |
+                                <strong>Jobs to Create:</strong> <span x-text="jobForm.agent_ids.length"></span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Command Preview -->
                     <div x-show="jobForm.hash_type && jobForm.attack_mode && jobForm.hash_file_id && jobForm.wordlist_id && jobForm.agent_ids && jobForm.agent_ids.length > 0" 
                          class="bg-gray-50 rounded-lg p-3 border">
@@ -185,7 +244,10 @@
                         </label>
                         <code class="block text-xs bg-gray-900 text-green-400 p-2 rounded font-mono whitespace-pre-wrap" 
                               x-text="commandTemplate">hashcat command will appear here...</code>
-                        <p class="text-xs text-gray-500 mt-1">This command will be executed on <span x-text="jobForm.agent_ids.length"></span> selected agent(s)</p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            <span x-show="jobForm.agent_ids.length === 1">This command will be executed on 1 selected agent</span>
+                            <span x-show="jobForm.agent_ids.length > 1">Multiple jobs will be created with distributed wordlists for <span x-text="jobForm.agent_ids.length"></span> agents</span>
+                        </p>
                     </div>
                 </div>
                 

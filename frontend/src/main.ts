@@ -405,6 +405,7 @@ class DashboardApplication {
             showJobModal: false,
             showFileModal: false,
             showWordlistModal: false,
+            showDistributedJobModal: false,
             
             // Compact mode for agent selection
             isCompactMode: false,
@@ -416,11 +417,13 @@ class DashboardApplication {
             createdAgentKey: null as any,
             deleteModalConfig: { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null as any },
             jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [] as string[], hash_type: '', attack_mode: '' },
+            distributedJobForm: { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', auto_distribute: true },
             fileForm: { file: null },
             wordlistForm: { file: null },
             
             // Command template for job creation
             commandTemplate: '',
+            distributedCommandTemplate: '',
             
             // Manual loading reset (fallback)
             forceStopLoading() {
@@ -490,6 +493,103 @@ class DashboardApplication {
             get pendingJobs() {
                 const jobs = this.jobs
                 return Array.isArray(jobs) ? jobs.filter((job: any) => job.status === 'pending') : []
+            },
+            
+            // Computed property for selected wordlist count
+            get selectedWordlistCount() {
+                if (!this.jobForm.wordlist_id) {
+                    return '0'
+                }
+                
+                const selectedWordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                if (!selectedWordlist) {
+                    return '0'
+                }
+                
+                // Return word count if available, otherwise return size in KB
+                if (selectedWordlist.word_count && selectedWordlist.word_count > 0) {
+                    return selectedWordlist.word_count.toLocaleString()
+                } else if (selectedWordlist.size) {
+                    const sizeKB = Math.round(selectedWordlist.size / 1024)
+                    return `${sizeKB} KB`
+                }
+                
+                return '0'
+            },
+            
+            // Computed properties for hash type based on selected file
+            get selectedHashTypeValue() {
+                if (!this.jobForm.hash_file_id) {
+                    return '2500' // Default for WPA/WPA2
+                }
+                
+                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                if (!selectedFile) {
+                    return '2500'
+                }
+                
+                // Determine hash type based on file type
+                const fileType = selectedFile.type?.toLowerCase() || ''
+                switch (fileType) {
+                    case 'hccapx':
+                    case 'hccap':
+                    case 'cap':
+                    case 'pcap':
+                        return '2500' // WPA/WPA2
+                    case 'hash':
+                    default:
+                        return '0' // Generic hash
+                }
+            },
+            
+            get selectedHashTypeName() {
+                if (!this.jobForm.hash_file_id) {
+                    return 'WPA/WPA2'
+                }
+                
+                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                if (!selectedFile) {
+                    return 'WPA/WPA2'
+                }
+                
+                // Determine hash type name based on file type
+                const fileType = selectedFile.type?.toLowerCase() || ''
+                switch (fileType) {
+                    case 'hccapx':
+                    case 'hccap':
+                    case 'cap':
+                    case 'pcap':
+                        return 'WPA/WPA2'
+                    case 'hash':
+                    default:
+                        return 'Generic Hash'
+                }
+            },
+            
+            get selectedHashTypeDescription() {
+                if (!this.jobForm.hash_file_id) {
+                    return 'This system is specialized for WPA/WPA2 cracking'
+                }
+                
+                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                if (!selectedFile) {
+                    return 'This system is specialized for WPA/WPA2 cracking'
+                }
+                
+                // Determine description based on file type
+                const fileType = selectedFile.type?.toLowerCase() || ''
+                switch (fileType) {
+                    case 'hccapx':
+                        return 'WiFi handshake file (.hccapx) - WPA/WPA2 cracking'
+                    case 'hccap':
+                        return 'Legacy WiFi handshake file (.hccap) - WPA/WPA2 cracking'
+                    case 'cap':
+                    case 'pcap':
+                        return 'WiFi packet capture file - WPA/WPA2 cracking'
+                    case 'hash':
+                    default:
+                        return 'Generic hash file - various hash types supported'
+                }
             },
 
             // Methods
@@ -1387,32 +1487,50 @@ class DashboardApplication {
                 const hashFileName = hashFile ? (hashFile.orig_name || hashFile.name) : 'hashfile'
                 const wordlistName = wordlist ? (wordlist.orig_name || wordlist.name) : 'wordlist'
 
-                // Build hashcat command for WPA/WPA2 Dictionary Attack
-                this.commandTemplate = `hashcat -m 2500 -a 0 ${hashFileName} ${wordlistName}`
-                
-                // Add WPA/WPA2 specific optimizations
-                this.commandTemplate += ' -O --force --status --status-timer=5'
-                
-                // Add session name
-                if (this.jobForm.name) {
-                    const sessionName = this.jobForm.name.toLowerCase().replace(/[^a-z0-9]/g, '_')
-                    this.commandTemplate += ` --session=${sessionName}`
-                }
-                
-                // Add outfile for WPA/WPA2
-                this.commandTemplate += ' --outfile=cracked.txt --outfile-format=2'
-                
-                // Add agent information
-                const selectedAgentCount = this.jobForm.agent_ids.length
-                this.commandTemplate += `\n\nThis job will be distributed to ${selectedAgentCount} agent(s):`
-                this.jobForm.agent_ids.forEach((agentId: string) => {
-                    const agent = this.agents.find((a: any) => a.id === agentId)
-                    if (agent) {
-                        const statusColor = agent.status === 'online' ? '🟢' : agent.status === 'busy' ? '🟡' : '🔴'
-                        this.commandTemplate += `\n- ${agent.name} (${agent.ip_address}) [${statusColor} ${agent.status}]`
+                if (this.jobForm.agent_ids.length === 1) {
+                    // Single agent - simple command
+                    this.commandTemplate = `hashcat -m ${this.jobForm.hash_type || 2500} -a ${this.jobForm.attack_mode || 0} ${hashFileName} ${wordlistName}`
+                    
+                    // Add WPA/WPA2 specific optimizations
+                    this.commandTemplate += ' -O --force --status --status-timer=5'
+                    
+                    // Add session name
+                    if (this.jobForm.name) {
+                        const sessionName = this.jobForm.name.toLowerCase().replace(/[^a-z0-9]/g, '_')
+                        this.commandTemplate += ` --session=${sessionName}`
                     }
-                })
+                    
+                    // Add outfile for WPA/WPA2
+                    this.commandTemplate += ' --outfile=cracked.txt --outfile-format=2'
+                } else {
+                    // Multiple agents - distributed commands
+                    this.commandTemplate = `# Distributed Hashcat Commands\n`
+                    this.commandTemplate += `# Hash File: ${hashFileName}\n`
+                    this.commandTemplate += `# Wordlist: ${wordlistName}\n`
+                    this.commandTemplate += `# Total Agents: ${this.jobForm.agent_ids.length}\n\n`
+                    
+                    this.jobForm.agent_ids.forEach((agentId: string, index: number) => {
+                        const agent = this.agents.find((a: any) => a.id === agentId)
+                        if (agent) {
+                            const assignedWords = this.getAssignedWordCountForSelected(agent)
+                            const resourceType = this.isGPUAgent(agent) ? 'GPU' : 'CPU'
+                            const performance = this.getAgentPerformanceScore(agent)
+                            
+                            this.commandTemplate += `# Job ${index + 1}: ${this.jobForm.name} - ${agent.name}\n`
+                            this.commandTemplate += `# Agent: ${agent.name} (${resourceType}, ${performance}%)\n`
+                            this.commandTemplate += `# Assigned: ${assignedWords.toLocaleString()} words\n`
+                            this.commandTemplate += `hashcat -m ${this.jobForm.hash_type || 2500} -a ${this.jobForm.attack_mode || 0} \\\n`
+                            this.commandTemplate += `  ${hashFileName} \\\n`
+                            this.commandTemplate += `  ${wordlistName}_part_${index + 1} \\\n`
+                            this.commandTemplate += `  -O --force --status --status-timer=5 \\\n`
+                            this.commandTemplate += `  --session=${(this.jobForm.name || 'job').toLowerCase().replace(/[^a-z0-9]/g, '_')}_part_${index + 1} \\\n`
+                            this.commandTemplate += `  --outfile=cracked_part_${index + 1}.txt --outfile-format=2\n\n`
+                        }
+                    })
+                }
             },
+
+
 
             // Toggle select all agents
             toggleSelectAllAgents(checked: boolean) {
@@ -1435,6 +1553,203 @@ class DashboardApplication {
             // Toggle compact mode for agent selection
             toggleCompactMode() {
                 this.isCompactMode = !this.isCompactMode
+            },
+
+            // Distributed Job Functions
+            openDistributedJobModal() {
+                this.showDistributedJobModal = true
+                this.distributedJobForm = { 
+                    name: '', 
+                    hash_file_id: '', 
+                    wordlist_id: '', 
+                    hash_type: '', 
+                    attack_mode: '', 
+                    auto_distribute: true 
+                }
+                this.updateDistributedCommandTemplate()
+            },
+
+            closeDistributedJobModal() {
+                this.showDistributedJobModal = false
+            },
+
+            // Check if agent is GPU-based
+            isGPUAgent(agent: any): boolean {
+                const capabilities = (agent.capabilities || '').toLowerCase()
+                return capabilities.includes('gpu') || 
+                       capabilities.includes('cuda') || 
+                       capabilities.includes('opencl') ||
+                       capabilities.includes('rtx') ||
+                       capabilities.includes('gtx') ||
+                       capabilities.includes('radeon')
+            },
+
+            // Get selected agents objects
+            getSelectedAgents() {
+                if (!this.jobForm.agent_ids || this.jobForm.agent_ids.length === 0) {
+                    return []
+                }
+                return this.onlineAgents.filter(agent => 
+                    this.jobForm.agent_ids.includes(agent.id)
+                )
+            },
+
+            // Get agent performance score (0-100)
+            getAgentPerformanceScore(agent: any): number {
+                if (this.isGPUAgent(agent)) {
+                    return 100 // GPU gets full performance
+                }
+                return 30 // CPU gets 30% performance
+            },
+
+            // Calculate assigned word count for agent
+            getAssignedWordCount(agent: any): number {
+                if (!this.distributedJobForm.wordlist_id) return 0
+                
+                const wordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
+                if (!wordlist || !wordlist.word_count) return 0
+                
+                const totalWords = wordlist.word_count
+                const onlineAgents = this.onlineAgents
+                
+                if (onlineAgents.length === 0) return 0
+                
+                // Calculate performance-based distribution
+                const totalPerformance = onlineAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
+                const agentPerformance = this.getAgentPerformanceScore(agent)
+                const performanceRatio = agentPerformance / totalPerformance
+                
+                return Math.round(totalWords * performanceRatio)
+            },
+
+            // Get distribution method description
+            getDistributionMethod(): string {
+                const gpuAgents = this.onlineAgents.filter(agent => this.isGPUAgent(agent))
+                const cpuAgents = this.onlineAgents.filter(agent => !this.isGPUAgent(agent))
+                
+                if (gpuAgents.length > 0 && cpuAgents.length > 0) {
+                    return `Performance-based (${gpuAgents.length} GPU + ${cpuAgents.length} CPU)`
+                } else if (gpuAgents.length > 0) {
+                    return `GPU-only distribution (${gpuAgents.length} agents)`
+                } else {
+                    return `CPU-only distribution (${cpuAgents.length} agents)`
+                }
+            },
+
+            // Get distribution method for selected agents
+            getDistributionMethodForSelected(): string {
+                const selectedAgents = this.getSelectedAgents()
+                const gpuAgents = selectedAgents.filter(agent => this.isGPUAgent(agent))
+                const cpuAgents = selectedAgents.filter(agent => !this.isGPUAgent(agent))
+                
+                if (gpuAgents.length > 0 && cpuAgents.length > 0) {
+                    return `Performance-based (${gpuAgents.length} GPU + ${cpuAgents.length} CPU)`
+                } else if (gpuAgents.length > 0) {
+                    return `GPU-only distribution (${gpuAgents.length} agents)`
+                } else {
+                    return `CPU-only distribution (${cpuAgents.length} agents)`
+                }
+            },
+
+            // Calculate assigned word count for selected agent
+            getAssignedWordCountForSelected(agent: any): number {
+                if (!this.jobForm.wordlist_id) return 0
+                
+                const wordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                if (!wordlist || !wordlist.word_count) return 0
+                
+                const totalWords = wordlist.word_count
+                const selectedAgents = this.getSelectedAgents()
+                
+                if (selectedAgents.length === 0) return 0
+                
+                // Calculate performance-based distribution
+                const totalPerformance = selectedAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
+                const agentPerformance = this.getAgentPerformanceScore(agent)
+                const performanceRatio = agentPerformance / totalPerformance
+                
+                return Math.round(totalWords * performanceRatio)
+            },
+
+            // Update distributed command template
+            updateDistributedCommandTemplate() {
+                if (!this.distributedJobForm.hash_file_id || !this.distributedJobForm.wordlist_id) {
+                    this.distributedCommandTemplate = 'Distributed hashcat commands will appear here...'
+                    return
+                }
+
+                const hashFile = this.hashFiles.find((f: any) => f.id === this.distributedJobForm.hash_file_id)
+                const wordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
+                
+                if (!hashFile || !wordlist) return
+
+                const hashFileName = hashFile.orig_name || hashFile.name
+                const wordlistName = wordlist.orig_name || wordlist.name
+                const totalWords = wordlist.word_count || 0
+
+                let template = `# Distributed Hashcat Commands\n`
+                template += `# Hash File: ${hashFileName}\n`
+                template += `# Wordlist: ${wordlistName} (${totalWords.toLocaleString()} words)\n`
+                template += `# Agents: ${this.onlineAgents.length}\n\n`
+
+                this.onlineAgents.forEach((agent, index) => {
+                    const assignedWords = this.getAssignedWordCount(agent)
+                    const resourceType = this.isGPUAgent(agent) ? 'GPU' : 'CPU'
+                    const performance = this.getAgentPerformanceScore(agent)
+                    
+                    template += `# Agent ${index + 1}: ${agent.name} (${resourceType}, ${performance}%)\n`
+                    template += `# Assigned: ${assignedWords.toLocaleString()} words\n`
+                    template += `hashcat -m ${this.distributedJobForm.hash_type || 2500} -a ${this.distributedJobForm.attack_mode || 0} \\\n`
+                    template += `  ${hashFileName} \\\n`
+                    template += `  ${wordlistName}_part_${index + 1} \\\n`
+                    template += `  -O --force --status --status-timer=5 \\\n`
+                    template += `  --session=${this.distributedJobForm.name?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'distributed'}_part_${index + 1} \\\n`
+                    template += `  --outfile=cracked_part_${index + 1}.txt --outfile-format=2\n\n`
+                })
+
+                this.distributedCommandTemplate = template
+            },
+
+            // Update distribution preview
+            updateDistributionPreview() {
+                // This will trigger Alpine.js reactivity for the preview section
+                setTimeout(() => {
+                    console.log('Distribution preview updated')
+                }, 0)
+            },
+
+            // Check if can create distributed job
+            canCreateDistributedJob(): boolean {
+                return !!(this.distributedJobForm.name && 
+                         this.distributedJobForm.hash_file_id && 
+                         this.distributedJobForm.wordlist_id &&
+                         this.onlineAgents.length > 0)
+            },
+
+            // Preview distribution
+            previewDistribution() {
+                this.updateDistributionPreview()
+                this.showNotification('Distribution preview updated', 'success')
+            },
+
+            // Create distributed job
+            async createDistributedJob() {
+                if (!this.canCreateDistributedJob()) {
+                    this.showNotification('Please fill all required fields and ensure agents are available', 'error')
+                    return
+                }
+
+                this.isLoading = true
+                try {
+                    // For now, show success message
+                    // In real implementation, this would call the API
+                    this.showNotification('Distributed job creation feature not yet implemented', 'info')
+                    this.closeDistributedJobModal()
+                } catch (error) {
+                    this.showNotification('Failed to create distributed job', 'error')
+                } finally {
+                    this.isLoading = false
+                }
             },
 
             async startJob(jobId: string) {
