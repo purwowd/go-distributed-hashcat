@@ -391,6 +391,12 @@ func (u *jobUsecase) FailJob(ctx context.Context, id uuid.UUID, reason string) e
 	job.Result = reason
 	job.CompletedAt = &now
 
+	// Set progress to 100% if the failure is due to password not found
+	if strings.Contains(strings.ToLower(reason), "password not found") || 
+	   strings.Contains(strings.ToLower(reason), "exhausted") {
+		job.Progress = 100.0
+	}
+
 	if err := u.jobRepo.Update(ctx, job); err != nil {
 		return fmt.Errorf("failed to update job: %w", err)
 	}
