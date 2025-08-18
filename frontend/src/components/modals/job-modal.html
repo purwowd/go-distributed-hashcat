@@ -125,6 +125,8 @@
                             <input type="hidden" x-model="jobForm.attack_mode" value="0">
                             <p class="text-xs text-gray-500 mt-1">Uses wordlist to attempt password combinations</p>
                         </div>
+
+
                     </div>
                     
                     <!-- Agent Assignment -->
@@ -285,8 +287,8 @@
                     <!-- Right Side: Navigation & Action Buttons -->
                     <div class="flex gap-2 order-2">
                         <button type="button" @click="closeJobModal()" class="btn-secondary">
-                            <i class="fas fa-times mr-2"></i>Cancel
-                        </button>
+                        <i class="fas fa-times mr-2"></i>Cancel
+                    </button>
                         
                         <!-- Step 1: Next Button -->
                         <button type="button" 
@@ -299,13 +301,13 @@
                         </button>
                         
                         <!-- Step 2: Create Job Button -->
-                        <button type="submit" 
+                    <button type="submit" 
                                 x-show="currentStep === 2"
-                                :disabled="!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0"
-                                :class="(!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0) ? 'btn-disabled' : 'btn-primary'"
+                            :disabled="!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0"
+                            :class="(!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0) ? 'btn-disabled' : 'btn-primary'"
                                 class="btn-primary">
-                            <i class="fas fa-plus mr-2"></i>Create Job
-                        </button>
+                        <i class="fas fa-plus mr-2"></i>Create Job
+                    </button>
                     </div>
                 </div>
             </form>

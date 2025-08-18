@@ -23,26 +23,28 @@ type Agent struct {
 
 // Job represents a cracking job
 type Job struct {
-	ID          uuid.UUID   `json:"id" db:"id"`
-	Name        string      `json:"name" db:"name"`
-	Status      string      `json:"status" db:"status"` // pending, running, completed, failed, paused
-	HashType    int         `json:"hash_type" db:"hash_type"`
-	AttackMode  int         `json:"attack_mode" db:"attack_mode"`
-	HashFile    string      `json:"hash_file" db:"hash_file"`
-	HashFileID  *uuid.UUID  `json:"hash_file_id" db:"hash_file_id"`
-	Wordlist    string      `json:"wordlist" db:"wordlist"`
-	WordlistID  *uuid.UUID  `json:"wordlist_id" db:"wordlist_id"`
-	Rules       string      `json:"rules" db:"rules"`
-	AgentID     *uuid.UUID  `json:"agent_id" db:"agent_id"`     // Single agent (legacy)
-	AgentIDs    []uuid.UUID `json:"agent_ids,omitempty" db:"-"` // Multiple agents (not stored in DB, computed)
-	Progress    float64     `json:"progress" db:"progress"`
-	Speed       int64       `json:"speed" db:"speed"`
-	ETA         *time.Time  `json:"eta" db:"eta"`
-	Result      string      `json:"result" db:"result"`
-	CreatedAt   time.Time   `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at" db:"updated_at"`
-	StartedAt   *time.Time  `json:"started_at" db:"started_at"`
-	CompletedAt *time.Time  `json:"completed_at" db:"completed_at"`
+	ID             uuid.UUID   `json:"id" db:"id"`
+	Name           string      `json:"name" db:"name"`
+	Status         string      `json:"status" db:"status"` // pending, running, completed, failed, paused
+	HashType       int         `json:"hash_type" db:"hash_type"`
+	AttackMode     int         `json:"attack_mode" db:"attack_mode"`
+	HashFile       string      `json:"hash_file" db:"hash_file"`
+	HashFileID     *uuid.UUID  `json:"hash_file_id" db:"hash_file_id"`
+	Wordlist       string      `json:"wordlist" db:"wordlist"`
+	WordlistID     *uuid.UUID  `json:"wordlist_id" db:"wordlist_id"`
+	Rules          string      `json:"rules" db:"rules"`           // Password hasil cracking atau hashcat rules
+	AgentID        *uuid.UUID  `json:"agent_id" db:"agent_id"`     // Single agent (legacy)
+	AgentIDs       []uuid.UUID `json:"agent_ids,omitempty" db:"-"` // Multiple agents (not stored in DB, computed)
+	Progress       float64     `json:"progress" db:"progress"`
+	Speed          int64       `json:"speed" db:"speed"` // Hash rate dalam H/s
+	ETA            *time.Time  `json:"eta" db:"eta"`     // Estimated time of completion
+	Result         string      `json:"result" db:"result"`
+	TotalWords     int64       `json:"total_words" db:"total_words"`         // Total dictionary words untuk job ini
+	ProcessedWords int64       `json:"processed_words" db:"processed_words"` // Words yang sudah diproses
+	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at" db:"updated_at"`
+	StartedAt      *time.Time  `json:"started_at" db:"started_at"`
+	CompletedAt    *time.Time  `json:"completed_at" db:"completed_at"`
 }
 
 // HashFile represents uploaded hash files
@@ -86,9 +88,10 @@ type CreateJobRequest struct {
 	HashFileID string   `json:"hash_file_id" binding:"required"`
 	Wordlist   string   `json:"wordlist" binding:"required"`
 	WordlistID string   `json:"wordlist_id,omitempty"`
-	AgentID    string   `json:"agent_id,omitempty"`  // Optional single agent assignment (legacy)
-	AgentIDs   []string `json:"agent_ids,omitempty"` // Multiple agent assignment for distributed jobs
-	Rules      string   `json:"rules,omitempty"`
+	AgentID    string   `json:"agent_id,omitempty"`    // Optional single agent assignment (legacy)
+	AgentIDs   []string `json:"agent_ids,omitempty"`   // Multiple agent assignment for distributed jobs
+	Rules      string   `json:"rules,omitempty"`       // Hashcat rules atau password hasil
+	TotalWords int64    `json:"total_words,omitempty"` // Total dictionary words
 }
 
 // EnrichedJob extends Job with readable names for frontend display
