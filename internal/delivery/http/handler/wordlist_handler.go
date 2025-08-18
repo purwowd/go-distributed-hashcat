@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"go-distributed-hashcat/internal/usecase"
 
@@ -91,6 +92,32 @@ func (h *WordlistHandler) DeleteWordlist(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Wordlist deleted successfully"})
+}
+
+func (h *WordlistHandler) GetWordlistContent(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wordlist ID"})
+		return
+	}
+
+	wordlist, err := h.wordlistUsecase.GetWordlist(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Read file content
+	content, err := os.ReadFile(wordlist.Path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read wordlist content"})
+		return
+	}
+
+	// Return content as plain text
+	c.Header("Content-Type", "text/plain")
+	c.Data(http.StatusOK, "text/plain", content)
 }
 
 func (h *WordlistHandler) DownloadWordlist(c *gin.Context) {
