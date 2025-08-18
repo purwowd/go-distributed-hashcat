@@ -19,6 +19,7 @@ type JobUsecase interface {
 	GetAvailableJobForAgent(ctx context.Context, agentID uuid.UUID) (*domain.Job, error)
 	StartJob(ctx context.Context, id uuid.UUID) error
 	UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error
+	UpdateJobData(ctx context.Context, job *domain.Job) error
 	CompleteJob(ctx context.Context, id uuid.UUID, result string) error
 	FailJob(ctx context.Context, id uuid.UUID, reason string) error
 	PauseJob(ctx context.Context, id uuid.UUID) error
@@ -203,6 +204,13 @@ func (u *jobUsecase) StartJob(ctx context.Context, id uuid.UUID) error {
 func (u *jobUsecase) UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error {
 	if err := u.jobRepo.UpdateProgress(ctx, id, progress, speed); err != nil {
 		return fmt.Errorf("failed to update job progress: %w", err)
+	}
+	return nil
+}
+
+func (u *jobUsecase) UpdateJobData(ctx context.Context, job *domain.Job) error {
+	if err := u.jobRepo.Update(ctx, job); err != nil {
+		return fmt.Errorf("failed to update job data: %w", err)
 	}
 	return nil
 }

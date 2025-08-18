@@ -768,6 +768,9 @@ func (a *Agent) startJob(jobID uuid.UUID) error {
 }
 
 func (a *Agent) runHashcat(job *domain.Job) error {
+	// Send initial job data to server immediately
+	a.sendInitialJobData(job)
+
 	// Resolve hash file (local first, download if needed)
 	var localHashFile string
 	var err error
@@ -1041,6 +1044,7 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	// Parse hashcat output for progress updates
 	progressRegex := regexp.MustCompile(`Progress\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
 	speedRegex := regexp.MustCompile(`Speed\.+:\s*(\d+)\s*H/s`)
+	etaRegex := regexp.MustCompile(`ETA\.+:\s*(\d+):(\d+):(\d+)`)
 
 	scanner := func(reader io.Reader) {
 		buf := make([]byte, 1024)
@@ -1062,7 +1066,22 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 					speed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
 				}
 
-				a.updateJobProgress(job.ID, progress, speed)
+				// Parse ETA
+				var eta *string
+				if etaMatches := etaRegex.FindStringSubmatch(output); len(etaMatches) > 3 {
+					hours, _ := strconv.Atoi(etaMatches[1])
+					minutes, _ := strconv.Atoi(etaMatches[2])
+					seconds, _ := strconv.Atoi(etaMatches[3])
+
+					etaTime := time.Now().Add(time.Duration(hours)*time.Hour +
+						time.Duration(minutes)*time.Minute +
+						time.Duration(seconds)*time.Second)
+					etaStr := etaTime.Format(time.RFC3339)
+					eta = &etaStr
+				}
+
+				// Send complete data to new endpoint
+				a.updateJobDataFromAgent(job.ID, progress, speed, eta)
 			}
 		}
 	}
@@ -1071,17 +1090,60 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	go scanner(stderr)
 }
 
-func (a *Agent) updateJobProgress(jobID uuid.UUID, progress float64, speed int64) {
+func (a *Agent) sendInitialJobData(job *domain.Job) {
 	req := struct {
-		Progress float64 `json:"progress"`
-		Speed    int64   `json:"speed"`
+		AgentID    string  `json:"agent_id"`
+		AttackMode int     `json:"attack_mode"`
+		Rules      string  `json:"rules"`
+		Speed      int64   `json:"speed"`
+		ETA        *string `json:"eta,omitempty"`
+		Progress   float64 `json:"progress"`
 	}{
-		Progress: progress,
-		Speed:    speed,
+		AgentID:    a.ID.String(),
+		AttackMode: job.AttackMode,
+		Rules:      job.Rules,
+		Speed:      0,   // Initial speed is 0
+		ETA:        nil, // No ETA initially
+		Progress:   0,   // Initial progress is 0
 	}
 
 	jsonData, _ := json.Marshal(req)
-	url := fmt.Sprintf("%s/api/v1/jobs/%s/progress", a.ServerURL, jobID.String())
+	url := fmt.Sprintf("%s/api/v1/jobs/%s/data", a.ServerURL, job.ID.String())
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	a.Client.Do(httpReq)
+}
+
+func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed int64, eta *string) {
+	// Get current job data to include attack_mode and rules
+	var attackMode int
+	var rules string
+
+	if a.CurrentJob != nil && a.CurrentJob.ID == jobID {
+		attackMode = a.CurrentJob.AttackMode
+		rules = a.CurrentJob.Rules
+	}
+
+	req := struct {
+		AgentID    string  `json:"agent_id"`
+		AttackMode int     `json:"attack_mode"`
+		Rules      string  `json:"rules"`
+		Speed      int64   `json:"speed"`
+		ETA        *string `json:"eta,omitempty"`
+		Progress   float64 `json:"progress"`
+	}{
+		AgentID:    a.ID.String(),
+		AttackMode: attackMode,
+		Rules:      rules,
+		Speed:      speed,
+		ETA:        eta,
+		Progress:   progress,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/jobs/%s/data", a.ServerURL, jobID.String())
 
 	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
 	httpReq.Header.Set("Content-Type", "application/json")

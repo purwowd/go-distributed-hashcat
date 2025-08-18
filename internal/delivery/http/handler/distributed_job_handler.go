@@ -3,7 +3,6 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"go-distributed-hashcat/internal/domain"
 
@@ -139,8 +138,6 @@ func (h *DistributedJobHandler) StartAllSubJobs(c *gin.Context) {
 		if subJob.Status == "pending" {
 			// Update job status to running
 			subJob.Status = "running"
-			now := time.Now()
-			subJob.StartedAt = &now
 			// In a real implementation, you would call the job repository to update status
 			startedCount++
 		}

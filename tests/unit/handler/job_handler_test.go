@@ -261,6 +261,11 @@ func (m *MockJobUsecase) GetAvailableJobForAgent(ctx context.Context, agentID uu
 	return args.Get(0).(*domain.Job), args.Error(1)
 }
 
+func (m *MockJobUsecase) UpdateJobData(ctx context.Context, job *domain.Job) error {
+	args := m.Called(ctx, job)
+	return args.Error(0)
+}
+
 func TestJobHandler_CreateJob(t *testing.T) {
 	hashFileID := uuid.New()
 
