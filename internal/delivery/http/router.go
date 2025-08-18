@@ -108,6 +108,7 @@ func NewRouter(
 			jobs.GET("/parallel/summary", jobHandler.GetParallelJobsSummary)
 			jobs.POST("/assign", jobHandler.AssignJobs)
 			jobs.POST("/auto", jobHandler.CreateParallelJobs)
+			jobs.GET("/agent/:id", jobHandler.GetAvailableJobForAgent)
 			jobs.GET("/:id", jobHandler.GetJob)
 			jobs.POST("/:id/start", jobHandler.StartJob)
 			jobs.PUT("/:id/progress", jobHandler.UpdateJobProgress)

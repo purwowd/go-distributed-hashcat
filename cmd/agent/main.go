@@ -702,8 +702,8 @@ func (a *Agent) pollForJobs(ctx context.Context) {
 }
 
 func (a *Agent) checkForNewJob() error {
-	// Get jobs assigned to this agent
-	url := fmt.Sprintf("%s/api/v1/jobs?status=pending", a.ServerURL)
+	// Use the specific endpoint for getting available job for this agent
+	url := fmt.Sprintf("%s/api/v1/jobs/agent/%s", a.ServerURL, a.ID.String())
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return err
@@ -711,20 +711,17 @@ func (a *Agent) checkForNewJob() error {
 	defer resp.Body.Close()
 
 	var response struct {
-		Data []domain.Job `json:"data"`
+		Data *domain.Job `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return err
 	}
 
-	// Find a job assigned to this agent
-	for _, job := range response.Data {
-		if job.AgentID != nil && *job.AgentID == a.ID {
-			log.Printf("Found assigned job: %s", job.Name)
-			a.CurrentJob = &job
-			go a.executeJob(&job)
-			break
-		}
+	// Check if we got a job
+	if response.Data != nil {
+		log.Printf("Found assigned job: %s", response.Data.Name)
+		a.CurrentJob = response.Data
+		go a.executeJob(response.Data)
 	}
 
 	return nil
