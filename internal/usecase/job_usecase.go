@@ -103,12 +103,76 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 			agentIDs = append(agentIDs, agentID)
 		}
 
-		// For now, assign to first agent (legacy compatibility)
-		// TODO: Implement proper distributed job creation
-		job.AgentID = &agentIDs[0]
+		// Create separate job for each agent (distributed job creation)
+		if len(agentIDs) > 1 {
+			// Create master job record
+			masterJob := &domain.Job{
+				ID:             uuid.New(),
+				Name:           fmt.Sprintf("%s (Master)", req.Name),
+				Status:         "distributed",
+				HashType:       req.HashType,
+				AttackMode:     req.AttackMode,
+				HashFile:       hashFile.Path,
+				HashFileID:     &hashFileID,
+				Wordlist:       req.Wordlist,
+				Rules:          req.Rules,
+				Progress:       0,
+				Speed:          0,
+				TotalWords:     req.TotalWords,
+				ProcessedWords: 0,
+				CreatedAt:      time.Now(),
+				UpdatedAt:      time.Now(),
+			}
 
-		// Store all agent IDs for future use
-		job.AgentIDs = agentIDs
+			// Save master job
+			if err := u.jobRepo.Create(ctx, masterJob); err != nil {
+				return nil, fmt.Errorf("failed to create master job: %w", err)
+			}
+
+			// Create sub-jobs for each agent
+			var subJobs []*domain.Job
+			for i, agentID := range agentIDs {
+				// Get agent details for naming
+				agent, _ := u.agentRepo.GetByID(ctx, agentID)
+				agentName := "Unknown"
+				if agent != nil {
+					agentName = agent.Name
+				}
+
+				subJob := &domain.Job{
+					ID:             uuid.New(),
+					Name:           fmt.Sprintf("%s (Part %d - %s)", req.Name, i+1, agentName),
+					Status:         "pending",
+					HashType:       req.HashType,
+					AttackMode:     req.AttackMode,
+					HashFile:       hashFile.Path,
+					HashFileID:     &hashFileID,
+					Wordlist:       req.Wordlist,
+					Rules:          req.Rules,
+					Progress:       0,
+					Speed:          0,
+					TotalWords:     req.TotalWords,
+					ProcessedWords: 0,
+					AgentID:        &agentID,
+					CreatedAt:      time.Now(),
+					UpdatedAt:      time.Now(),
+				}
+
+				// Save sub-job
+				if err := u.jobRepo.Create(ctx, subJob); err != nil {
+					return nil, fmt.Errorf("failed to create sub-job %d: %w", i, err)
+				}
+
+				subJobs = append(subJobs, subJob)
+			}
+
+			// Return the first sub-job as the primary result
+			// The master job and other sub-jobs are created but not returned
+			return subJobs[0], nil
+		} else {
+			// Single agent assignment
+			job.AgentID = &agentIDs[0]
+		}
 
 	} else if req.AgentID != "" {
 		// Single agent assignment (legacy)
