@@ -517,6 +517,8 @@ class DashboardApplication {
                 
                 return '0'
             },
+
+
             
             // Computed properties for hash type based on selected file
             get selectedHashTypeValue() {
@@ -998,6 +1000,8 @@ class DashboardApplication {
                 if (!numValue || isNaN(numValue)) return '0'
                 return numValue.toLocaleString()
             },
+
+
             
             getDisplayName(item: any) {
                 // Try different name fields

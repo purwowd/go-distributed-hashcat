@@ -54,17 +54,19 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 	}
 
 	job := &domain.Job{
-		ID:         uuid.New(),
-		Name:       req.Name,
-		Status:     "pending",
-		HashType:   req.HashType,
-		AttackMode: req.AttackMode,
-		HashFile:   hashFile.Path,
-		HashFileID: &hashFileID,
-		Wordlist:   req.Wordlist,
-		Rules:      req.Rules,
-		Progress:   0,
-		Speed:      0,
+		ID:             uuid.New(),
+		Name:           req.Name,
+		Status:         "pending",
+		HashType:       req.HashType,
+		AttackMode:     req.AttackMode,
+		HashFile:       hashFile.Path,
+		HashFileID:     &hashFileID,
+		Wordlist:       req.Wordlist,
+		Rules:          req.Rules,
+		Progress:       0,
+		Speed:          0,
+		TotalWords:     req.TotalWords,
+		ProcessedWords: 0,
 	}
 
 	// Handle wordlist ID if provided
