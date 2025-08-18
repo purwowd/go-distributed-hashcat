@@ -391,9 +391,8 @@ func (u *jobUsecase) FailJob(ctx context.Context, id uuid.UUID, reason string) e
 	job.Result = reason
 	job.CompletedAt = &now
 
-	// Set progress to 100% if the failure is due to password not found
-	if strings.Contains(strings.ToLower(reason), "password not found") || 
-	   strings.Contains(strings.ToLower(reason), "exhausted") {
+	// If the failure reason indicates password not found, set progress to 100%
+	if reason == "Password not found" || strings.Contains(reason, "Password not found") {
 		job.Progress = 100.0
 	}
 
