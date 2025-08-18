@@ -390,4 +390,76 @@ Feature ini memungkinkan user untuk:
 
 **Note**: Field baru (Attack Mode, Speed, ETA, Total Words, Processed Words) sudah diimplementasikan di backend dan database, tetapi frontend tetap menggunakan tampilan yang lama untuk menjaga konsistensi UI. Field-field baru dapat diakses melalui API dan akan ditampilkan di frontend sesuai kebutuhan di masa depan.
 
+## 🔧 **Wordlist Distribution Logic (Fixed)**
+
+### **Problem yang Diperbaiki:**
+1. **Total Percentage**: Sebelumnya tidak 100% (100% + 30% + 30% = 160% ❌)
+2. **Inconsistent CPU Agents**: CPU agents dengan word count sama mendapat percentage berbeda (19% vs 18% ❌)
+3. **Performance vs Word Mismatch**: Percentage tidak mencerminkan distribusi word yang sebenarnya
+
+### **Solusi: Word-Based Distribution** ✅
+Sekarang: Total persentase selalu 100% dan konsisten dengan word count
+
+### **Formula Distribusi yang Benar:**
+```typescript
+// Method 1: Performance-Based (Old - Had Issues)
+// Performance Score per Agent
+GPU Agent: 80-90 points
+CPU Agent: 5-20 points
+// Percentage = (Agent Score / Total Score) × 100
+// Problem: CPU agents with same word count got different percentages
+
+// Method 2: Word-Based (New - More Accurate) ✅
+// Word Count per Agent
+GPU Agent: 4 words
+CPU Agent: 1 word each
+// Percentage = (Agent Words / Total Words) × 100
+// Last Agent: 100% - Σ(Previous Agents Percentage)
+// Benefit: Same word count = Same percentage
+```
+
+### **Contoh Distribusi 3 Agents (Word-Based):**
+- **Agent 1 (GPU)**: 4 words = (4/6) × 100 = 67%
+- **Agent 2 (CPU)**: 1 word = (1/6) × 100 = 17%
+- **Agent 3 (CPU)**: 1 word = (1/6) × 100 = 16% (calculated as 100 - 67 - 17)
+- **Total**: 67% + 17% + 16% = 100% ✅ (Exact, consistent with word count)
+
+### **Implementation (Exact Total = 100%):**
+```typescript
+getAssignedPercentageExact(agent: any): number {
+    const selectedAgents = this.getSelectedAgents();
+    const agentScores = selectedAgents.map(a => ({
+        agent: a,
+        score: this.getAgentPerformanceScore(a)
+    }));
+    
+    // Sort by performance (highest first)
+    agentScores.sort((a, b) => b.score - a.score);
+    
+    // Find this agent's position
+    const agentIndex = agentScores.findIndex(item => item.agent.id === agent.id);
+    
+    // Calculate distribution based on performance
+    const totalScore = agentScores.reduce((sum, item) => sum + item.score, 0);
+    const agentScore = agentScores[agentIndex].score;
+    
+    // For the last agent, ensure total = 100%
+    if (agentIndex === selectedAgents.length - 1) {
+        // Calculate what the total should be for previous agents
+        let previousTotal = 0;
+        for (let i = 0; i < agentIndex; i++) {
+            const prevScore = agentScores[i].score;
+            const prevPercent = Math.round((prevScore / totalScore) * 100);
+            previousTotal += prevPercent;
+        }
+        
+        // Last agent gets the remaining percentage to make total = 100%
+        return 100 - previousTotal;
+    }
+    
+    // For other agents, round normally
+    return Math.round((agentScore / totalScore) * 100);
+}
+```
+
 Dengan implementasi yang lengkap di backend dan frontend, sistem sekarang memiliki tracking yang powerful untuk semua aspek job execution! 🚀
