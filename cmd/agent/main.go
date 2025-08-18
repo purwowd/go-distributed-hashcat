@@ -1113,7 +1113,19 @@ func (a *Agent) sendInitialJobData(job *domain.Job) {
 	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	a.Client.Do(httpReq)
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		log.Printf("❌ Failed to send initial job data to server: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("❌ Initial job data failed with status %d: %s", resp.StatusCode, string(body))
+	} else {
+		log.Printf("✅ Initial job data sent successfully to server")
+	}
 }
 
 func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed int64, eta *string) {
@@ -1148,7 +1160,19 @@ func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed 
 	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	a.Client.Do(httpReq)
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		log.Printf("❌ Failed to send job data update to server: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("❌ Job data update failed with status %d: %s", resp.StatusCode, string(body))
+	} else {
+		log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+	}
 }
 
 func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec.Cmd) {
@@ -1213,7 +1237,19 @@ func (a *Agent) completeJob(jobID uuid.UUID, result string) {
 	jsonData, _ := json.Marshal(req)
 	url := fmt.Sprintf("%s/api/v1/jobs/%s/complete", a.ServerURL, jobID.String())
 
-	a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ Failed to send job completion to server: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("❌ Job completion failed with status %d: %s", resp.StatusCode, string(body))
+	} else {
+		log.Printf("✅ Job completion sent successfully to server")
+	}
 }
 
 func (a *Agent) failJob(jobID uuid.UUID, reason string) {
@@ -1224,7 +1260,19 @@ func (a *Agent) failJob(jobID uuid.UUID, reason string) {
 	jsonData, _ := json.Marshal(req)
 	url := fmt.Sprintf("%s/api/v1/jobs/%s/fail", a.ServerURL, jobID.String())
 
-	a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ Failed to send job failure to server: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("❌ Job failure notification failed with status %d: %s", resp.StatusCode, string(body))
+	} else {
+		log.Printf("✅ Job failure notification sent successfully to server")
+	}
 }
 
 func getLocalIP() string {
