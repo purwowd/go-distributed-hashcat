@@ -796,7 +796,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		localHashFile = job.HashFile
 	}
 
-	// Resolve wordlist (local first, download if needed)
+	// Resolve wordlist (local first, download if needed, or create from content)
 	var localWordlist string
 
 	// Prioritize WordlistID if available
@@ -808,23 +808,41 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		localWordlist = downloadedPath
 		log.Printf("📥 Downloaded wordlist from ID: %s", localWordlist)
 	} else if job.Wordlist != "" {
-		// Fallback to wordlist filename resolution
-		if localPath, found := a.findLocalFile(job.Wordlist); found {
-			localWordlist = localPath
-			log.Printf("📁 Using local wordlist: %s", localWordlist)
+		// Check if wordlist contains newlines (indicating it's content, not a path)
+		if strings.Contains(job.Wordlist, "\n") {
+			// This is wordlist content, create a temporary file
+			tempDir := filepath.Join(a.UploadDir, "temp")
+			if err := os.MkdirAll(tempDir, 0755); err != nil {
+				return fmt.Errorf("failed to create temp directory: %w", err)
+			}
+			
+			wordlistFile := filepath.Join(tempDir, fmt.Sprintf("wordlist-%s.txt", job.ID.String()))
+			if err := os.WriteFile(wordlistFile, []byte(job.Wordlist), 0644); err != nil {
+				return fmt.Errorf("failed to create wordlist file: %w", err)
+			}
+			
+			localWordlist = wordlistFile
+			log.Printf("📝 Created wordlist file from content: %s", localWordlist)
+			log.Printf("📋 Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
 		} else {
-			// Try to parse as UUID and download
-			if wordlistUUID, err := uuid.Parse(job.Wordlist); err == nil {
-				downloadedPath, err := a.downloadWordlist(wordlistUUID)
-				if err != nil {
-					return fmt.Errorf("failed to download wordlist %s: %w", job.Wordlist, err)
-				}
-				localWordlist = downloadedPath
-				log.Printf("📥 Downloaded wordlist: %s", localWordlist)
+			// Fallback to wordlist filename resolution
+			if localPath, found := a.findLocalFile(job.Wordlist); found {
+				localWordlist = localPath
+				log.Printf("📁 Using local wordlist: %s", localWordlist)
 			} else {
-				// If not UUID, use as direct path
-				localWordlist = job.Wordlist
-				log.Printf("⚠️  Using wordlist path directly: %s", localWordlist)
+				// Try to parse as UUID and download
+				if wordlistUUID, err := uuid.Parse(job.Wordlist); err == nil {
+					downloadedPath, err := a.downloadWordlist(wordlistUUID)
+					if err != nil {
+						return fmt.Errorf("failed to download wordlist %s: %w", job.Wordlist, err)
+					}
+					localWordlist = downloadedPath
+					log.Printf("📥 Downloaded wordlist: %s", localWordlist)
+				} else {
+					// If not UUID, use as direct path
+					localWordlist = job.Wordlist
+					log.Printf("⚠️  Using wordlist path directly: %s", localWordlist)
+				}
 			}
 		}
 	}
