@@ -105,6 +105,9 @@ func NewRouter(
 		{
 			jobs.POST("/", jobHandler.CreateJob)
 			jobs.GET("/", jobHandler.GetAllJobs)
+			jobs.GET("/parallel/summary", jobHandler.GetParallelJobsSummary)
+			jobs.POST("/assign", jobHandler.AssignJobs)
+			jobs.POST("/auto", jobHandler.CreateParallelJobs)
 			jobs.GET("/:id", jobHandler.GetJob)
 			jobs.POST("/:id/start", jobHandler.StartJob)
 			jobs.PUT("/:id/progress", jobHandler.UpdateJobProgress)
@@ -115,8 +118,6 @@ func NewRouter(
 			jobs.POST("/:id/resume", jobHandler.ResumeJob)
 			jobs.POST("/:id/stop", jobHandler.StopJob)
 			jobs.DELETE("/:id", jobHandler.DeleteJob)
-			jobs.POST("/assign", jobHandler.AssignJobs)
-			jobs.POST("/auto", jobHandler.CreateParallelJobs)
 		}
 
 		// Distributed Job routes
