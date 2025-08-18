@@ -175,30 +175,6 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 				agentPerformances[i].Weight = float64(agentPerformances[i].Speed) / float64(totalSpeed)
 			}
 
-			// Create master job record
-			masterJob := &domain.Job{
-				ID:             uuid.New(),
-				Name:           fmt.Sprintf("%s (Master)", req.Name),
-				Status:         "distributed",
-				HashType:       req.HashType,
-				AttackMode:     req.AttackMode,
-				HashFile:       hashFile.Path,
-				HashFileID:     &hashFileID,
-				Wordlist:       req.Wordlist,
-				Rules:          req.Rules,
-				Progress:       0,
-				Speed:          0,
-				TotalWords:     totalWords,
-				ProcessedWords: 0,
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-			}
-
-			// Save master job
-			if err := u.jobRepo.Create(ctx, masterJob); err != nil {
-				return nil, fmt.Errorf("failed to create master job: %w", err)
-			}
-
 			// Create sub-jobs for each agent with distributed wordlist
 			var subJobs []*domain.Job
 			currentIndex := 0
@@ -235,7 +211,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 
 				subJob := &domain.Job{
 					ID:             uuid.New(),
-					Name:           fmt.Sprintf("%s (Part %d - %s)", req.Name, i+1, agentPerf.Name),
+					Name:           fmt.Sprintf("%s (%s)", req.Name, agentPerf.Name),
 					Status:         "pending",
 					HashType:       req.HashType,
 					AttackMode:     req.AttackMode,
@@ -265,7 +241,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 			}
 
 			// Return the first sub-job as the primary result
-			// The master job and other sub-jobs are created but not returned
+			// Other sub-jobs are created but not returned
 			return subJobs[0], nil
 		} else {
 			// Single agent assignment

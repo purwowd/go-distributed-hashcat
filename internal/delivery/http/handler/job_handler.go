@@ -15,6 +15,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// defaultString returns fallback if s is empty
+func defaultString(s string, fallback string) string {
+	if strings.TrimSpace(s) == "" {
+		return fallback
+	}
+	return s
+}
+
 type JobHandler struct {
 	jobUsecase        usecase.JobUsecase
 	enrichmentService usecase.JobEnrichmentService
@@ -88,7 +96,76 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": enrichedJobs})
+	// Normalize response to ensure all fields are populated with sensible defaults
+	normalized := make([]gin.H, 0, len(enrichedJobs))
+	for _, ej := range enrichedJobs {
+		var (
+			hashFileID    string
+			wordlistID    string
+			agentID       string
+			etaStr        string
+			startedAtStr  string
+			completedAtStr string
+		)
+
+		if ej.HashFileID != nil {
+			hashFileID = ej.HashFileID.String()
+		} else {
+			hashFileID = ""
+		}
+		if ej.WordlistID != nil {
+			wordlistID = ej.WordlistID.String()
+		} else {
+			wordlistID = ""
+		}
+		if ej.AgentID != nil {
+			agentID = ej.AgentID.String()
+		} else {
+			agentID = ""
+		}
+		if ej.ETA != nil {
+			etaStr = ej.ETA.Format(time.RFC3339)
+		} else {
+			etaStr = ""
+		}
+		if ej.StartedAt != nil {
+			startedAtStr = ej.StartedAt.Format(time.RFC3339)
+		} else {
+			startedAtStr = ""
+		}
+		if ej.CompletedAt != nil {
+			completedAtStr = ej.CompletedAt.Format(time.RFC3339)
+		} else {
+			completedAtStr = ""
+		}
+
+		normalized = append(normalized, gin.H{
+			"id":             ej.ID.String(),
+			"name":           defaultString(ej.Name, "-"),
+			"status":         defaultString(ej.Status, "pending"),
+			"hash_type":      ej.HashType,
+			"attack_mode":    ej.AttackMode,
+			"hash_file":      defaultString(ej.HashFile, ""),
+			"hash_file_id":   hashFileID,
+			"hash_file_name": defaultString(ej.HashFileName, "-"),
+			"wordlist":       defaultString(ej.Wordlist, ""),
+			"wordlist_id":    wordlistID,
+			"wordlist_name":  defaultString(ej.WordlistName, "-"),
+			"rules":          defaultString(ej.Rules, "-"),
+			"agent_id":       agentID,
+			"agent_name":     defaultString(ej.AgentName, "Unassigned"),
+			"progress":       ej.Progress,
+			"speed":          ej.Speed,
+			"eta":            etaStr,
+			"result":         defaultString(ej.Result, "-"),
+			"created_at":     ej.CreatedAt.Format(time.RFC3339),
+			"updated_at":     ej.UpdatedAt.Format(time.RFC3339),
+			"started_at":     startedAtStr,
+			"completed_at":   completedAtStr,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": normalized})
 }
 
 func (h *JobHandler) StartJob(c *gin.Context) {
