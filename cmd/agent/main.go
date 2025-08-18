@@ -746,15 +746,7 @@ func (a *Agent) executeJob(job *domain.Job) {
 	// Execute hashcat command
 	if err := a.runHashcat(job); err != nil {
 		log.Printf("Hashcat execution failed: %v", err)
-		
-		// Check if the error is due to exit status 255 (password not found)
-		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 255 {
-			// Treat exit status 255 as completion with "Password not found"
-			a.completeJob(job.ID, "Password not found")
-		} else {
-			// For other errors, use the original failure handling
-			a.failJob(job.ID, fmt.Sprintf("Hashcat execution failed: %v", err))
-		}
+		a.failJob(job.ID, fmt.Sprintf("Hashcat execution failed: %v", err))
 		return
 	}
 
@@ -914,9 +906,10 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				a.cleanupJobFiles(job.ID)
 				return nil
 			} else if exitCode == 255 {
-				// Exit status 255 usually means password not found due to some error
-				// Treat as completion with "Password not found" message
-				a.completeJob(job.ID, "Password not found")
+				// Exit code 255 usually means invalid arguments or file not found
+				// Check if this is due to password not being found vs other errors
+				// For now, treat exit 255 as password not found scenario
+				a.failJob(job.ID, "Password not found")
 				a.cleanupJobFiles(job.ID)
 				return nil
 			}
