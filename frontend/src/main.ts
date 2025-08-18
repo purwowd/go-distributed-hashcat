@@ -1710,6 +1710,139 @@ class DashboardApplication {
                 return Math.round(totalWords * performanceRatio)
             },
 
+            // Get assigned percentage for selected agents (ensures total = 100%)
+            getAssignedPercentageForSelected(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Calculate performance scores
+                const agentScores = selectedAgents.map(a => ({
+                    agent: a,
+                    score: this.getAgentPerformanceScore(a)
+                }));
+                
+                // Sort by performance (highest first)
+                agentScores.sort((a, b) => b.score - a.score);
+                
+                // Find this agent's position
+                const agentIndex = agentScores.findIndex(item => item.agent.id === agent.id);
+                if (agentIndex === -1) return 0;
+                
+                // Calculate distribution based on performance
+                const totalScore = agentScores.reduce((sum, item) => sum + item.score, 0);
+                const agentScore = agentScores[agentIndex].score;
+                
+                // Calculate percentage (ensures total = 100%)
+                const percentage = (agentScore / totalScore) * 100;
+                
+                return Math.round(percentage);
+            },
+
+            // Get assigned percentage with exact 100% total (no rounding errors)
+            getAssignedPercentageExact(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Calculate performance scores
+                const agentScores = selectedAgents.map(a => ({
+                    agent: a,
+                    score: this.getAgentPerformanceScore(a)
+                }));
+                
+                // Sort by performance (highest first)
+                agentScores.sort((a, b) => b.score - a.score);
+                
+                // Find this agent's position
+                const agentIndex = agentScores.findIndex(item => item.agent.id === agent.id);
+                if (agentIndex === -1) return 0;
+                
+                // Calculate distribution based on performance
+                const totalScore = agentScores.reduce((sum, item) => sum + item.score, 0);
+                const agentScore = agentScores[agentIndex].score;
+                
+                // Calculate percentage without rounding first
+                const exactPercentage = (agentScore / totalScore) * 100;
+                
+                // For the last agent, ensure total = 100%
+                if (agentIndex === selectedAgents.length - 1) {
+                    // Calculate what the total should be for previous agents
+                    let previousTotal = 0;
+                    for (let i = 0; i < agentIndex; i++) {
+                        const prevScore = agentScores[i].score;
+                        const prevPercent = Math.round((prevScore / totalScore) * 100);
+                        previousTotal += prevPercent;
+                    }
+                    
+                    // Last agent gets the remaining percentage to make total = 100%
+                    return 100 - previousTotal;
+                }
+                
+                // For other agents, round normally
+                return Math.round(exactPercentage);
+            },
+
+            // Get assigned percentage based on word count distribution (more accurate)
+            getAssignedPercentageByWords(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Get word count for this agent
+                const agentWords = this.getAssignedWordCountForSelected(agent);
+                if (agentWords === 0) return 0;
+                
+                // Get total words for all selected agents
+                const totalWords = selectedAgents.reduce((sum, a) => sum + this.getAssignedWordCountForSelected(a), 0);
+                if (totalWords === 0) return 0;
+                
+                // Calculate percentage based on actual word count
+                const percentage = (agentWords / totalWords) * 100;
+                
+                return Math.round(percentage);
+            },
+
+            // Get assigned percentage with word-based distribution (most accurate)
+            getAssignedPercentageWordBased(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Get word counts for all agents
+                const agentWordCounts = selectedAgents.map(a => ({
+                    agent: a,
+                    words: this.getAssignedWordCountForSelected(a)
+                }));
+                
+                // Sort by word count (highest first)
+                agentWordCounts.sort((a, b) => b.words - a.words);
+                
+                // Find this agent's position
+                const agentIndex = agentWordCounts.findIndex(item => item.agent.id === agent.id);
+                if (agentIndex === -1) return 0;
+                
+                // Get total words
+                const totalWords = agentWordCounts.reduce((sum, item) => sum + item.words, 0);
+                if (totalWords === 0) return 0;
+                
+                // For the last agent, ensure total = 100%
+                if (agentIndex === selectedAgents.length - 1) {
+                    // Calculate what the total should be for previous agents
+                    let previousTotal = 0;
+                    for (let i = 0; i < agentIndex; i++) {
+                        const prevWords = agentWordCounts[i].words;
+                        const prevPercent = Math.round((prevWords / totalWords) * 100);
+                        previousTotal += prevPercent;
+                    }
+                    
+                    // Last agent gets the remaining percentage to make total = 100%
+                    return 100 - previousTotal;
+                }
+                
+                // For other agents, calculate based on word count
+                const agentWords = agentWordCounts[agentIndex].words;
+                const percentage = (agentWords / totalWords) * 100;
+                
+                return Math.round(percentage);
+            },
+
             // Update distributed command template
             updateDistributedCommandTemplate() {
                 if (!this.distributedJobForm.hash_file_id || !this.distributedJobForm.wordlist_id) {
