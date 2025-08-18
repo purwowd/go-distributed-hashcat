@@ -29,7 +29,7 @@ interface Agent {
     id: string
     name: string
     ip_address: string
-    port?: number
+    port?: number | string
     status: 'online' | 'offline' | 'busy'
     capabilities?: string
     gpu_info?: string
@@ -187,11 +187,14 @@ class DashboardApplication {
                 { name: 'ui/breadcrumb', path: '/components/ui/breadcrumb.html' },
                 { name: 'tabs/overview', path: '/components/tabs/overview.html' },
                 { name: 'tabs/agents', path: '/components/tabs/agents.html' },
+                { name: 'tabs/agent-keys', path: '/components/tabs/agent-keys.html' },
                 { name: 'tabs/jobs', path: '/components/tabs/jobs.html' },
                 { name: 'tabs/files', path: '/components/tabs/files.html' },
                 { name: 'tabs/wordlists', path: '/components/tabs/wordlists.html' },
                 { name: 'tabs/docs', path: '/components/tabs/docs.html' },
                 { name: 'modals/agent-modal', path: '/components/modals/agent-modal.html' },
+                { name: 'modals/agent-key-modal', path: '/components/modals/agent-key-modal.html' },
+                { name: 'modals/delete-confirm-modal', path: '/components/modals/delete-confirm-modal.html' },
                 { name: 'modals/job-modal', path: '/components/modals/job-modal.html' },
                 { name: 'modals/file-modal', path: '/components/modals/file-modal.html' },
                 { name: 'modals/wordlist-modal', path: '/components/modals/wordlist-modal.html' },
@@ -272,7 +275,8 @@ class DashboardApplication {
         // Load tab content
         const tabComponents = [
             'tabs/overview',
-            'tabs/agents', 
+            'tabs/agents',
+            'tabs/agent-keys',
             'tabs/jobs',
             'tabs/files',
             'tabs/wordlists',
@@ -296,8 +300,10 @@ class DashboardApplication {
         // Load modals
         const modalComponents = [
             'modals/agent-modal',
+            'modals/agent-key-modal',
+            'modals/delete-confirm-modal',
             'modals/job-modal',
-            'modals/file-modal', 
+            'modals/file-modal',
             'modals/wordlist-modal'
         ]
 
@@ -393,18 +399,32 @@ class DashboardApplication {
             
             // Modal states
             showAgentModal: false,
+            showAgentKeyModal: false,
+            showDeleteModal: false,
+            showAgentKeys: false,
             showJobModal: false,
+            currentStep: 1, // 1: Basic Config, 2: Distribution Preview
             showFileModal: false,
             showWordlistModal: false,
+            showDistributedJobModal: false,
+            
+            // Compact mode for agent selection
+            isCompactMode: false,
             
             // Form states
-            agentForm: { name: '', ip_address: '', port: 8080, capabilities: '' },
-            jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '', attack_mode: '' },
+            agentForm: { ip_address: '', port: null as number | null, capabilities: '', agent_key: '' },
+            agentKeyForm: { name: '', agent_key: '' },
+            createdAgent: null as any,
+            createdAgentKey: null as any,
+            deleteModalConfig: { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null as any },
+            jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [] as string[], hash_type: '', attack_mode: '' },
+            distributedJobForm: { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', auto_distribute: true },
             fileForm: { file: null },
             wordlistForm: { file: null },
             
             // Command template for job creation
             commandTemplate: '',
+            distributedCommandTemplate: '',
             
             // Manual loading reset (fallback)
             forceStopLoading() {
@@ -424,21 +444,41 @@ class DashboardApplication {
             
             // Reactive data arrays - these will be updated by store subscriptions
             reactiveAgents: [] as any[],
+            reactiveAgentKeys: [] as any[],
             reactiveJobs: [] as any[],
             reactiveHashFiles: [] as any[],
             reactiveWordlists: [] as any[],
 
+            // Server-side table state for Agents/Agent-Keys
+            agentTable: {
+                page: 1,
+                pageSize: 10,
+                search: '',
+                total: 0
+            },
+            
+            // Server-side table state for Jobs
+            jobTable: {
+                page: 1,
+                pageSize: 10,
+                search: '',
+                total: 0
+            },
+
             // Getters that return reactive data
-            get agents() { 
+            get agents() {
                 return this.reactiveAgents || []
             },
-            get jobs() { 
+            get agentKeys() {
+                return this.reactiveAgentKeys || []
+            },
+            get jobs() {
                 return this.reactiveJobs || []
             },
-            get hashFiles() { 
+            get hashFiles() {
                 return this.reactiveHashFiles || []
             },
-            get wordlists() { 
+            get wordlists() {
                 return this.reactiveWordlists || []
             },
             
@@ -454,6 +494,105 @@ class DashboardApplication {
             get pendingJobs() {
                 const jobs = this.jobs
                 return Array.isArray(jobs) ? jobs.filter((job: any) => job.status === 'pending') : []
+            },
+            
+            // Computed property for selected wordlist count
+            get selectedWordlistCount() {
+                if (!this.jobForm.wordlist_id) {
+                    return '0'
+                }
+                
+                const selectedWordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                if (!selectedWordlist) {
+                    return '0'
+                }
+                
+                // Return word count if available, otherwise return size in KB
+                if (selectedWordlist.word_count && selectedWordlist.word_count > 0) {
+                    return selectedWordlist.word_count.toLocaleString()
+                } else if (selectedWordlist.size) {
+                    const sizeKB = Math.round(selectedWordlist.size / 1024)
+                    return `${sizeKB} KB`
+                }
+                
+                return '0'
+            },
+
+
+            
+            // Computed properties for hash type based on selected file
+            get selectedHashTypeValue() {
+                if (!this.jobForm.hash_file_id) {
+                    return '2500' // Default for WPA/WPA2
+                }
+                
+                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                if (!selectedFile) {
+                    return '2500'
+                }
+                
+                // Determine hash type based on file type
+                const fileType = selectedFile.type?.toLowerCase() || ''
+                switch (fileType) {
+                    case 'hccapx':
+                    case 'hccap':
+                    case 'cap':
+                    case 'pcap':
+                        return '2500' // WPA/WPA2
+                    case 'hash':
+                    default:
+                        return '0' // Generic hash
+                }
+            },
+            
+            get selectedHashTypeName() {
+                if (!this.jobForm.hash_file_id) {
+                    return 'WPA/WPA2'
+                }
+                
+                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                if (!selectedFile) {
+                    return 'WPA/WPA2'
+                }
+                
+                // Determine hash type name based on file type
+                const fileType = selectedFile.type?.toLowerCase() || ''
+                switch (fileType) {
+                    case 'hccapx':
+                    case 'hccap':
+                    case 'cap':
+                    case 'pcap':
+                        return 'WPA/WPA2'
+                    case 'hash':
+                    default:
+                        return 'Generic Hash'
+                }
+            },
+            
+            get selectedHashTypeDescription() {
+                if (!this.jobForm.hash_file_id) {
+                    return 'This system is specialized for WPA/WPA2 cracking'
+                }
+                
+                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                if (!selectedFile) {
+                    return 'This system is specialized for WPA/WPA2 cracking'
+                }
+                
+                // Determine description based on file type
+                const fileType = selectedFile.type?.toLowerCase() || ''
+                switch (fileType) {
+                    case 'hccapx':
+                        return 'WiFi handshake file (.hccapx) - WPA/WPA2 cracking'
+                    case 'hccap':
+                        return 'Legacy WiFi handshake file (.hccap) - WPA/WPA2 cracking'
+                    case 'cap':
+                    case 'pcap':
+                        return 'WiFi packet capture file - WPA/WPA2 cracking'
+                    case 'hash':
+                    default:
+                        return 'Generic hash file - various hash types supported'
+                }
             },
 
             // Methods
@@ -497,9 +636,37 @@ class DashboardApplication {
                 // Subscribe to agent store changes
                 agentStore.subscribe(() => {
                     const state = agentStore.getState()
+                    
+                    // ✅ Implement stable sorting to maintain card positions
+                    const agents = state.agents || []
+                    // Sort by created_at DESC, then by ID ASC for stable ordering
+                    const stableSortedAgents = agents.sort((a, b) => {
+                        // First sort by created_at DESC (newest first)
+                        const dateComparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                        if (dateComparison !== 0) {
+                            return dateComparison
+                        }
+                        // If dates are equal, sort by ID ASC for stable ordering
+                        return a.id.localeCompare(b.id)
+                    })
+                    
                     // ✅ Force Alpine.js reactivity by creating new array reference
-                    this.reactiveAgents = [...(state.agents || [])]
+                    this.reactiveAgents = [...stableSortedAgents]
+                    // Also update agentKeys with agents that have no IP address (these are just keys)
+                    this.reactiveAgentKeys = [...stableSortedAgents].filter(agent => !agent.ip_address || agent.ip_address === '')
                     console.log('🔄 Agent store updated:', this.reactiveAgents.length, 'agents')
+
+                    // Sync pagination (if available)
+                    if (state.pagination) {
+                        this.agentTable.total = state.pagination.total
+                        // Keep page size and page if already set
+                        if (state.pagination.pageSize && this.agentTable.pageSize !== state.pagination.pageSize) {
+                            this.agentTable.pageSize = state.pagination.pageSize
+                        }
+                        if (state.pagination.page && this.agentTable.page !== state.pagination.page) {
+                            this.agentTable.page = state.pagination.page
+                        }
+                    }
                 })
                 
                 // Subscribe to job store changes
@@ -508,6 +675,9 @@ class DashboardApplication {
                     // ✅ Force Alpine.js reactivity by creating new array reference
                     this.reactiveJobs = [...(state.jobs || [])]
                     console.log('🔄 Job store updated:', this.reactiveJobs.length, 'jobs')
+                    
+                    // Sync pagination (if available)
+                    // Note: This would need to be updated when we implement job pagination in the backend
                 })
                 
                 // Subscribe to file store changes
@@ -523,6 +693,91 @@ class DashboardApplication {
                 })
                 
                 // console.log('📡 Store subscriptions setup for reactive UI updates')
+            },
+
+            // Server-side table helpers
+            async refreshAgentsTable() {
+                await agentStore.actions.fetchAgents({
+                    page: this.agentTable.page,
+                    page_size: this.agentTable.pageSize,
+                    search: this.agentTable.search
+                })
+            },
+            async setAgentTablePageSize(event: any) {
+                const val = parseInt(event?.target?.value || '10')
+                this.agentTable.pageSize = isNaN(val) ? 10 : val
+                this.agentTable.page = 1
+                await this.refreshAgentsTable()
+            },
+            async setAgentTableSearch(event: any) {
+                this.agentTable.search = event?.target?.value || ''
+                this.agentTable.page = 1
+                await this.refreshAgentsTable()
+            },
+            async goPrevAgentsPage() {
+                if (this.agentTable.page > 1) {
+                    this.agentTable.page -= 1
+                    await this.refreshAgentsTable()
+                }
+            },
+            async goNextAgentsPage() {
+                const canNext = this.agentTable.page * this.agentTable.pageSize < (this.agentTable.total || 0)
+                if (canNext) {
+                    this.agentTable.page += 1
+                    await this.refreshAgentsTable()
+                }
+            },
+
+            // Server-side table helpers for Jobs
+            async refreshJobsTable() {
+                const result = await jobStore.actions.fetchJobs({
+                    page: this.jobTable.page,
+                    page_size: this.jobTable.pageSize,
+                    search: this.jobTable.search
+                })
+                if (result) {
+                    this.jobTable.total = result.total
+                }
+            },
+            async setJobTablePageSize(event: any) {
+                const val = parseInt(event?.target?.value || '10')
+                this.jobTable.pageSize = isNaN(val) ? 10 : val
+                this.jobTable.page = 1
+                await this.refreshJobsTable()
+            },
+            async setJobTableSearch(event: any) {
+                this.jobTable.search = event?.target?.value || ''
+                this.jobTable.page = 1
+                await this.refreshJobsTable()
+            },
+            async goPrevJobsPage() {
+                if (this.jobTable.page > 1) {
+                    this.jobTable.page -= 1
+                    await this.refreshJobsTable()
+                }
+            },
+            async goNextJobsPage() {
+                const canNext = this.jobTable.page * this.jobTable.pageSize < (this.jobTable.total || 0)
+                if (canNext) {
+                    this.jobTable.page += 1
+                    await this.refreshJobsTable()
+                }
+            },
+            async goToJobsPage(page: number) {
+                const totalPages = Math.max(1, Math.ceil((this.jobTable.total || 0) / (this.jobTable.pageSize || 10)))
+                const target = Math.min(Math.max(1, page), totalPages)
+                if (target !== this.jobTable.page) {
+                    this.jobTable.page = target
+                    await this.refreshJobsTable()
+                }
+            },
+            async goToAgentsPage(page: number) {
+                const totalPages = Math.max(1, Math.ceil((this.agentTable.total || 0) / (this.agentTable.pageSize || 10)))
+                const target = Math.min(Math.max(1, page), totalPages)
+                if (target !== this.agentTable.page) {
+                    this.agentTable.page = target
+                    await this.refreshAgentsTable()
+                }
             },
 
             // NEW: Setup WebSocket subscriptions for real-time updates
@@ -653,13 +908,22 @@ class DashboardApplication {
                     })
                     
                     // Load jobs with separate timeout
-                    await Promise.race([
+                    const jobResult = await Promise.race([
                         timeout,
-                        jobStore.actions.fetchJobs().catch(err => {
+                        jobStore.actions.fetchJobs({
+                            page: this.jobTable.page,
+                            page_size: this.jobTable.pageSize,
+                            search: this.jobTable.search
+                        }).catch(err => {
                             console.warn('Failed to load jobs:', err)
-                            return []
+                            return null
                         })
                     ])
+                    
+                    // Sync job pagination data
+                    if (jobResult) {
+                        this.jobTable.total = (jobResult as any).total
+                    }
                     
                     // Load cache stats
                     await this.refreshCacheStats().catch(err => {
@@ -736,6 +1000,8 @@ class DashboardApplication {
                 if (!numValue || isNaN(numValue)) return '0'
                 return numValue.toLocaleString()
             },
+
+
             
             getDisplayName(item: any) {
                 // Try different name fields
@@ -911,10 +1177,19 @@ class DashboardApplication {
                 // Poll for updates every 30 seconds
                 setInterval(async () => {
                     if (!this.isLoading && this.currentTab === 'overview') {
-                        await Promise.all([
+                        const [_, jobResult] = await Promise.all([
                             agentStore.actions.fetchAgents(),
-                            jobStore.actions.fetchJobs()
+                            jobStore.actions.fetchJobs({
+                                page: this.jobTable.page,
+                                page_size: this.jobTable.pageSize,
+                                search: this.jobTable.search
+                            })
                         ])
+                        
+                        // Sync job pagination data
+                        if (jobResult) {
+                            this.jobTable.total = (jobResult as any).total
+                        }
                     }
                 }, 30000)
             },
@@ -922,20 +1197,175 @@ class DashboardApplication {
             // Modal actions
             async openAgentModal() {
                 this.showAgentModal = true
-                this.agentForm = { name: '', ip_address: '', port: 8080, capabilities: '' }
+                this.agentForm = { ip_address: '', port: null as number | null, capabilities: '', agent_key: '' }
+                this.createdAgent = null
             },
             
             closeAgentModal() {
                 this.showAgentModal = false
+                this.createdAgent = null
+            },
+            
+            async openAgentKeyModal() {
+                this.showAgentKeyModal = true
+                // Pre-generate an 8-char hex key on the client for instant UX; server will accept or generate if absent
+                const pregenerated = Math.random().toString(16).slice(2, 10).padEnd(8, '0').slice(0,8)
+                this.agentKeyForm = { name: '', agent_key: pregenerated }
+                this.createdAgentKey = null
+            },
+            
+            closeAgentKeyModal() {
+                this.showAgentKeyModal = false
+                this.createdAgentKey = null
+            },
+
+            // Generic Delete Modal actions
+            openDeleteModal(entityType: string, entity: any, confirmAction: any) {
+                const configs = {
+                    'agent': {
+                        entityType: 'Agent',
+                        entityName: entity?.name || 'agent',
+                        description: 'This action will remove the agent from the list. This operation cannot be undone.',
+                        warning: 'This will permanently remove the agent and all associated data.'
+                    },
+                    'job': {
+                        entityType: 'Job',
+                        entityName: entity?.name || 'job',
+                        description: 'This action will permanently delete the job and all associated data. This operation cannot be undone.',
+                        warning: 'This will remove the job from the system permanently.'
+                    },
+                    'file': {
+                        entityType: 'Hash File',
+                        entityName: entity?.orig_name || entity?.name || 'file',
+                        description: 'This action will permanently delete the hash file. This operation cannot be undone.',
+                        warning: 'This will remove the file and all associated data permanently.'
+                    },
+                    'wordlist': {
+                        entityType: 'Wordlist',
+                        entityName: entity?.orig_name || entity?.name || 'wordlist',
+                        description: 'This action will permanently delete the wordlist. This operation cannot be undone.',
+                        warning: 'This will remove the wordlist and all associated data permanently.'
+                    }
+                }
+                
+                this.deleteModalConfig = {
+                    ...configs[entityType as keyof typeof configs],
+                    entityId: entity?.id,
+                    confirmAction: confirmAction
+                }
+                this.showDeleteModal = true
+            },
+            closeDeleteModal() {
+                this.showDeleteModal = false
+                this.deleteModalConfig = { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null }
+            },
+            async confirmDelete() {
+                if (this.deleteModalConfig.confirmAction) {
+                    await this.deleteModalConfig.confirmAction()
+                }
+                this.closeDeleteModal()
             },
 
             async createAgent(agentData: any) {
-                const result = await agentStore.actions.createAgent(agentData)
-                if (result) {
-                    this.showNotification('Agent created successfully!', 'success')
-                    this.closeAgentModal()
+                try {
+                    this.isLoading = true
+                    
+                    // Validate required fields - only agent_key is required now
+                    if (!agentData.agent_key) {
+                    this.showNotification('Agent key is required. Please enter an agent key.', 'error')
+                    return
+                }
+                
+                    // Set default port 8080 if port is empty or null
+                    const processedData = { ...agentData }
+                    if (!processedData.port || processedData.port === '' || processedData.port === null || processedData.port === undefined) {
+                        processedData.port = 8080
+                        console.log('🔧 Setting default port 8080 for agent')
+                    }
+                
+                // Use updateAgentData instead of createAgent to only update data without changing status
+                const result = await agentStore.actions.updateAgentData(processedData)
+                if (result.success) {
+                    // Agent data updated successfully, show success notification and close modal
+                    this.showNotification(result.message || 'Agent data updated successfully!', 'success')
+                    this.closeAgentModal() // Close modal after success
                 } else {
-                    this.showNotification('Failed to create agent', 'error')
+                    // Show specific error message
+                    if (result.error) {
+                        // Remove HTTP status prefix if present for better user experience
+                        let userMessage = result.error
+                        
+                        // Remove HTTP status prefix if present
+                        if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                            userMessage = userMessage.replace('HTTP 400: Bad Request - ', '')
+                        } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                            userMessage = userMessage.replace('HTTP 409: Conflict - ', '')
+                        } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                            userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '')
+                        }
+                        
+                        this.showNotification(userMessage, 'error')
+                    } else {
+                        this.showNotification('Failed to update agent data', 'error')
+                    }
+                }
+                } catch (error) {
+                    console.error('Error creating agent:', error)
+                    this.showNotification('Failed to register agent', 'error')
+                } finally {
+                    this.isLoading = false
+                }
+            },
+
+
+            async copyAgentKey(agentKey: string) {
+                try {
+                    await navigator.clipboard.writeText(agentKey)
+                    this.showNotification('Agent key copied to clipboard!', 'success')
+                } catch (err) {
+                    console.error('Failed to copy agent key: ', err)
+                    this.showNotification('Failed to copy agent key', 'error')
+                }
+            },
+            
+            async createAgentKey(agentKeyData: any) {
+                // Use the new generateAgentKey action for creating agent keys
+                const result = await agentStore.actions.generateAgentKey(agentKeyData.name)
+                if (result) {
+                    this.showNotification('Agent Key Generated Successfully!', 'success')
+                    this.createdAgentKey = result
+                    if (result.agent_key) {
+                        this.agentKeyForm.agent_key = result.agent_key
+                    }
+                    // Auto-close modal after short delay
+                    setTimeout(() => {
+                        this.closeAgentKeyModal()
+                    }, 400)
+                } else {
+                    const state = agentStore.getState()
+                    const rawError = String(state.error || '')
+                    const err = rawError.toLowerCase()
+                    if (err.includes('already exists')) {
+                        // Extract agent name if present: "already exists <name>"
+                        const namePart = rawError.split('already exists')[1]?.trim() || agentKeyData.name
+                        this.showNotification(`Agent name '${namePart}' already exists`, 'error')
+                    } else if (state.error != null && String(state.error).trim() !== '') {
+                        // Try to extract user-friendly message from error
+                        let userMessage = String(state.error);
+                        
+                        // Remove HTTP status prefix if present
+                        if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                            userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
+                        } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                            userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
+                        } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                            userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
+                        }
+                        
+                        this.showNotification(userMessage, 'error')
+                    } else {
+                        this.showNotification('Failed to generate agent key', 'error')
+                    }
                 }
             },
 
@@ -947,20 +1377,70 @@ class DashboardApplication {
                 }
                 
                 this.showJobModal = true
-                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
+                this.currentStep = 1
+                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
             },
             
             closeJobModal() {
                 this.showJobModal = false
+                this.currentStep = 1
+            },
+
+            // Step management functions
+            goToStep(step: number) {
+                if (step === 2 && !this.canProceedToStep2()) {
+                    this.showNotification('Please complete all required fields before proceeding', 'warning')
+                    return
+                }
+                this.currentStep = step
+                if (step === 2) {
+                    this.updateCommandTemplate()
+                }
+            },
+
+            canProceedToStep2(): boolean {
+                return !!(this.jobForm.name && 
+                         this.jobForm.hash_file_id && 
+                         this.jobForm.wordlist_id &&
+                         this.jobForm.agent_ids && 
+                         this.jobForm.agent_ids.length > 0)
+            },
+
+            getSelectedHashFileName(): string {
+                if (!this.jobForm.hash_file_id) return 'Not selected'
+                const hashFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                return hashFile ? (hashFile.orig_name || hashFile.name) : 'Not selected'
+            },
+
+            getSelectedWordlistName(): string {
+                if (!this.jobForm.wordlist_id) return 'Not selected'
+                const wordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                return wordlist ? (wordlist.orig_name || wordlist.name) : 'Not selected'
             },
 
             async createJob(jobData: any) {
                 try {
                     this.isLoading = true
                     
-                    // Get wordlist name for backend requirement
+                    // Get wordlist details for backend requirement
                     const selectedWordlist = this.wordlists.find((w: any) => w.id === jobData.wordlist_id)
                     const wordlistName = selectedWordlist ? (selectedWordlist.orig_name || selectedWordlist.name) : 'unknown.txt'
+                    
+                    // Get wordlist content for distribution
+                    let wordlistContent = ''
+                    if (selectedWordlist && selectedWordlist.content) {
+                        wordlistContent = selectedWordlist.content
+                    } else if (selectedWordlist && selectedWordlist.path) {
+                        // Try to fetch wordlist content from server
+                        try {
+                            const response = await fetch(`/api/v1/wordlists/${selectedWordlist.id}/content`)
+                            if (response.ok) {
+                                wordlistContent = await response.text()
+                            }
+                        } catch (error) {
+                            console.warn('Failed to fetch wordlist content:', error)
+                        }
+                    }
                     
                     // Enhanced job creation with agent assignment
                     const jobPayload = {
@@ -968,9 +1448,9 @@ class DashboardApplication {
                         hash_type: parseInt(jobData.hash_type),
                         attack_mode: parseInt(jobData.attack_mode),
                         hash_file_id: jobData.hash_file_id,
-                        wordlist: wordlistName,                    // Required field for backend
+                        wordlist: wordlistContent || wordlistName,  // Send content if available, otherwise name
                         wordlist_id: jobData.wordlist_id,         // Optional reference ID
-                        agent_id: jobData.agent_id || undefined   // Include agent assignment if specified
+                        agent_ids: jobData.agent_ids || []        // Include multiple agent assignments
                     }
                     
                     // Validate required fields before sending
@@ -981,20 +1461,22 @@ class DashboardApplication {
                     }
                     
                     // Validate agent assignment is required
-                    if (!jobPayload.agent_id) {
-                        this.showNotification('Please select an agent to run this job', 'error')
+                    if (!jobPayload.agent_ids || jobPayload.agent_ids.length === 0) {
+                        this.showNotification('Please select at least one agent to run this job', 'error')
                         return
                     }
                     
-                    // Validate selected agent is online
-                    const selectedAgent = this.agents.find((a: any) => a.id === jobPayload.agent_id)
-                    if (!selectedAgent) {
-                        this.showNotification('Selected agent not found', 'error')
+                    // Validate all selected agents are online
+                    const selectedAgents = this.agents.filter((a: any) => jobPayload.agent_ids.includes(a.id))
+                    if (selectedAgents.length !== jobPayload.agent_ids.length) {
+                        this.showNotification('Some selected agents were not found', 'error')
                         return
                     }
                     
-                    if (selectedAgent.status !== 'online') {
-                        this.showNotification(`Cannot create job: Agent "${selectedAgent.name}" is ${selectedAgent.status}`, 'error')
+                    const offlineAgents = selectedAgents.filter((a: any) => a.status !== 'online')
+                    if (offlineAgents.length > 0) {
+                        const agentNames = offlineAgents.map((a: any) => a.name).join(', ')
+                        this.showNotification(`Cannot create job: Agents "${agentNames}" are offline`, 'error')
                         return
                     }
                     
@@ -1004,10 +1486,10 @@ class DashboardApplication {
                     if (result) {
                         this.showNotification('Job created successfully!', 'success')
                         this.showJobModal = false
-                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_id: '', hash_type: '2500', attack_mode: '0' }
+                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
                         
                         // Refresh jobs list to show the new job
-                        await jobStore.actions.fetchJobs()
+                        await this.refreshJobsTable()
                     } else {
                         this.showNotification('Failed to create job - server returned null', 'error')
                     }
@@ -1048,7 +1530,7 @@ class DashboardApplication {
                     this.jobForm.attack_mode = '0'
                 }
                 
-                if (!this.jobForm.hash_file_id || !this.jobForm.wordlist_id) {
+                if (!this.jobForm.hash_file_id || !this.jobForm.wordlist_id || !this.jobForm.agent_ids || this.jobForm.agent_ids.length === 0) {
                     this.commandTemplate = 'hashcat command will appear here...'
                     return
                 }
@@ -1060,20 +1542,402 @@ class DashboardApplication {
                 const hashFileName = hashFile ? (hashFile.orig_name || hashFile.name) : 'hashfile'
                 const wordlistName = wordlist ? (wordlist.orig_name || wordlist.name) : 'wordlist'
 
-                // Build hashcat command for WPA/WPA2 Dictionary Attack
-                this.commandTemplate = `hashcat -m 2500 -a 0 ${hashFileName} ${wordlistName}`
+                if (this.jobForm.agent_ids.length === 1) {
+                    // Single agent - simple command
+                    this.commandTemplate = `hashcat -m ${this.jobForm.hash_type || 2500} -a ${this.jobForm.attack_mode || 0} ${hashFileName} ${wordlistName}`
+                    
+                    // Add WPA/WPA2 specific optimizations
+                    this.commandTemplate += ' -O --force --status --status-timer=5'
+                    
+                    // Add session name
+                    if (this.jobForm.name) {
+                        const sessionName = this.jobForm.name.toLowerCase().replace(/[^a-z0-9]/g, '_')
+                        this.commandTemplate += ` --session=${sessionName}`
+                    }
+                    
+                    // Add outfile for WPA/WPA2
+                    this.commandTemplate += ' --outfile=cracked.txt --outfile-format=2'
+                } else {
+                    // Multiple agents - distributed commands
+                    this.commandTemplate = `# Distributed Hashcat Commands\n`
+                    this.commandTemplate += `# Hash File: ${hashFileName}\n`
+                    this.commandTemplate += `# Wordlist: ${wordlistName}\n`
+                    this.commandTemplate += `# Total Agents: ${this.jobForm.agent_ids.length}\n\n`
+                    
+                    this.jobForm.agent_ids.forEach((agentId: string, index: number) => {
+                        const agent = this.agents.find((a: any) => a.id === agentId)
+                        if (agent) {
+                            const assignedWords = this.getAssignedWordCountForSelected(agent)
+                            const resourceType = this.isGPUAgent(agent) ? 'GPU' : 'CPU'
+                            const performance = this.getAgentPerformanceScore(agent)
+                            
+                            this.commandTemplate += `# Job ${index + 1}: ${this.jobForm.name} - ${agent.name}\n`
+                            this.commandTemplate += `# Agent: ${agent.name} (${resourceType}, ${performance}%)\n`
+                            this.commandTemplate += `# Assigned: ${assignedWords.toLocaleString()} words\n`
+                            this.commandTemplate += `hashcat -m ${this.jobForm.hash_type || 2500} -a ${this.jobForm.attack_mode || 0} \\\n`
+                            this.commandTemplate += `  ${hashFileName} \\\n`
+                            this.commandTemplate += `  ${wordlistName}_part_${index + 1} \\\n`
+                            this.commandTemplate += `  -O --force --status --status-timer=5 \\\n`
+                            this.commandTemplate += `  --session=${(this.jobForm.name || 'job').toLowerCase().replace(/[^a-z0-9]/g, '_')}_part_${index + 1} \\\n`
+                            this.commandTemplate += `  --outfile=cracked_part_${index + 1}.txt --outfile-format=2\n\n`
+                        }
+                    })
+                }
+            },
+
+
+
+            // Toggle select all agents
+            toggleSelectAllAgents(checked: boolean) {
+                if (checked) {
+                    // Select all online agents
+                    this.jobForm.agent_ids = this.onlineAgents.map((agent: any) => agent.id)
+                } else {
+                    // Deselect all agents
+                    this.jobForm.agent_ids = []
+                }
+            },
+
+            // Check if all agents are selected
+            areAllAgentsSelected(): boolean {
+                return this.onlineAgents.length > 0 && 
+                       this.jobForm.agent_ids.length === this.onlineAgents.length &&
+                       this.onlineAgents.every((agent: any) => this.jobForm.agent_ids.includes(agent.id))
+            },
+
+            // Toggle compact mode for agent selection
+            toggleCompactMode() {
+                this.isCompactMode = !this.isCompactMode
+            },
+
+            // Distributed Job Functions
+            openDistributedJobModal() {
+                this.showDistributedJobModal = true
+                this.distributedJobForm = { 
+                    name: '', 
+                    hash_file_id: '', 
+                    wordlist_id: '', 
+                    hash_type: '', 
+                    attack_mode: '', 
+                    auto_distribute: true 
+                }
+                this.updateDistributedCommandTemplate()
+            },
+
+            closeDistributedJobModal() {
+                this.showDistributedJobModal = false
+            },
+
+            // Check if agent is GPU-based
+            isGPUAgent(agent: any): boolean {
+                const capabilities = (agent.capabilities || '').toLowerCase()
+                return capabilities.includes('gpu') || 
+                       capabilities.includes('cuda') || 
+                       capabilities.includes('opencl') ||
+                       capabilities.includes('rtx') ||
+                       capabilities.includes('gtx') ||
+                       capabilities.includes('radeon')
+            },
+
+            // Get selected agents objects
+            getSelectedAgents() {
+                if (!this.jobForm.agent_ids || this.jobForm.agent_ids.length === 0) {
+                    return []
+                }
+                return this.onlineAgents.filter(agent => 
+                    this.jobForm.agent_ids.includes(agent.id)
+                )
+            },
+
+            // Get agent performance score (0-100)
+            getAgentPerformanceScore(agent: any): number {
+                if (this.isGPUAgent(agent)) {
+                    return 100 // GPU gets full performance
+                }
+                return 30 // CPU gets 30% performance
+            },
+
+            // Calculate assigned word count for agent
+            getAssignedWordCount(agent: any): number {
+                if (!this.distributedJobForm.wordlist_id) return 0
                 
-                // Add WPA/WPA2 specific optimizations
-                this.commandTemplate += ' -O --force --status --status-timer=5'
+                const wordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
+                if (!wordlist || !wordlist.word_count) return 0
                 
-                // Add session name
-                if (this.jobForm.name) {
-                    const sessionName = this.jobForm.name.toLowerCase().replace(/[^a-z0-9]/g, '_')
-                    this.commandTemplate += ` --session=${sessionName}`
+                const totalWords = wordlist.word_count
+                const onlineAgents = this.onlineAgents
+                
+                if (onlineAgents.length === 0) return 0
+                
+                // Calculate performance-based distribution
+                const totalPerformance = onlineAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
+                const agentPerformance = this.getAgentPerformanceScore(agent)
+                const performanceRatio = agentPerformance / totalPerformance
+                
+                return Math.round(totalWords * performanceRatio)
+            },
+
+            // Get distribution method description
+            getDistributionMethod(): string {
+                const gpuAgents = this.onlineAgents.filter(agent => this.isGPUAgent(agent))
+                const cpuAgents = this.onlineAgents.filter(agent => !this.isGPUAgent(agent))
+                
+                if (gpuAgents.length > 0 && cpuAgents.length > 0) {
+                    return `Performance-based (${gpuAgents.length} GPU + ${cpuAgents.length} CPU)`
+                } else if (gpuAgents.length > 0) {
+                    return `GPU-only distribution (${gpuAgents.length} agents)`
+                } else {
+                    return `CPU-only distribution (${cpuAgents.length} agents)`
+                }
+            },
+
+            // Get distribution method for selected agents
+            getDistributionMethodForSelected(): string {
+                const selectedAgents = this.getSelectedAgents()
+                const gpuAgents = selectedAgents.filter(agent => this.isGPUAgent(agent))
+                const cpuAgents = selectedAgents.filter(agent => !this.isGPUAgent(agent))
+                
+                if (gpuAgents.length > 0 && cpuAgents.length > 0) {
+                    return `Performance-based (${gpuAgents.length} GPU + ${cpuAgents.length} CPU)`
+                } else if (gpuAgents.length > 0) {
+                    return `GPU-only distribution (${gpuAgents.length} agents)`
+                } else {
+                    return `CPU-only distribution (${cpuAgents.length} agents)`
+                }
+            },
+
+            // Calculate assigned word count for selected agent
+            getAssignedWordCountForSelected(agent: any): number {
+                if (!this.jobForm.wordlist_id) return 0
+                
+                const wordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                if (!wordlist || !wordlist.word_count) return 0
+                
+                const totalWords = wordlist.word_count
+                const selectedAgents = this.getSelectedAgents()
+                
+                if (selectedAgents.length === 0) return 0
+                
+                // Calculate performance-based distribution
+                const totalPerformance = selectedAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
+                const agentPerformance = this.getAgentPerformanceScore(agent)
+                const performanceRatio = agentPerformance / totalPerformance
+                
+                return Math.round(totalWords * performanceRatio)
+            },
+
+            // Get assigned percentage for selected agents (ensures total = 100%)
+            getAssignedPercentageForSelected(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Calculate performance scores
+                const agentScores = selectedAgents.map(a => ({
+                    agent: a,
+                    score: this.getAgentPerformanceScore(a)
+                }));
+                
+                // Sort by performance (highest first)
+                agentScores.sort((a, b) => b.score - a.score);
+                
+                // Find this agent's position
+                const agentIndex = agentScores.findIndex(item => item.agent.id === agent.id);
+                if (agentIndex === -1) return 0;
+                
+                // Calculate distribution based on performance
+                const totalScore = agentScores.reduce((sum, item) => sum + item.score, 0);
+                const agentScore = agentScores[agentIndex].score;
+                
+                // Calculate percentage (ensures total = 100%)
+                const percentage = (agentScore / totalScore) * 100;
+                
+                return Math.round(percentage);
+            },
+
+            // Get assigned percentage with exact 100% total (no rounding errors)
+            getAssignedPercentageExact(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Calculate performance scores
+                const agentScores = selectedAgents.map(a => ({
+                    agent: a,
+                    score: this.getAgentPerformanceScore(a)
+                }));
+                
+                // Sort by performance (highest first)
+                agentScores.sort((a, b) => b.score - a.score);
+                
+                // Find this agent's position
+                const agentIndex = agentScores.findIndex(item => item.agent.id === agent.id);
+                if (agentIndex === -1) return 0;
+                
+                // Calculate distribution based on performance
+                const totalScore = agentScores.reduce((sum, item) => sum + item.score, 0);
+                const agentScore = agentScores[agentIndex].score;
+                
+                // Calculate percentage without rounding first
+                const exactPercentage = (agentScore / totalScore) * 100;
+                
+                // For the last agent, ensure total = 100%
+                if (agentIndex === selectedAgents.length - 1) {
+                    // Calculate what the total should be for previous agents
+                    let previousTotal = 0;
+                    for (let i = 0; i < agentIndex; i++) {
+                        const prevScore = agentScores[i].score;
+                        const prevPercent = Math.round((prevScore / totalScore) * 100);
+                        previousTotal += prevPercent;
+                    }
+                    
+                    // Last agent gets the remaining percentage to make total = 100%
+                    return 100 - previousTotal;
                 }
                 
-                // Add outfile for WPA/WPA2
-                this.commandTemplate += ' --outfile=cracked.txt --outfile-format=2'
+                // For other agents, round normally
+                return Math.round(exactPercentage);
+            },
+
+            // Get assigned percentage based on word count distribution (more accurate)
+            getAssignedPercentageByWords(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Get word count for this agent
+                const agentWords = this.getAssignedWordCountForSelected(agent);
+                if (agentWords === 0) return 0;
+                
+                // Get total words for all selected agents
+                const totalWords = selectedAgents.reduce((sum, a) => sum + this.getAssignedWordCountForSelected(a), 0);
+                if (totalWords === 0) return 0;
+                
+                // Calculate percentage based on actual word count
+                const percentage = (agentWords / totalWords) * 100;
+                
+                return Math.round(percentage);
+            },
+
+            // Get assigned percentage with word-based distribution (most accurate)
+            getAssignedPercentageWordBased(agent: any): number {
+                const selectedAgents = this.getSelectedAgents();
+                if (selectedAgents.length === 0) return 0;
+                
+                // Get word counts for all agents
+                const agentWordCounts = selectedAgents.map(a => ({
+                    agent: a,
+                    words: this.getAssignedWordCountForSelected(a)
+                }));
+                
+                // Sort by word count (highest first)
+                agentWordCounts.sort((a, b) => b.words - a.words);
+                
+                // Find this agent's position
+                const agentIndex = agentWordCounts.findIndex(item => item.agent.id === agent.id);
+                if (agentIndex === -1) return 0;
+                
+                // Get total words
+                const totalWords = agentWordCounts.reduce((sum, item) => sum + item.words, 0);
+                if (totalWords === 0) return 0;
+                
+                // For the last agent, ensure total = 100%
+                if (agentIndex === selectedAgents.length - 1) {
+                    // Calculate what the total should be for previous agents
+                    let previousTotal = 0;
+                    for (let i = 0; i < agentIndex; i++) {
+                        const prevWords = agentWordCounts[i].words;
+                        const prevPercent = Math.round((prevWords / totalWords) * 100);
+                        previousTotal += prevPercent;
+                    }
+                    
+                    // Last agent gets the remaining percentage to make total = 100%
+                    return 100 - previousTotal;
+                }
+                
+                // For other agents, calculate based on word count
+                const agentWords = agentWordCounts[agentIndex].words;
+                const percentage = (agentWords / totalWords) * 100;
+                
+                return Math.round(percentage);
+            },
+
+            // Update distributed command template
+            updateDistributedCommandTemplate() {
+                if (!this.distributedJobForm.hash_file_id || !this.distributedJobForm.wordlist_id) {
+                    this.distributedCommandTemplate = 'Distributed hashcat commands will appear here...'
+                    return
+                }
+
+                const hashFile = this.hashFiles.find((f: any) => f.id === this.distributedJobForm.hash_file_id)
+                const wordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
+                
+                if (!hashFile || !wordlist) return
+
+                const hashFileName = hashFile.orig_name || hashFile.name
+                const wordlistName = wordlist.orig_name || wordlist.name
+                const totalWords = wordlist.word_count || 0
+
+                let template = `# Distributed Hashcat Commands\n`
+                template += `# Hash File: ${hashFileName}\n`
+                template += `# Wordlist: ${wordlistName} (${totalWords.toLocaleString()} words)\n`
+                template += `# Agents: ${this.onlineAgents.length}\n\n`
+
+                this.onlineAgents.forEach((agent, index) => {
+                    const assignedWords = this.getAssignedWordCount(agent)
+                    const resourceType = this.isGPUAgent(agent) ? 'GPU' : 'CPU'
+                    const performance = this.getAgentPerformanceScore(agent)
+                    
+                    template += `# Agent ${index + 1}: ${agent.name} (${resourceType}, ${performance}%)\n`
+                    template += `# Assigned: ${assignedWords.toLocaleString()} words\n`
+                    template += `hashcat -m ${this.distributedJobForm.hash_type || 2500} -a ${this.distributedJobForm.attack_mode || 0} \\\n`
+                    template += `  ${hashFileName} \\\n`
+                    template += `  ${wordlistName}_part_${index + 1} \\\n`
+                    template += `  -O --force --status --status-timer=5 \\\n`
+                    template += `  --session=${this.distributedJobForm.name?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'distributed'}_part_${index + 1} \\\n`
+                    template += `  --outfile=cracked_part_${index + 1}.txt --outfile-format=2\n\n`
+                })
+
+                this.distributedCommandTemplate = template
+            },
+
+            // Update distribution preview
+            updateDistributionPreview() {
+                // This will trigger Alpine.js reactivity for the preview section
+                setTimeout(() => {
+                    console.log('Distribution preview updated')
+                }, 0)
+            },
+
+            // Check if can create distributed job
+            canCreateDistributedJob(): boolean {
+                return !!(this.distributedJobForm.name && 
+                         this.distributedJobForm.hash_file_id && 
+                         this.distributedJobForm.wordlist_id &&
+                         this.onlineAgents.length > 0)
+            },
+
+            // Preview distribution
+            previewDistribution() {
+                this.updateDistributionPreview()
+                this.showNotification('Distribution preview updated', 'success')
+            },
+
+            // Create distributed job
+            async createDistributedJob() {
+                if (!this.canCreateDistributedJob()) {
+                    this.showNotification('Please fill all required fields and ensure agents are available', 'error')
+                    return
+                }
+
+                this.isLoading = true
+                try {
+                    // For now, show success message
+                    // In real implementation, this would call the API
+                    this.showNotification('Distributed job creation feature not yet implemented', 'info')
+                    this.closeDistributedJobModal()
+                } catch (error) {
+                    this.showNotification('Failed to create distributed job', 'error')
+                } finally {
+                    this.isLoading = false
+                }
             },
 
             async startJob(jobId: string) {
@@ -1208,13 +2072,16 @@ class DashboardApplication {
                     this.showNotification('Error: No agent ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this agent?')) {
+                const agent = this.agents.find((a: any) => a.id === id)
+                if (agent) {
+                    this.openDeleteModal('agent', agent, async () => {
                     const success = await agentStore.actions.deleteAgent(id)
                     if (success) {
                         this.showNotification('Agent deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete agent', 'error')
                     }
+                    })
                 }
             },
 
@@ -1223,13 +2090,16 @@ class DashboardApplication {
                     this.showNotification('Error: No job ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this job?')) {
+                const job = this.jobs.find((j: any) => j.id === id)
+                if (job) {
+                    this.openDeleteModal('job', job, async () => {
                     const success = await jobStore.actions.deleteJob(id)
                     if (success) {
                         this.showNotification('Job deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete job', 'error')
                     }
+                    })
                 }
             },
 
@@ -1238,13 +2108,16 @@ class DashboardApplication {
                     this.showNotification('Error: No file ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this hash file?')) {
+                const file = this.hashFiles.find((f: any) => f.id === id)
+                if (file) {
+                    this.openDeleteModal('file', file, async () => {
                     const success = await fileStore.actions.deleteHashFile(id)
                     if (success) {
                         this.showNotification('Hash file deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete hash file', 'error')
                     }
+                    })
                 }
             },
 
@@ -1253,13 +2126,16 @@ class DashboardApplication {
                     this.showNotification('Error: No wordlist ID provided', 'error')
                     return
                 }
-                if (confirm('Are you sure you want to delete this wordlist?')) {
+                const wordlist = this.wordlists.find((w: any) => w.id === id)
+                if (wordlist) {
+                    this.openDeleteModal('wordlist', wordlist, async () => {
                     const success = await wordlistStore.actions.deleteWordlist(id)
                     if (success) {
                         this.showNotification('Wordlist deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete wordlist', 'error')
                     }
+                    })
                 }
             },
 

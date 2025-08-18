@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <!-- Breadcrumb Navigation Component -->
 <nav x-show="currentTab !== 'overview'" 
      x-transition:enter="transition ease-out duration-200"
@@ -14,10 +15,29 @@
                     Dashboard
                 </a>
             </li>
-            <li class="flex items-center">
-                <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
-                <span class="font-medium text-gray-900 capitalize" x-text="currentTab">Current Tab</span>
-            </li>
+            <!-- Default: Dashboard > {Current Tab} -->
+            <template x-if="currentTab !== 'agent-keys'">
+                <li class="flex items-center">
+                    <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                    <span class="font-medium text-gray-900 capitalize" x-text="currentTab">Current Tab</span>
+                </li>
+            </template>
+
+            <!-- Special case: Dashboard > Agents > Agent-Keys -->
+            <template x-if="currentTab === 'agent-keys'">
+                <li class="flex items-center">
+                    <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                    <a :href="getRouteUrl('agents')"
+                       @click.prevent="switchTab('agents')"
+                       class="hover:text-blue-600 transition-colors duration-200">Agents</a>
+                </li>
+            </template>
+            <template x-if="currentTab === 'agent-keys'">
+                <li class="flex items-center">
+                    <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                    <span class="font-medium text-gray-900">Agent-Keys</span>
+                </li>
+            </template>
         </ol>
         
         <!-- Tab-specific summary info -->
@@ -57,6 +77,15 @@
                         <span x-text="`${getArrayLength(wordlists)} wordlists`"></span>
                         <span class="mx-2">•</span>
                         <span class="text-orange-600 font-medium" x-text="formatFileSize(wordlists.reduce((total, wl) => total + (wl.size || 0), 0))"></span>
+                    </div>
+                </template>
+                
+                <template x-if="currentTab === 'agent-keys'">
+                    <div class="flex items-center text-sm text-gray-600">
+                        <i class="fas fa-server text-blue-500 mr-2"></i>
+                        <span x-text="`${getArrayLength(agents)} total agents`"></span>
+                        <span class="mx-2">•</span>
+                        <span class="text-green-600 font-medium" x-text="`${getArrayLength(onlineAgents)} online`"></span>
                     </div>
                 </template>
                 

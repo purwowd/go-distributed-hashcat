@@ -14,80 +14,116 @@ import (
 )
 
 type agentRepository struct {
-	db              *database.SQLiteDB
-	cache           cache.Cache
-	getByIDStmt     *sql.Stmt
-	getByNameIPStmt *sql.Stmt
-	getAllStmt      *sql.Stmt
-	updateStmt      *sql.Stmt
-	deleteStmt      *sql.Stmt
+	db                 *database.SQLiteDB
+	cache              cache.Cache
+	getByIDStmt        *sql.Stmt
+	getByNameStmt      *sql.Stmt
+	getByNameIPStmt    *sql.Stmt
+	getByIPAddressStmt *sql.Stmt
+	getAllStmt         *sql.Stmt
+	updateStmt         *sql.Stmt
+	deleteStmt         *sql.Stmt
+	getByAgentKeyStmt  *sql.Stmt
 }
 
 func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository {
 	repo := &agentRepository{
 		db:    db,
-		cache: cache.NewMemoryCache(30 * time.Second), // 30 second cache for agents
+		cache: cache.NewMemoryCache(30 * time.Second),
 	}
 
-	// Prepare frequently used statements
 	repo.prepareStatements()
-
 	return repo
 }
 
 func (r *agentRepository) prepareStatements() {
 	var err error
 
-	// Prepare optimized queries
 	r.getByIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
 		FROM agents WHERE id = ? LIMIT 1
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getByID statement: %v", err))
 	}
 
+	r.getByNameStmt, err = r.db.DB().Prepare(`
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		FROM agents WHERE name = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByName statement: %v", err))
+	}
+
 	r.getByNameIPStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
-		FROM agents WHERE name = ? AND ip_address = ? LIMIT 1
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		FROM agents WHERE name = ? AND ip_address = ? AND port = ? LIMIT 1
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getByNameIP statement: %v", err))
 	}
 
+	r.getByIPAddressStmt, err = r.db.DB().Prepare(`
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		FROM agents WHERE ip_address = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByIPAddress statement: %v", err))
+	}
+
 	r.getAllStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at
-		FROM agents ORDER BY status DESC, updated_at DESC
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		FROM agents ORDER BY created_at DESC, id ASC
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getAll statement: %v", err))
 	}
 
 	r.updateStmt, err = r.db.DB().Prepare(`
-		UPDATE agents SET 
-		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, updated_at = ?
+		UPDATE agents SET
+		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, agent_key = ?, last_seen = ?, updated_at = ?
 		WHERE id = ?
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare update statement: %v", err))
 	}
 
-	r.deleteStmt, err = r.db.DB().Prepare(`DELETE FROM agents WHERE id = ?`)
+	r.deleteStmt, err = r.db.DB().Prepare(`
+		DELETE FROM agents WHERE id = ?
+	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare delete statement: %v", err))
+	}
+
+	r.getByAgentKeyStmt, err = r.db.DB().Prepare(`
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		FROM agents WHERE agent_key = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByAgentKey statement: %v", err))
 	}
 }
 
 func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error {
-	query := `
-		INSERT INTO agents (id, name, ip_address, port, status, capabilities, last_seen, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
+	// Invalidate cache for IP address if it exists
+	if agent.IPAddress != "" {
+		cacheKey := "agent:ip:" + agent.IPAddress
+		r.cache.Delete(ctx, cacheKey)
+	}
 
-	now := time.Now()
-	agent.CreatedAt = now
-	agent.UpdatedAt = now
-	agent.LastSeen = now
+	// Invalidate cache for agent key if it exists
+	if agent.AgentKey != "" {
+		cacheKey := "agent:key:" + agent.AgentKey
+		r.cache.Delete(ctx, cacheKey)
+	}
+
+	// Invalidate cache for all agents list
+	r.cache.Delete(ctx, "agents:all")
+
+	query := `
+        INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
 
 	_, err := r.db.DB().ExecContext(ctx, query,
 		agent.ID.String(),
@@ -96,33 +132,28 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 		agent.Port,
 		agent.Status,
 		agent.Capabilities,
+		agent.AgentKey,
 		agent.LastSeen,
 		agent.CreatedAt,
 		agent.UpdatedAt,
 	)
 
-	if err == nil {
-		// Cache the new agent
-		r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
-		// Invalidate list cache
-		r.cache.Delete(ctx, "agents:all")
+	if err != nil {
+		return fmt.Errorf("failed to create agent: %w", err)
 	}
 
-	return err
+	return nil
 }
 
 func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
 	cacheKey := "agent:" + id.String()
 
-	// Try cache first
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
 		return &agent, nil
 	}
 
-	// Fallback to database with prepared statement
 	var idStr string
-
 	err := r.getByIDStmt.QueryRowContext(ctx, id.String()).Scan(
 		&idStr,
 		&agent.Name,
@@ -130,21 +161,53 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.AgentKey,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("agent not found")
+			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
 		}
 		return nil, err
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+	r.cache.Set(ctx, cacheKey, &agent)
 
-	// Cache the result
+	return &agent, nil
+}
+
+func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.Agent, error) {
+	cacheKey := "agent:name:" + name
+
+	var agent domain.Agent
+	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		return &agent, nil
+	}
+
+	var idStr string
+	err := r.getByNameStmt.QueryRowContext(ctx, name).Scan(
+		&idStr,
+		&agent.Name,
+		&agent.IPAddress,
+		&agent.Port,
+		&agent.Status,
+		&agent.Capabilities,
+		&agent.AgentKey,
+		&agent.LastSeen,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
+		}
+		return nil, err
+	}
+
+	agent.ID = uuid.MustParse(idStr)
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -153,27 +216,24 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
 	cacheKey := "agent:name_ip:" + name + ":" + ip
 
-	// Try cache first
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
 		return &agent, nil
 	}
 
-	// Fallback to database with prepared statement
 	var idStr string
-
-	err := r.getByNameIPStmt.QueryRowContext(ctx, name, ip).Scan(
+	err := r.getByNameIPStmt.QueryRowContext(ctx, name, ip, port).Scan(
 		&idStr,
 		&agent.Name,
 		&agent.IPAddress,
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.AgentKey,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("agent not found")
@@ -182,8 +242,6 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 	}
 
 	agent.ID = uuid.MustParse(idStr)
-
-	// Cache the result
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -192,20 +250,18 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 	cacheKey := "agents:all"
 
-	// Try cache first
 	var agents []domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agents); err == nil && found {
 		return agents, nil
 	}
 
-	// Fallback to database with prepared statement
 	rows, err := r.getAllStmt.QueryContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	agents = make([]domain.Agent, 0, 10) // Pre-allocate slice
+	agents = make([]domain.Agent, 0, 10)
 	for rows.Next() {
 		var agent domain.Agent
 		var idStr string
@@ -217,6 +273,7 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 			&agent.Port,
 			&agent.Status,
 			&agent.Capabilities,
+			&agent.AgentKey,
 			&agent.LastSeen,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
@@ -229,14 +286,31 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 		agents = append(agents, agent)
 	}
 
-	// Cache the result
 	r.cache.Set(ctx, cacheKey, agents)
 
 	return agents, nil
 }
 
 func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error {
-	agent.UpdatedAt = time.Now()
+	// Invalidate cache before update
+	if agent.IPAddress != "" {
+		cacheKey := "agent:ip:" + agent.IPAddress
+		r.cache.Delete(ctx, cacheKey)
+	}
+
+	// Invalidate cache for agent key
+	if agent.AgentKey != "" {
+		cacheKey := "agent:key:" + agent.AgentKey
+		r.cache.Delete(ctx, cacheKey)
+	}
+
+	// Invalidate cache for agent ID
+	cacheKey := "agent:id:" + agent.ID.String()
+	r.cache.Delete(ctx, cacheKey)
+
+	if r.updateStmt == nil {
+		return fmt.Errorf("updateStmt is not prepared")
+	}
 
 	_, err := r.updateStmt.ExecContext(ctx,
 		agent.Name,
@@ -244,29 +318,24 @@ func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error
 		agent.Port,
 		agent.Status,
 		agent.Capabilities,
+		agent.AgentKey,
+		agent.LastSeen,
 		agent.UpdatedAt,
-		agent.ID.String(),
+		agent.ID,
 	)
 
-	if err == nil {
-		// Update cache
-		r.cache.Set(ctx, "agent:"+agent.ID.String(), agent)
-		// Update name+IP cache
-		r.cache.Set(ctx, "agent:name_ip:"+agent.Name+":"+agent.IPAddress, agent)
-		// Invalidate list cache
-		r.cache.Delete(ctx, "agents:all")
+	if err != nil {
+		return fmt.Errorf("failed to update agent: %w", err)
 	}
 
-	return err
+	return nil
 }
 
 func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := r.deleteStmt.ExecContext(ctx, id.String())
 
 	if err == nil {
-		// Remove from cache
 		r.cache.Delete(ctx, "agent:"+id.String())
-		// Invalidate list cache
 		r.cache.Delete(ctx, "agents:all")
 	}
 
@@ -274,12 +343,13 @@ func (r *agentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *agentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
-	query := `UPDATE agents SET status = ?, updated_at = ? WHERE id = ?`
+	query := `
+		UPDATE agents SET status = ?, updated_at = ? WHERE id = ?
+	`
 	now := time.Now()
 	_, err := r.db.DB().ExecContext(ctx, query, status, now, id.String())
 
 	if err == nil {
-		// Invalidate caches
 		r.cache.Delete(ctx, "agent:"+id.String())
 		r.cache.Delete(ctx, "agents:all")
 	}
@@ -288,15 +358,111 @@ func (r *agentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 }
 
 func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) error {
-	query := `UPDATE agents SET last_seen = ?, updated_at = ? WHERE id = ?`
+	query := `
+		UPDATE agents SET last_seen = ?, updated_at = ? WHERE id = ?
+	`
 	now := time.Now()
 	_, err := r.db.DB().ExecContext(ctx, query, now, now, id.String())
 
 	if err == nil {
-		// Invalidate caches
 		r.cache.Delete(ctx, "agent:"+id.String())
 		r.cache.Delete(ctx, "agents:all")
 	}
 
 	return err
+}
+
+func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domain.Agent, error) {
+	cacheKey := "agent:ip:" + ip
+
+	var agent domain.Agent
+	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		return &agent, nil
+	}
+
+	if r.getByIPAddressStmt == nil {
+		return nil, fmt.Errorf("getByIPAddressStmt is not prepared")
+	}
+
+	var idStr string
+	err := r.getByIPAddressStmt.QueryRowContext(ctx, ip).Scan(
+		&idStr,
+		&agent.Name,
+		&agent.IPAddress,
+		&agent.Port,
+		&agent.Status,
+		&agent.Capabilities,
+		&agent.AgentKey,
+		&agent.LastSeen,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
+		}
+		return nil, err
+	}
+
+	agent.ID = uuid.MustParse(idStr)
+	r.cache.Set(ctx, cacheKey, &agent)
+
+	return &agent, nil
+}
+
+func (r *agentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
+	cacheKey := "agent:key:" + agentKey
+
+	var agent domain.Agent
+	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		return &agent, nil
+	}
+
+	if r.getByAgentKeyStmt == nil {
+		return nil, fmt.Errorf("getByAgentKeyStmt is not prepared")
+	}
+
+	var idStr string
+	err := r.getByAgentKeyStmt.QueryRowContext(ctx, agentKey).Scan(
+		&idStr,
+		&agent.Name,
+		&agent.IPAddress,
+		&agent.Port,
+		&agent.Status,
+		&agent.Capabilities,
+		&agent.AgentKey,
+		&agent.LastSeen,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrAgentNotFound
+		}
+		return nil, err
+	}
+
+	agent.ID = uuid.MustParse(idStr)
+	r.cache.Set(ctx, cacheKey, &agent)
+
+	return &agent, nil
+}
+
+func (r *agentRepository) CreateAgent(ctx context.Context, agent *domain.Agent) error {
+	return r.Create(ctx, agent)
+}
+
+func (r *agentRepository) UpdateAgent(ctx context.Context, agent *domain.Agent) error {
+	return r.Update(ctx, agent)
+}
+
+func (r *agentRepository) GetByNameAndIPForStartup(ctx context.Context, name, ip string, port int) (*domain.Agent, error) {
+	agent, err := r.GetByNameAndIP(ctx, name, ip, port)
+	if err != nil {
+		if err == domain.ErrAgentNotFound {
+			return nil, domain.ErrAgentNotFound
+		}
+		return nil, err
+	}
+	return agent, nil
 }

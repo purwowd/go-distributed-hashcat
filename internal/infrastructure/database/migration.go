@@ -187,12 +187,18 @@ func (mr *MigrationRunner) parseUpDown(content string) (string, string) {
 		}
 
 		// Skip comments and empty lines in SQL sections
-		if currentSection != "" && !strings.HasPrefix(trimmed, "--") && trimmed != "" {
-			if currentSection == "up" {
-				upSQL.WriteString(line + "\n")
-			} else if currentSection == "down" {
-				downSQL.WriteString(line + "\n")
-			}
+		// if currentSection != "" && !strings.HasPrefix(trimmed, "--") && trimmed != "" {
+		// 	if currentSection == "up" {
+		// 		upSQL.WriteString(line + "\n")
+		// 	} else if currentSection == "down" {
+		// 		downSQL.WriteString(line + "\n")
+		// 	}
+		// }
+		switch currentSection {
+		case "up":
+			upSQL.WriteString(line + "\n")
+		case "down":
+			downSQL.WriteString(line + "\n")
 		}
 	}
 

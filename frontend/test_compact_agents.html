@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Compact Agent Selection</title>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar styles */
+        .scrollbar-thin {
+            scrollbar-width: thin;
+            scrollbar-color: #d1d5db #f3f4f6;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #f3f4f6;
+            border-radius: 3px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+        
+        .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+        }
+        
+        .scrollbar-track-gray-100::-webkit-scrollbar-track {
+            background: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div x-data="testData()" class="max-w-2xl mx-auto">
+        <h1 class="text-2xl font-bold mb-6">Test Compact Agent Selection</h1>
+        
+        <!-- Mock Online Agents Count -->
+        <div class="mb-6">
+            <h2 class="text-lg font-semibold mb-3">Mock Online Agents (<span x-text="onlineAgents.length"></span> total)</h2>
+            <p class="text-sm text-gray-600 mb-4">This demonstrates compact mode to prevent the form from extending too much vertically.</p>
+        </div>
+
+        <!-- Job Form -->
+        <div class="bg-white p-6 rounded-lg shadow">
+            <h3 class="text-lg font-semibold mb-4">Job Form - Compact Agent Selection</h3>
+            
+            <!-- Agent Selection -->
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                    Agent Assignment <span class="text-red-500">*</span>
+                </label>
+                
+                <!-- Select All Checkbox with Compact Toggle -->
+                <div class="mb-2">
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" 
+                                   @change="toggleSelectAllAgents($event.target.checked)"
+                                   :checked="areAllAgentsSelected()"
+                                   class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2">
+                            <span class="text-sm font-medium text-gray-700">Select All Available Agents</span>
+                            <span class="text-xs text-gray-500">(<span x-text="onlineAgents.length"></span> total)</span>
+                        </label>
+                        <!-- Compact Mode Toggle -->
+                        <button type="button" 
+                                @click="toggleCompactMode()"
+                                class="text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1">
+                            <i class="fas fa-compress-alt" x-show="!isCompactMode"></i>
+                            <i class="fas fa-expand-alt" x-show="isCompactMode"></i>
+                            <span x-text="isCompactMode ? 'Expand' : 'Compact'"></span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Multiple Agent Selection with Dynamic Height -->
+                <div :class="isCompactMode ? 'max-h-24' : 'max-h-32'" 
+                     class="overflow-y-auto border border-gray-200 rounded-lg bg-white scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 transition-all duration-200">
+                    <template x-if="onlineAgents.length === 0">
+                        <div class="text-center py-3 text-gray-500">
+                            <i class="fas fa-exclamation-triangle text-yellow-500 text-sm mb-1"></i>
+                            <p class="text-xs">No online agents available</p>
+                        </div>
+                    </template>
+                    
+                    <template x-for="agent in onlineAgents" :key="agent.id">
+                        <label class="flex items-center space-x-2 py-1.5 px-2 hover:bg-gray-50 rounded cursor-pointer border-b border-gray-100 last:border-b-0">
+                            <input type="checkbox" 
+                                   :value="agent.id"
+                                   x-model="jobForm.agent_ids"
+                                   class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 flex-shrink-0">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-medium text-gray-900 truncate text-sm" x-text="agent.name"></span>
+                                    <div class="flex items-center space-x-1.5 flex-shrink-0">
+                                        <!-- Status Badge -->
+                                        <span class="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                              :class="{
+                                                  'bg-green-100 text-green-800': agent.status === 'online',
+                                                  'bg-red-100 text-red-800': agent.status === 'offline',
+                                                  'bg-yellow-100 text-yellow-800': agent.status === 'busy'
+                                              }"
+                                              x-text="agent.status.charAt(0).toUpperCase() + agent.status.slice(1)">
+                                        </span>
+                                        <!-- Type Badge -->
+                                        <span class="text-xs text-gray-500 bg-blue-100 px-1.5 py-0.5 rounded" x-text="agent.type"></span>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-600 truncate" x-text="agent.ip_address"></div>
+                            </div>
+                        </label>
+                    </template>
+                </div>
+                
+                <p class="text-xs text-gray-500 mt-1">
+                    <span x-show="jobForm.agent_ids && jobForm.agent_ids.length > 0" class="text-green-600">
+                        <i class="fas fa-thumbtack mr-1"></i>Job will be distributed to <span x-text="jobForm.agent_ids.length"></span> selected agent(s)
+                    </span>
+                    <!-- Agent Count Info -->
+                    <span x-show="onlineAgents.length > 0" class="text-gray-500 ml-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <span x-text="`${onlineAgents.length} agents available`"></span>
+                        <span x-show="isCompactMode" class="text-blue-600">
+                            <i class="fas fa-compress-alt mr-1"></i>Compact mode active
+                        </span>
+                    </span>
+                </p>
+            </div>
+
+            <!-- Height Information -->
+            <div class="mt-4 bg-blue-50 p-3 rounded border">
+                <h4 class="font-semibold text-blue-800 mb-2">Height Control Information</h4>
+                <ul class="text-sm text-blue-700 space-y-1">
+                    <li>• <strong>Normal Mode:</strong> max-h-32 (128px) - Shows more agents at once</li>
+                    <li>• <strong>Compact Mode:</strong> max-h-24 (96px) - Saves vertical space</li>
+                    <li>• <strong>Scrolling:</strong> Automatically appears when content exceeds height</li>
+                    <li>• <strong>Transition:</strong> Smooth height change with CSS transitions</li>
+                    <li>• <strong>Current Height:</strong> <span x-text="isCompactMode ? '96px (Compact)' : '128px (Normal)'" class="font-semibold"></span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testData() {
+            return {
+                jobForm: {
+                    agent_ids: []
+                },
+                
+                // Compact mode state
+                isCompactMode: false,
+                
+                // Generate many mock online agents
+                get onlineAgents() {
+                    const agents = []
+                    const types = ['CPU', 'GPU', 'CPU', 'GPU', 'CPU', 'GPU']
+                    const statuses = ['online', 'busy', 'offline']
+                    
+                    for (let i = 1; i <= 30; i++) {
+                        const type = types[i % types.length]
+                        const status = statuses[i % statuses.length]
+                        agents.push({
+                            id: i.toString(),
+                            name: `${type}-Agent-${i.toString().padStart(2, '0')}`,
+                            ip_address: `192.168.1.${100 + i}`,
+                            type: type,
+                            status: status
+                        })
+                    }
+                    return agents
+                },
+
+                // Toggle select all agents
+                toggleSelectAllAgents(checked) {
+                    if (checked) {
+                        this.jobForm.agent_ids = this.onlineAgents.map(agent => agent.id)
+                    } else {
+                        this.jobForm.agent_ids = []
+                    }
+                },
+
+                // Check if all agents are selected
+                areAllAgentsSelected() {
+                    return this.onlineAgents.length > 0 && 
+                           this.jobForm.agent_ids.length === this.onlineAgents.length &&
+                           this.onlineAgents.every(agent => this.jobForm.agent_ids.includes(agent.id))
+                },
+
+                // Toggle compact mode
+                toggleCompactMode() {
+                    this.isCompactMode = !this.isCompactMode
+                },
+
+                // Get agent name by ID
+                getAgentName(agentId) {
+                    const agent = this.onlineAgents.find(a => a.id === agentId)
+                    return agent ? `${agent.name} (${agent.ip_address})` : 'Unknown Agent'
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -6,6 +6,12 @@ interface AgentState {
     loading: boolean
     error: string | null
     lastUpdated: Date | null
+    pagination?: {
+        total: number
+        page: number
+        pageSize: number
+        search: string
+    }
 }
 
 class AgentStore {
@@ -43,16 +49,22 @@ class AgentStore {
     // Actions
     public actions = {
         // Fetch all agents
-        fetchAgents: async (): Promise<void> => {
+        fetchAgents: async (params?: { page?: number; page_size?: number; search?: string }): Promise<void> => {
             this.setState({ loading: true, error: null })
             
             try {
-                const agents = await apiService.getAgents()
+                const result = await apiService.getAgents(params)
                 this.setState({ 
-                    agents, 
+                    agents: result.data, 
                     loading: false, 
                     lastUpdated: new Date(),
-                    error: null 
+                    error: null,
+                    pagination: {
+                        total: result.total,
+                        page: result.page,
+                        pageSize: result.page_size,
+                        search: params?.search || ''
+                    }
                 })
             } catch (error) {
                 this.setState({ 
@@ -90,18 +102,52 @@ class AgentStore {
             this.setState({ loading: true, error: null })
             
             try {
-                const newAgent = await apiService.createAgent(agentData)
-                if (newAgent) {
-                    this.setState({ 
-                        agents: [...this.state.agents, newAgent],
-                        loading: false 
+                const { agent, error } = await apiService.createAgent(agentData)
+                if (agent) {
+                    this.setState({
+                        agents: [...this.state.agents, agent],
+                        loading: false
                     })
+                    return agent
+                } else {
+                    this.setState({
+                        loading: false,
+                        error: error || 'Failed to create agent'
+                    })
+                    return null
                 }
-                return newAgent
             } catch (error) {
-                this.setState({ 
-                    loading: false, 
-                    error: error instanceof Error ? error.message : 'Failed to create agent' 
+                this.setState({
+                    loading: false,
+                    error: error instanceof Error ? error.message : 'Failed to create agent'
+                })
+                return null
+            }
+        },
+
+        // Generate new agent key
+        generateAgentKey: async (name: string): Promise<Agent | null> => {
+            this.setState({ loading: true, error: null })
+            
+            try {
+                const { agent, error } = await apiService.generateAgentKey(name)
+                if (agent) {
+                    this.setState({
+                        agents: [...this.state.agents, agent],
+                        loading: false
+                    })
+                    return agent
+                } else {
+                    this.setState({
+                        loading: false,
+                        error: error || 'Failed to generate agent key'
+                    })
+                    return null
+                }
+            } catch (error) {
+                this.setState({
+                    loading: false,
+                    error: error instanceof Error ? error.message : 'Failed to generate agent key'
                 })
                 return null
             }
@@ -123,6 +169,54 @@ class AgentStore {
                     error: error instanceof Error ? error.message : 'Failed to update agent' 
                 })
                 return null
+            }
+        },
+
+        // Update agent data (ip_address, port, capabilities) without changing status
+        updateAgentData: async (agentData: { agent_key: string; ip_address?: string; port?: number; capabilities?: string }): Promise<{success: boolean, message?: string, error?: string}> => {
+            this.setState({ loading: true, error: null })
+            
+            try {
+                const result = await apiService.updateAgentData(agentData)
+                if (result.success) {
+                    // Refresh agents list to get updated data
+                    await this.actions.fetchAgents()
+                    this.setState({ loading: false })
+                    return {
+                        success: true,
+                        message: result.message || 'Agent data updated successfully'
+                    }
+                } else {
+                    // Handle specific error types
+                    let errorMessage = 'Failed to update agent data'
+                    
+                    if (result.code === 'AGENT_KEY_NOT_FOUND') {
+                        errorMessage = result.error || 'Agent key not found. Please generate a valid agent key first.'
+                    } else if (result.code === 'IP_ADDRESS_CONFLICT') {
+                        errorMessage = result.error || 'IP address is already in use by another agent.'
+                    } else if (result.error) {
+                        errorMessage = result.error
+                    }
+                    
+                    this.setState({
+                        loading: false,
+                        error: errorMessage
+                    })
+                    return {
+                        success: false,
+                        error: errorMessage
+                    }
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to update agent data'
+                this.setState({
+                    loading: false,
+                    error: errorMessage
+                })
+                return {
+                    success: false,
+                    error: errorMessage
+                }
             }
         },
 

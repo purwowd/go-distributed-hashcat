@@ -10,12 +10,18 @@ import (
 type AgentRepository interface {
 	Create(ctx context.Context, agent *Agent) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Agent, error)
+	GetByName(ctx context.Context, name string) (*Agent, error)
 	GetByNameAndIP(ctx context.Context, name, ip string, port int) (*Agent, error)
 	GetAll(ctx context.Context) ([]Agent, error)
 	Update(ctx context.Context, agent *Agent) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateLastSeen(ctx context.Context, id uuid.UUID) error
+	GetByIPAddress(ctx context.Context, ip string) (*Agent, error)
+	GetByAgentKey(ctx context.Context, agentKey string) (*Agent, error)
+	CreateAgent(ctx context.Context, agent *Agent) error // bisa panggil Create
+	UpdateAgent(ctx context.Context, agent *Agent) error // bisa panggil Update
+	GetByNameAndIPForStartup(ctx context.Context, name, ip string, port int) (*Agent, error)
 }
 
 // JobRepository defines the interface for job data operations
@@ -46,4 +52,10 @@ type WordlistRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Wordlist, error)
 	GetAll(ctx context.Context) ([]Wordlist, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// DistributedJobUsecase defines the interface for distributed job operations
+type DistributedJobUsecase interface {
+	CreateDistributedJobs(ctx context.Context, req *DistributedJobRequest) (*DistributedJobResult, error)
+	GetDistributedJobStatus(ctx context.Context, masterJobID uuid.UUID) (*DistributedJobResult, error)
 }

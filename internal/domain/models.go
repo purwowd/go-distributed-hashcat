@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ type Agent struct {
 	Port         int       `json:"port" db:"port"`
 	Status       string    `json:"status" db:"status"` // online, offline, busy
 	Capabilities string    `json:"capabilities" db:"capabilities"`
+	AgentKey     string    `json:"agent_key" db:"agent_key"`
 	LastSeen     time.Time `json:"last_seen" db:"last_seen"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
@@ -21,25 +23,28 @@ type Agent struct {
 
 // Job represents a cracking job
 type Job struct {
-	ID          uuid.UUID  `json:"id" db:"id"`
-	Name        string     `json:"name" db:"name"`
-	Status      string     `json:"status" db:"status"` // pending, running, completed, failed, paused
-	HashType    int        `json:"hash_type" db:"hash_type"`
-	AttackMode  int        `json:"attack_mode" db:"attack_mode"`
-	HashFile    string     `json:"hash_file" db:"hash_file"`
-	HashFileID  *uuid.UUID `json:"hash_file_id" db:"hash_file_id"`
-	Wordlist    string     `json:"wordlist" db:"wordlist"`
-	WordlistID  *uuid.UUID `json:"wordlist_id" db:"wordlist_id"`
-	Rules       string     `json:"rules" db:"rules"`
-	AgentID     *uuid.UUID `json:"agent_id" db:"agent_id"`
-	Progress    float64    `json:"progress" db:"progress"`
-	Speed       int64      `json:"speed" db:"speed"`
-	ETA         *time.Time `json:"eta" db:"eta"`
-	Result      string     `json:"result" db:"result"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
-	StartedAt   *time.Time `json:"started_at" db:"started_at"`
-	CompletedAt *time.Time `json:"completed_at" db:"completed_at"`
+	ID             uuid.UUID   `json:"id" db:"id"`
+	Name           string      `json:"name" db:"name"`
+	Status         string      `json:"status" db:"status"` // pending, running, completed, failed, paused
+	HashType       int         `json:"hash_type" db:"hash_type"`
+	AttackMode     int         `json:"attack_mode" db:"attack_mode"`
+	HashFile       string      `json:"hash_file" db:"hash_file"`
+	HashFileID     *uuid.UUID  `json:"hash_file_id" db:"hash_file_id"`
+	Wordlist       string      `json:"wordlist" db:"wordlist"`
+	WordlistID     *uuid.UUID  `json:"wordlist_id" db:"wordlist_id"`
+	Rules          string      `json:"rules" db:"rules"`           // Password hasil cracking atau hashcat rules
+	AgentID        *uuid.UUID  `json:"agent_id" db:"agent_id"`     // Single agent (legacy)
+	AgentIDs       []uuid.UUID `json:"agent_ids,omitempty" db:"-"` // Multiple agents (not stored in DB, computed)
+	Progress       float64     `json:"progress" db:"progress"`
+	Speed          int64       `json:"speed" db:"speed"` // Hash rate dalam H/s
+	ETA            *time.Time  `json:"eta" db:"eta"`     // Estimated time of completion
+	Result         string      `json:"result" db:"result"`
+	TotalWords     int64       `json:"total_words" db:"total_words"`         // Total dictionary words untuk job ini
+	ProcessedWords int64       `json:"processed_words" db:"processed_words"` // Words yang sudah diproses
+	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at" db:"updated_at"`
+	StartedAt      *time.Time  `json:"started_at" db:"started_at"`
+	CompletedAt    *time.Time  `json:"completed_at" db:"completed_at"`
 }
 
 // HashFile represents uploaded hash files
@@ -77,14 +82,16 @@ type JobStatus struct {
 
 // CreateJobRequest represents the request to create a new job
 type CreateJobRequest struct {
-	Name       string `json:"name" binding:"required"`
-	HashType   int    `json:"hash_type" binding:"gte=0"`
-	AttackMode int    `json:"attack_mode" binding:"gte=0"`
-	HashFileID string `json:"hash_file_id" binding:"required"`
-	Wordlist   string `json:"wordlist" binding:"required"`
-	WordlistID string `json:"wordlist_id,omitempty"`
-	AgentID    string `json:"agent_id,omitempty"` // Optional manual agent assignment
-	Rules      string `json:"rules,omitempty"`
+	Name       string   `json:"name" binding:"required"`
+	HashType   int      `json:"hash_type" binding:"gte=0"`
+	AttackMode int      `json:"attack_mode" binding:"gte=0"`
+	HashFileID string   `json:"hash_file_id" binding:"required"`
+	Wordlist   string   `json:"wordlist" binding:"required"`
+	WordlistID string   `json:"wordlist_id,omitempty"`
+	AgentID    string   `json:"agent_id,omitempty"`    // Optional single agent assignment (legacy)
+	AgentIDs   []string `json:"agent_ids,omitempty"`   // Multiple agent assignment for distributed jobs
+	Rules      string   `json:"rules,omitempty"`       // Hashcat rules atau password hasil
+	TotalWords int64    `json:"total_words,omitempty"` // Total dictionary words
 }
 
 // EnrichedJob extends Job with readable names for frontend display
@@ -95,10 +102,77 @@ type EnrichedJob struct {
 	HashFileName string `json:"hash_file_name,omitempty"`
 }
 
+// AgentPerformance represents agent performance metrics
+type AgentPerformance struct {
+	AgentID      uuid.UUID `json:"agent_id"`
+	Name         string    `json:"name"`
+	Capabilities string    `json:"capabilities"`
+	Speed        int64     `json:"speed"`         // Hash rate (H/s)
+	ResourceType string    `json:"resource_type"` // "GPU" or "CPU"
+	Performance  float64   `json:"performance"`   // Normalized performance score (0-1)
+	WordCount    int64     `json:"word_count"`    // Assigned word count for this job
+}
+
+// DistributedJobRequest represents request to create distributed jobs
+type DistributedJobRequest struct {
+	Name           string `json:"name" binding:"required"`
+	HashType       int    `json:"hash_type" binding:"gte=0"`
+	AttackMode     int    `json:"attack_mode" binding:"gte=0"`
+	HashFileID     string `json:"hash_file_id" binding:"required"`
+	WordlistID     string `json:"wordlist_id" binding:"required"`
+	Rules          string `json:"rules,omitempty"`
+	AutoDistribute bool   `json:"auto_distribute"` // Whether to auto-distribute to all agents
+}
+
+// WordlistSegment represents a segment of wordlist for distribution
+type WordlistSegment struct {
+	StartIndex int64  `json:"start_index"`
+	EndIndex   int64  `json:"end_index"`
+	WordCount  int64  `json:"word_count"`
+	Content    string `json:"content,omitempty"`   // For small segments
+	FilePath   string `json:"file_path,omitempty"` // For large segments
+}
+
+// DistributedJobResult represents the result of distributed job creation
+type DistributedJobResult struct {
+	MasterJobID      uuid.UUID          `json:"master_job_id"`
+	SubJobs          []Job              `json:"sub_jobs"`
+	AgentAssignments []AgentPerformance `json:"agent_assignments"`
+	TotalWords       int64              `json:"total_words"`
+	DistributedWords int64              `json:"distributed_words"`
+	Message          string             `json:"message"`
+}
+
 // CreateAgentRequest represents the request to register a new agent
 type CreateAgentRequest struct {
 	Name         string `json:"name" binding:"required"`
-	IPAddress    string `json:"ip_address" binding:"required"`
-	Port         int    `json:"port" binding:"required"`
+	IPAddress    string `json:"ip_address" binding:"omitempty"`
+	Port         int    `json:"port,omitempty"` // Optional, will default to 8080
 	Capabilities string `json:"capabilities,omitempty"`
+	AgentKey     string `json:"agent_key,omitempty"` // Agent key for validation
+	Status       string `json:"status,omitempty"`
+}
+
+// DuplicateAgentError represents an error when trying to create an agent that already exists
+type DuplicateAgentError struct {
+	Name      string
+	IPAddress string
+	Port      int
+}
+
+func (e *DuplicateAgentError) Error() string {
+	return fmt.Sprintf("agent with name '%s' and IP address '%s:%d' already exists", e.Name, e.IPAddress, e.Port)
+}
+
+// AlreadyRegisteredAgentError represents an error when trying to register an agent that is already registered
+type AlreadyRegisteredAgentError struct {
+	Name         string
+	IPAddress    string
+	Port         int
+	Capabilities string
+}
+
+func (e *AlreadyRegisteredAgentError) Error() string {
+	return fmt.Sprintf("agent '%s' is already registered with IP address '%s', port '%d', and capabilities '%s'",
+		e.Name, e.IPAddress, e.Port, e.Capabilities)
 }

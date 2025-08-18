@@ -1,6 +1,7 @@
 package http
 
 import (
+	"net/http"
 	"os"
 	"time"
 
@@ -44,11 +45,14 @@ func NewRouter(
 
 	// Initialize handlers
 	agentHandler := handler.NewAgentHandler(agentUsecase)
-	jobHandler := handler.NewJobHandler(jobUsecase, jobEnrichmentService)
+	jobHandler := handler.NewJobHandler(jobUsecase, jobEnrichmentService, agentUsecase, wordlistUsecase)
 	hashFileHandler := handler.NewHashFileHandler(hashFileUsecase)
 	wordlistHandler := handler.NewWordlistHandler(wordlistUsecase)
 	cacheHandler := handler.NewCacheHandler(jobEnrichmentService)
 	wsHandler := handler.NewWebSocketHandler()
+
+	// Initialize distributed job handler (placeholder for now)
+	// distributedJobHandler := handler.NewDistributedJobHandler(distributedJobUsecase)
 
 	// Serve modern frontend (production build)
 	router.Static("/assets", "./frontend/dist/assets")
@@ -81,11 +85,15 @@ func NewRouter(
 		// Agent routes
 		agents := v1.Group("/agents")
 		{
+			agents.POST("/generate-key", agentHandler.GenerateAgentKey) // New route for generating agent keys
+			agents.POST("/startup", agentHandler.AgentStartup)          // New route for agent startup
+			agents.POST("/heartbeat", agentHandler.AgentHeartbeat)      // New route for agent heartbeat
+			agents.POST("/update-data", agentHandler.UpdateAgentData)   // New route for updating agent data (no status change)
 			agents.POST("/", agentHandler.RegisterAgent)
 			agents.GET("/", agentHandler.GetAllAgents)
 			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
-			agents.POST("/:id/heartbeat", agentHandler.Heartbeat)
+			agents.PUT("/:id/heartbeat", agentHandler.UpdateAgentHeartbeat)
 			agents.POST("/:id/files", agentHandler.RegisterAgentFiles)
 			agents.GET("/:id/jobs", jobHandler.GetJobsByAgentID)
 			agents.GET("/:id/jobs/next", jobHandler.GetAvailableJobForAgent)
@@ -97,16 +105,55 @@ func NewRouter(
 		{
 			jobs.POST("/", jobHandler.CreateJob)
 			jobs.GET("/", jobHandler.GetAllJobs)
+			jobs.GET("/parallel/summary", jobHandler.GetParallelJobsSummary)
+			jobs.POST("/assign", jobHandler.AssignJobs)
+			jobs.POST("/auto", jobHandler.CreateParallelJobs)
+			jobs.GET("/agent/:id", jobHandler.GetAvailableJobForAgent)
 			jobs.GET("/:id", jobHandler.GetJob)
 			jobs.POST("/:id/start", jobHandler.StartJob)
 			jobs.PUT("/:id/progress", jobHandler.UpdateJobProgress)
+			jobs.PUT("/:id/data", jobHandler.UpdateJobDataFromAgent)
 			jobs.POST("/:id/complete", jobHandler.CompleteJob)
 			jobs.POST("/:id/fail", jobHandler.FailJob)
 			jobs.POST("/:id/pause", jobHandler.PauseJob)
 			jobs.POST("/:id/resume", jobHandler.ResumeJob)
 			jobs.POST("/:id/stop", jobHandler.StopJob)
 			jobs.DELETE("/:id", jobHandler.DeleteJob)
-			jobs.POST("/assign", jobHandler.AssignJobs)
+		}
+
+		// Distributed Job routes
+		distributedJobs := v1.Group("/distributed-jobs")
+		{
+			distributedJobs.POST("/", func(c *gin.Context) {
+				c.JSON(http.StatusNotImplemented, gin.H{
+					"success": false,
+					"error":   "Distributed jobs feature not yet implemented",
+				})
+			})
+			distributedJobs.GET("/:id/status", func(c *gin.Context) {
+				c.JSON(http.StatusNotImplemented, gin.H{
+					"success": false,
+					"error":   "Distributed jobs feature not yet implemented",
+				})
+			})
+			distributedJobs.POST("/:id/start-all", func(c *gin.Context) {
+				c.JSON(http.StatusNotImplemented, gin.H{
+					"success": false,
+					"error":   "Distributed jobs feature not yet implemented",
+				})
+			})
+			distributedJobs.GET("/performance", func(c *gin.Context) {
+				c.JSON(http.StatusNotImplemented, gin.H{
+					"success": false,
+					"error":   "Distributed jobs feature not yet implemented",
+				})
+			})
+			distributedJobs.GET("/preview", func(c *gin.Context) {
+				c.JSON(http.StatusNotImplemented, gin.H{
+					"success": false,
+					"error":   "Distributed jobs feature not yet implemented",
+				})
+			})
 		}
 
 		// Hash file routes
@@ -125,6 +172,7 @@ func NewRouter(
 			wordlists.POST("/upload", wordlistHandler.UploadWordlist)
 			wordlists.GET("/", wordlistHandler.GetAllWordlists)
 			wordlists.GET("/:id", wordlistHandler.GetWordlist)
+			wordlists.GET("/:id/content", wordlistHandler.GetWordlistContent)
 			wordlists.GET("/:id/download", wordlistHandler.DownloadWordlist)
 			wordlists.DELETE("/:id", wordlistHandler.DeleteWordlist)
 		}

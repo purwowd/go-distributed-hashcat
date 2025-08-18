@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
@@ -19,6 +20,7 @@ type JobUsecase interface {
 	GetAvailableJobForAgent(ctx context.Context, agentID uuid.UUID) (*domain.Job, error)
 	StartJob(ctx context.Context, id uuid.UUID) error
 	UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error
+	UpdateJobData(ctx context.Context, job *domain.Job) error
 	CompleteJob(ctx context.Context, id uuid.UUID, result string) error
 	FailJob(ctx context.Context, id uuid.UUID, reason string) error
 	PauseJob(ctx context.Context, id uuid.UUID) error
@@ -54,17 +56,19 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 	}
 
 	job := &domain.Job{
-		ID:         uuid.New(),
-		Name:       req.Name,
-		Status:     "pending",
-		HashType:   req.HashType,
-		AttackMode: req.AttackMode,
-		HashFile:   hashFile.Path,
-		HashFileID: &hashFileID,
-		Wordlist:   req.Wordlist,
-		Rules:      req.Rules,
-		Progress:   0,
-		Speed:      0,
+		ID:             uuid.New(),
+		Name:           req.Name,
+		Status:         "pending",
+		HashType:       req.HashType,
+		AttackMode:     req.AttackMode,
+		HashFile:       hashFile.Path,
+		HashFileID:     &hashFileID,
+		Wordlist:       req.Wordlist,
+		Rules:          req.Rules,
+		Progress:       0,
+		Speed:          0,
+		TotalWords:     req.TotalWords,
+		ProcessedWords: 0,
 	}
 
 	// Handle wordlist ID if provided
@@ -76,8 +80,176 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		job.WordlistID = &wordlistID
 	}
 
-	// Handle manual agent assignment
-	if req.AgentID != "" {
+	// Handle agent assignment (single or multiple)
+	if len(req.AgentIDs) > 0 {
+		// Multiple agent assignment for distributed jobs
+		agentIDs := make([]uuid.UUID, 0, len(req.AgentIDs))
+
+		for _, agentIDStr := range req.AgentIDs {
+			agentID, err := uuid.Parse(agentIDStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid agent ID %s: %w", agentIDStr, err)
+			}
+
+			// Verify agent exists and is available
+			agent, err := u.agentRepo.GetByID(ctx, agentID)
+			if err != nil {
+				return nil, fmt.Errorf("agent not found: %w", err)
+			}
+
+			if agent.Status != "online" {
+				return nil, fmt.Errorf("agent %s is not available (status: %s)", agent.Name, agent.Status)
+			}
+
+			agentIDs = append(agentIDs, agentID)
+		}
+
+		// Create separate job for each agent (distributed job creation)
+		if len(agentIDs) > 1 {
+			// Get wordlist details for distribution
+			var wordlistContent []string
+			var totalWords int64
+			
+			if req.WordlistID != "" {
+				_, err := uuid.Parse(req.WordlistID)
+				if err == nil {
+					// Try to get wordlist from repository if available
+					// For now, we'll use the wordlist content from request
+					if req.Wordlist != "" {
+						// Parse wordlist content (assuming it's newline-separated)
+						wordlistContent = strings.Split(req.Wordlist, "\n")
+						// Filter empty lines
+						var validWords []string
+						for _, word := range wordlistContent {
+							word = strings.TrimSpace(word)
+							if word != "" {
+								validWords = append(validWords, word)
+							}
+						}
+						wordlistContent = validWords
+						totalWords = int64(len(wordlistContent))
+					}
+				}
+			}
+
+			// Calculate agent performance scores (similar to frontend)
+			type AgentPerformance struct {
+				AgentID      uuid.UUID
+				Name         string
+				Capabilities string
+				Speed        int
+				Weight       float64
+			}
+			
+			var agentPerformances []AgentPerformance
+			totalSpeed := 0
+			
+			for _, agentID := range agentIDs {
+				agent, err := u.agentRepo.GetByID(ctx, agentID)
+				if err != nil {
+					continue
+				}
+				
+				speed := 1 // Default untuk CPU
+				if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
+					speed = 5 // GPU lebih cepat
+				} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
+					speed = 8 // RTX lebih cepat lagi
+				} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
+					speed = 6 // GTX lebih cepat
+				}
+				
+				totalSpeed += speed
+				
+				agentPerformances = append(agentPerformances, AgentPerformance{
+					AgentID:      agent.ID,
+					Name:         agent.Name,
+					Capabilities: agent.Capabilities,
+					Speed:        speed,
+					Weight:       0, // Will be calculated below
+				})
+			}
+			
+			// Calculate weights
+			for i := range agentPerformances {
+				agentPerformances[i].Weight = float64(agentPerformances[i].Speed) / float64(totalSpeed)
+			}
+
+			// Create sub-jobs for each agent with distributed wordlist
+			var subJobs []*domain.Job
+			currentIndex := 0
+
+			for i, agentPerf := range agentPerformances {
+				// Calculate word count for this agent
+				wordCount := int(float64(totalWords) * agentPerf.Weight)
+				
+				// Ensure last agent gets remaining words
+				if i == len(agentPerformances)-1 {
+					wordCount = int(totalWords) - currentIndex
+				}
+				
+				// Ensure minimum words per agent
+				if wordCount < 1 {
+					wordCount = 1
+				}
+				
+				// Get agent's wordlist segment
+				var agentWordlist string
+				if len(wordlistContent) > 0 {
+					endIndex := currentIndex + wordCount
+					if endIndex > len(wordlistContent) {
+						endIndex = len(wordlistContent)
+					}
+					
+					agentWords := wordlistContent[currentIndex:endIndex]
+					agentWordlist = strings.Join(agentWords, "\n")
+					currentIndex = endIndex
+				} else {
+					// Fallback to original wordlist if we can't parse it
+					agentWordlist = req.Wordlist
+				}
+
+				subJob := &domain.Job{
+					ID:             uuid.New(),
+					Name:           fmt.Sprintf("%s (%s)", req.Name, agentPerf.Name),
+					Status:         "pending",
+					HashType:       req.HashType,
+					AttackMode:     req.AttackMode,
+					HashFile:       hashFile.Path,
+					HashFileID:     &hashFileID,
+					Wordlist:       agentWordlist, // Use distributed wordlist
+					Rules:          req.Rules,
+					Progress:       0,
+					Speed:          0,
+					TotalWords:     int64(wordCount),
+					ProcessedWords: 0,
+					AgentID:        &agentPerf.AgentID,
+					CreatedAt:      time.Now(),
+					UpdatedAt:      time.Now(),
+				}
+
+				// Save sub-job
+				if err := u.jobRepo.Create(ctx, subJob); err != nil {
+					return nil, fmt.Errorf("failed to create sub-job %d: %w", i, err)
+				}
+
+				subJobs = append(subJobs, subJob)
+				
+				// Log distribution info
+				fmt.Printf("✅ Created job \"%s\" for agent %s with %d words (%.1f%%)\n", 
+					subJob.Name, agentPerf.Name, wordCount, agentPerf.Weight*100)
+			}
+
+			// Return the first sub-job as the primary result
+			// Other sub-jobs are created but not returned
+			return subJobs[0], nil
+		} else {
+			// Single agent assignment
+			job.AgentID = &agentIDs[0]
+		}
+
+	} else if req.AgentID != "" {
+		// Single agent assignment (legacy)
 		agentID, err := uuid.Parse(req.AgentID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid agent ID: %w", err)
@@ -94,6 +266,9 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		}
 
 		job.AgentID = &agentID
+	} else {
+		// No agent assigned - job will be in "unassigned" state
+		// This is valid for job queuing systems
 	}
 
 	if err := u.jobRepo.Create(ctx, job); err != nil {
@@ -171,6 +346,13 @@ func (u *jobUsecase) UpdateJobProgress(ctx context.Context, id uuid.UUID, progre
 	return nil
 }
 
+func (u *jobUsecase) UpdateJobData(ctx context.Context, job *domain.Job) error {
+	if err := u.jobRepo.Update(ctx, job); err != nil {
+		return fmt.Errorf("failed to update job data: %w", err)
+	}
+	return nil
+}
+
 func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result string) error {
 	job, err := u.jobRepo.GetByID(ctx, id)
 	if err != nil {
@@ -208,6 +390,11 @@ func (u *jobUsecase) FailJob(ctx context.Context, id uuid.UUID, reason string) e
 	job.Status = "failed"
 	job.Result = reason
 	job.CompletedAt = &now
+
+	// If the failure reason indicates password not found, set progress to 100%
+	if reason == "Password not found" || strings.Contains(reason, "Password not found") {
+		job.Progress = 100.0
+	}
 
 	if err := u.jobRepo.Update(ctx, job); err != nil {
 		return fmt.Errorf("failed to update job: %w", err)
