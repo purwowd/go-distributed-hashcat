@@ -1422,9 +1422,25 @@ class DashboardApplication {
                 try {
                     this.isLoading = true
                     
-                    // Get wordlist name for backend requirement
+                    // Get wordlist details for backend requirement
                     const selectedWordlist = this.wordlists.find((w: any) => w.id === jobData.wordlist_id)
                     const wordlistName = selectedWordlist ? (selectedWordlist.orig_name || selectedWordlist.name) : 'unknown.txt'
+                    
+                    // Get wordlist content for distribution
+                    let wordlistContent = ''
+                    if (selectedWordlist && selectedWordlist.content) {
+                        wordlistContent = selectedWordlist.content
+                    } else if (selectedWordlist && selectedWordlist.path) {
+                        // Try to fetch wordlist content from server
+                        try {
+                            const response = await fetch(`/api/v1/wordlists/${selectedWordlist.id}/content`)
+                            if (response.ok) {
+                                wordlistContent = await response.text()
+                            }
+                        } catch (error) {
+                            console.warn('Failed to fetch wordlist content:', error)
+                        }
+                    }
                     
                     // Enhanced job creation with agent assignment
                     const jobPayload = {
@@ -1432,7 +1448,7 @@ class DashboardApplication {
                         hash_type: parseInt(jobData.hash_type),
                         attack_mode: parseInt(jobData.attack_mode),
                         hash_file_id: jobData.hash_file_id,
-                        wordlist: wordlistName,                    // Required field for backend
+                        wordlist: wordlistContent || wordlistName,  // Send content if available, otherwise name
                         wordlist_id: jobData.wordlist_id,         // Optional reference ID
                         agent_ids: jobData.agent_ids || []        // Include multiple agent assignments
                     }
