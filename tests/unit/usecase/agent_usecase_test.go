@@ -186,7 +186,10 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 					UpdatedAt:    time.Now().Add(-time.Hour),
 				}
 				repo.On("GetByName", mock.Anything, "existing-agent").Return(existingAgentForUpdate, nil)
+				// Mock GetByIPAddress to return no conflict (same agent)
+				repo.On("GetByIPAddress", mock.Anything, "192.168.1.100").Return(existingAgentForUpdate, nil)
 				repo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Agent")).Return(nil)
+				repo.On("UpdateLastSeen", mock.Anything, existingAgentID).Return(nil)
 			},
 			expectedError:  false,
 			expectedStatus: "offline", // Updated agents stay offline
@@ -272,6 +275,8 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 					UpdatedAt:    time.Now().Add(-time.Hour),
 				}
 				repo.On("GetByName", mock.Anything, "test-agent").Return(existingAgentForUpdate, nil)
+				// Mock GetByIPAddress to return no conflict (same agent)
+				repo.On("GetByIPAddress", mock.Anything, "192.168.1.100").Return(existingAgentForUpdate, nil)
 				repo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Agent")).Return(errors.New("update error"))
 			},
 			expectedError: true,
@@ -461,7 +466,14 @@ func TestAgentUsecase_UpdateAgentStatus(t *testing.T) {
 			agentID: agentID,
 			status:  "offline",
 			mockSetup: func(repo *MockAgentRepository) {
+				expectedAgent := &domain.Agent{
+					ID:        agentID,
+					Name:      "test-agent",
+					Status:    "offline",
+					LastSeen:  time.Now(),
+				}
 				repo.On("UpdateStatus", mock.Anything, agentID, "offline").Return(nil)
+				repo.On("GetByID", mock.Anything, agentID).Return(expectedAgent, nil)
 			},
 			expectedError: false,
 		},

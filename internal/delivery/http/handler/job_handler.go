@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"go-distributed-hashcat/internal/domain"
 	"go-distributed-hashcat/internal/usecase"
@@ -356,7 +357,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 	}
 	var agentSpeeds []AgentSpeed
 	for _, agent := range agents {
-		speed := 1 // Default untuk CPU
+		speed := 1                                       // Default untuk CPU
 		if strings.Contains(agent.Capabilities, "GPU") { // Ganti dengan field yang sesuai
 			speed = 5
 		}
@@ -399,11 +400,85 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Jobs created successfully"})
 }
 
+// UpdateJobDataFromAgent receives complete job data from agent and updates database immediately
+func (h *JobHandler) UpdateJobDataFromAgent(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid job ID"})
+		return
+	}
+
+	var req struct {
+		AgentID    string  `json:"agent_id" binding:"required"`
+		AttackMode int     `json:"attack_mode"`
+		Rules      string  `json:"rules"`
+		Speed      int64   `json:"speed"`
+		ETA        *string `json:"eta,omitempty"`
+		Progress   float64 `json:"progress"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Parse agent ID
+	agentID, err := uuid.Parse(req.AgentID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
+		return
+	}
+
+	// Get the job first
+	job, err := h.jobUsecase.GetJob(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update job with data from agent (only update if provided)
+	if req.AttackMode > 0 {
+		job.AttackMode = req.AttackMode
+	}
+	if req.Rules != "" {
+		job.Rules = req.Rules
+	}
+	job.Speed = req.Speed
+	job.Progress = req.Progress
+
+	// Update agent ID if not already set
+	if job.AgentID == nil {
+		job.AgentID = &agentID
+	}
+
+	// Parse ETA if provided
+	if req.ETA != nil && *req.ETA != "" {
+		if etaTime, err := time.Parse(time.RFC3339, *req.ETA); err == nil {
+			job.ETA = &etaTime
+		}
+	}
+
+	// Update the job in database immediately
+	if err := h.jobUsecase.UpdateJobData(c.Request.Context(), job); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Broadcast real-time update
+	eta := ""
+	if req.ETA != nil {
+		eta = *req.ETA
+	}
+	Hub.BroadcastJobProgress(id.String(), req.Progress, req.Speed, eta, job.Status)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Job data updated successfully"})
+}
+
 // Fungsi pembantu untuk membaca file wordlist
 func readWordlistFile(path string) ([]string, error) {
-    content, err := os.ReadFile(path)
-    if err != nil {
-        return nil, err
-    }
-    return strings.Split(string(content), "\n"), nil
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(string(content), "\n"), nil
 }
