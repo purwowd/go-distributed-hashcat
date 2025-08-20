@@ -94,7 +94,7 @@ export default defineConfig(({ command, mode }) => {
       proxy: {
         // Proxy API calls to backend during development
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:1337',
+          target: env.VITE_API_BASE_URL || 'http://172.15.1.94:1337',
           changeOrigin: true,
           secure: false,
         }
