@@ -1,22 +1,73 @@
-# 🔓 Distributed Hashcat
+# Go Distributed Hashcat
 
-**Modern distributed password cracking system** with Go backend, TypeScript frontend, and clean architecture.
+A distributed password cracking system using hashcat, built with Go.
 
-[![Go](https://img.shields.io/badge/Go-1.24-blue)](https://golang.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+## Features
 
-## 🚀 Key Features
+- Distributed password cracking across multiple agents
+- Support for various hash types and attack modes
+- Real-time progress monitoring via WebSocket
+- Agent health monitoring and automatic failover
+- Web-based management interface
+- RESTful API for automation
+- Database migrations support
 
-- **🔥 High Performance**: Multi-GPU distributed cracking
-- **🌐 Web Dashboard**: Real-time monitoring with TypeScript UI  
-- **🏗️ Clean Architecture**: Go backend with domain-driven design
-- **🔒 Secure**: WireGuard VPN support
-- **📊 Real-time Updates**: Live progress tracking
+## CLI Commands
 
-**Stack**: Go 1.24 + Gin + SQLite + TypeScript + Alpine.js + Tailwind CSS
+### Server Management
 
-## ⚡ Quick Start
+```bash
+# Start the server
+./server
+
+# Database migrations
+./server migrate up          # Run pending migrations
+./server migrate down        # Rollback last migration
+./server migrate status      # Show migration status
+./server migrate generate    # Generate new migration
+```
+
+### Wordlist Management
+
+The server includes optimized CLI commands for managing wordlist files, especially designed for large files with 1 million+ words:
+
+```bash
+# Upload a wordlist file with optimized processing
+./server wordlist upload /path/to/wordlist.txt
+
+# Upload with custom name
+./server wordlist upload /path/to/rockyou.txt --name "rockyou_2021"
+
+# Upload large files with custom chunk size (in MB)
+./server wordlist upload /path/to/large_wordlist.txt --chunk 50
+
+# Disable word counting for faster uploads
+./server wordlist upload /path/to/wordlist.txt --count=false
+
+# List all uploaded wordlists
+./server wordlist list
+
+# Delete a wordlist by ID
+./server wordlist delete 123e4567-e89b-12d3-a456-426614174000
+```
+
+#### Wordlist Upload Features
+
+- **Optimized Processing**: Uses buffered I/O and efficient file handling for large files
+- **Progress Reporting**: Real-time progress updates during upload
+- **Configurable Chunking**: Adjustable chunk size for memory-efficient processing
+- **Word Counting**: Automatic word count calculation (can be disabled for speed)
+- **File Validation**: Automatic file format detection and validation
+- **Memory Efficient**: Processes files in chunks to handle very large wordlists
+
+#### Performance Tips for Large Wordlists
+
+- Use `--chunk 50` for files larger than 1GB
+- Disable word counting with `--count=false` for fastest uploads
+- Ensure sufficient disk space in the upload directory
+- For files with 10M+ words, consider using larger chunk sizes
+
+## Installation
 
 ```bash
 # Install dependencies (Ubuntu)
