@@ -676,6 +676,12 @@ class DashboardApplication {
                     this.reactiveJobs = [...(state.jobs || [])]
                     console.log('🔄 Job store updated:', this.reactiveJobs.length, 'jobs')
                     
+                    // ✅ Debug: Log job IDs for verification
+                    if (this.reactiveJobs.length > 0) {
+                        const jobIds = this.reactiveJobs.slice(0, 5).map(j => j.id).join(', ')
+                        console.log('📋 First 5 job IDs:', jobIds)
+                    }
+                    
                     // Sync pagination (if available)
                     // Note: This would need to be updated when we implement job pagination in the backend
                 })
@@ -730,13 +736,24 @@ class DashboardApplication {
 
             // Server-side table helpers for Jobs
             async refreshJobsTable() {
-                const result = await jobStore.actions.fetchJobs({
-                    page: this.jobTable.page,
-                    page_size: this.jobTable.pageSize,
-                    search: this.jobTable.search
-                })
-                if (result) {
-                    this.jobTable.total = result.total
+                try {
+                    const result = await jobStore.actions.fetchJobs({
+                        page: this.jobTable.page,
+                        page_size: this.jobTable.pageSize,
+                        search: this.jobTable.search
+                    })
+                    if (result) {
+                        this.jobTable.total = result.total
+                        
+                        // ✅ Ensure reactiveJobs is updated with the latest data
+                        const state = jobStore.getState()
+                        this.reactiveJobs = [...(state.jobs || [])]
+                        
+                        console.log('🔄 Jobs table refreshed:', this.reactiveJobs.length, 'jobs')
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to refresh jobs table:', error)
+                    this.showNotification('Failed to refresh jobs table', 'error')
                 }
             },
             async setJobTablePageSize(event: any) {
@@ -1488,8 +1505,21 @@ class DashboardApplication {
                         this.showJobModal = false
                         this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
                         
-                        // Refresh jobs list to show the new job
+                        // ✅ Immediately add the new job to reactiveJobs for instant UI update
+                        if (this.reactiveJobs) {
+                            this.reactiveJobs = [result, ...this.reactiveJobs]
+                        }
+                        
+                        // ✅ Reset pagination to page 1 to show the new job
+                        this.jobTable.page = 1
+                        
+                        // ✅ Also refresh the table to ensure data consistency
                         await this.refreshJobsTable()
+                        
+                        // ✅ Force Alpine.js reactivity update by creating a new array reference
+                        setTimeout(() => {
+                            this.reactiveJobs = [...this.reactiveJobs]
+                        }, 0)
                     } else {
                         this.showNotification('Failed to create job - server returned null', 'error')
                     }

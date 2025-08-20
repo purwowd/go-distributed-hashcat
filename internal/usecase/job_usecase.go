@@ -360,7 +360,14 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 	}
 
 	now := time.Now()
-	job.Status = "completed"
+	
+	// Check if the result indicates failure (no password found)
+	if result == "Password not found - exhausted" || strings.Contains(result, "Password not found") {
+		job.Status = "failed"
+	} else {
+		job.Status = "completed"
+	}
+	
 	job.Result = result
 	job.Progress = 100.0
 	job.CompletedAt = &now

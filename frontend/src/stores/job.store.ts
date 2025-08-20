@@ -85,10 +85,16 @@ class JobStore {
             try {
                 const newJob = await apiService.createJob(jobData)
                 if (newJob) {
+                    // ✅ Immediately add the new job to the beginning of the list
+                    const updatedJobs = [newJob, ...this.state.jobs]
                     this.setState({ 
-                        jobs: [...this.state.jobs, newJob],
+                        jobs: updatedJobs,
                         loading: false 
                     })
+                    
+                    // ✅ Log for debugging
+                    console.log('✅ New job created and added to store:', newJob.id, newJob.name)
+                    
                     return newJob
                 } else {
                     // API returned success but null data

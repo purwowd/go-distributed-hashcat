@@ -398,11 +398,12 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 	agentID := uuid.New()
 
 	tests := []struct {
-		name          string
-		jobID         uuid.UUID
-		result        string
-		mockSetup     func(*MockJobRepository, *MockAgentRepository)
-		expectedError bool
+		name           string
+		jobID          uuid.UUID
+		result         string
+		mockSetup      func(*MockJobRepository, *MockAgentRepository)
+		expectedError  bool
+		expectedStatus string
 	}{
 		{
 			name:   "successful job completion",
@@ -418,7 +419,42 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
 				agentRepo.On("UpdateStatus", mock.Anything, agentID, "online").Return(nil)
 			},
-			expectedError: false,
+			expectedError:  false,
+			expectedStatus: "completed",
+		},
+		{
+			name:   "job completion with password not found - exhausted",
+			jobID:  jobID,
+			result: "Password not found - exhausted",
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+				job := &domain.Job{
+					ID:      jobID,
+					Status:  "running",
+					AgentID: &agentID,
+				}
+				jobRepo.On("GetByID", mock.Anything, jobID).Return(job, nil)
+				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
+				agentRepo.On("UpdateStatus", mock.Anything, agentID, "online").Return(nil)
+			},
+			expectedError:  false,
+			expectedStatus: "failed",
+		},
+		{
+			name:   "job completion with password not found",
+			jobID:  jobID,
+			result: "Password not found",
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+				job := &domain.Job{
+					ID:      jobID,
+					Status:  "running",
+					AgentID: &agentID,
+				}
+				jobRepo.On("GetByID", mock.Anything, jobID).Return(job, nil)
+				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
+				agentRepo.On("UpdateStatus", mock.Anything, agentID, "online").Return(nil)
+			},
+			expectedError:  false,
+			expectedStatus: "failed",
 		},
 		{
 			name:   "job not found",
@@ -427,7 +463,8 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
 				jobRepo.On("GetByID", mock.Anything, jobID).Return(nil, errors.New("job not found"))
 			},
-			expectedError: true,
+			expectedError:  true,
+			expectedStatus: "",
 		},
 		{
 			name:   "completing already completed job",
@@ -441,7 +478,8 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 				jobRepo.On("GetByID", mock.Anything, jobID).Return(job, nil)
 				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
 			},
-			expectedError: false, // Implementation allows completing any job
+			expectedError:  false, // Implementation allows completing any job
+			expectedStatus: "completed",
 		},
 	}
 
@@ -462,10 +500,10 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+				// Verify that the job status is updated correctly
+				jobRepo.AssertExpectations(t)
+				agentRepo.AssertExpectations(t)
 			}
-
-			jobRepo.AssertExpectations(t)
-			agentRepo.AssertExpectations(t)
 		})
 	}
 }
