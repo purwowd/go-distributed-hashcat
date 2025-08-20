@@ -295,7 +295,14 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 	}
 
 	// Broadcast job completion with result
-	Hub.BroadcastJobStatus(id.String(), "completed", req.Result)
+	// Determine the correct status based on the result
+	var broadcastStatus string
+	if req.Result != "" && req.Result != "Password not found - exhausted" {
+		broadcastStatus = "completed"
+	} else {
+		broadcastStatus = "failed"
+	}
+	Hub.BroadcastJobStatus(id.String(), broadcastStatus, req.Result)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Job completed successfully"})
 }
