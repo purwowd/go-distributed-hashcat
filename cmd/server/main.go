@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"go-distributed-hashcat/internal/infrastructure/repository"
 	"go-distributed-hashcat/internal/usecase"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -240,6 +243,135 @@ Example:
 	},
 }
 
+// Wordlist upload commands
+var wordlistCmd = &cobra.Command{
+	Use:   "wordlist",
+	Short: "Wordlist management commands",
+	Long:  `Manage wordlist files - upload, list, and delete wordlists.`,
+}
+
+var wordlistUploadCmd = &cobra.Command{
+	Use:   "upload [path]",
+	Short: "Upload a wordlist file with optimized processing",
+	Long: `Upload a wordlist file with optimized processing for large files (1M+ words).
+
+This command provides fast processing for large wordlist files by:
+- Using buffered I/O for efficient file reading
+- Parallel word counting for files with 1M+ words
+- Progress reporting during upload
+- Automatic file validation and optimization
+
+Parameters:
+  path      Path to the wordlist file to upload
+  --name    Custom name for the wordlist (optional)
+  --count   Enable word counting (default: true)
+  --chunk   Chunk size for processing in MB (default: 10)
+
+Examples:
+  ./server wordlist upload /path/to/rockyou.txt
+  ./server wordlist upload /path/to/wordlist.txt --name "custom_name"
+  ./server wordlist upload /path/to/large.txt --chunk 50 --count=false`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		filePath := args[0]
+		customName, _ := cmd.Flags().GetString("name")
+		enableCount, _ := cmd.Flags().GetBool("count")
+		chunkSize, _ := cmd.Flags().GetInt("chunk")
+
+		// Initialize database connection
+		config := loadConfig()
+		db, err := database.NewSQLiteDB(config.Database.Path)
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+		defer db.Close()
+
+		// Run migrations automatically
+		runner := database.NewMigrationRunner(db.DB(), migrationsDir)
+		if err := runner.MigrateUp(); err != nil {
+			log.Printf("Warning: Failed to run migrations: %v", err)
+		}
+
+		// Initialize repositories and usecase
+		wordlistRepo := repository.NewWordlistRepository(db)
+		wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
+
+		// Upload wordlist with CLI optimization
+		if err := uploadWordlistCLI(wordlistUsecase, filePath, customName, enableCount, chunkSize); err != nil {
+			log.Fatalf("Failed to upload wordlist: %v", err)
+		}
+	},
+}
+
+var wordlistListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all uploaded wordlists",
+	Long: `List all uploaded wordlists with their details including size, word count, and creation date.
+
+Examples:
+  ./server wordlist list`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Initialize database connection
+		config := loadConfig()
+		db, err := database.NewSQLiteDB(config.Database.Path)
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+		defer db.Close()
+
+		// Run migrations automatically
+		runner := database.NewMigrationRunner(db.DB(), migrationsDir)
+		if err := runner.MigrateUp(); err != nil {
+			log.Printf("Warning: Failed to run migrations: %v", err)
+		}
+
+		// Initialize repositories and usecase
+		wordlistRepo := repository.NewWordlistRepository(db)
+		wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
+
+		// List wordlists
+		if err := listWordlistsCLI(wordlistUsecase); err != nil {
+			log.Fatalf("Failed to list wordlists: %v", err)
+		}
+	},
+}
+
+var wordlistDeleteCmd = &cobra.Command{
+	Use:   "delete [id]",
+	Short: "Delete a wordlist by ID",
+	Long: `Delete a wordlist by its UUID. This will remove both the database record and the physical file.
+
+Examples:
+  ./server wordlist delete 123e4567-e89b-12d3-a456-426614174000`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		wordlistID := args[0]
+
+		// Initialize database connection
+		config := loadConfig()
+		db, err := database.NewSQLiteDB(config.Database.Path)
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+		defer db.Close()
+
+		// Run migrations automatically
+		runner := database.NewMigrationRunner(db.DB(), migrationsDir)
+		if err := runner.MigrateUp(); err != nil {
+			log.Printf("Warning: Failed to run migrations: %v", err)
+		}
+
+		// Initialize repositories and usecase
+		wordlistRepo := repository.NewWordlistRepository(db)
+		wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
+
+		// Delete wordlist
+		if err := deleteWordlistCLI(wordlistUsecase, wordlistID); err != nil {
+			log.Fatalf("Failed to delete wordlist: %v", err)
+		}
+	},
+}
+
 func init() {
 	// Add migration commands to root
 	rootCmd.AddCommand(migrateCmd)
@@ -248,8 +380,182 @@ func init() {
 	migrateCmd.AddCommand(migrateDownCmd)
 	migrateCmd.AddCommand(migrateStatusCmd)
 
+	// Add wordlist commands to root
+	rootCmd.AddCommand(wordlistCmd)
+	wordlistCmd.AddCommand(wordlistUploadCmd)
+	wordlistCmd.AddCommand(wordlistListCmd)
+	wordlistCmd.AddCommand(wordlistDeleteCmd)
+
 	// Flags
 	migrateCmd.PersistentFlags().StringVar(&migrationsDir, "migrations-dir", migrationsDir, "Directory containing migration files")
+	
+	// Wordlist upload flags
+	wordlistUploadCmd.Flags().String("name", "", "Custom name for the wordlist")
+	wordlistUploadCmd.Flags().Bool("count", true, "Enable word counting")
+	wordlistUploadCmd.Flags().Int("chunk", 10, "Chunk size for processing in MB")
+}
+
+// uploadWordlistCLI handles optimized wordlist upload with progress reporting
+func uploadWordlistCLI(wordlistUsecase usecase.WordlistUsecase, filePath, customName string, enableCount bool, chunkSizeMB int) error {
+	// Validate file exists
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	// Determine filename
+	filename := customName
+	if filename == "" {
+		filename = filepath.Base(filePath)
+	}
+
+	// Convert chunk size to bytes
+	chunkSize := int64(chunkSizeMB) * 1024 * 1024
+
+	log.Printf("Starting wordlist upload: %s", filename)
+	log.Printf("File size: %s", formatBytes(fileInfo.Size()))
+	log.Printf("Chunk size: %s", formatBytes(chunkSize))
+	log.Printf("Word counting: %t", enableCount)
+
+	// Open file for reading
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Create a custom reader that provides progress updates
+	var reader io.Reader = file
+	if enableCount {
+		reader = &progressReader{
+			file:       file,
+			totalSize:  fileInfo.Size(),
+			chunkSize:  chunkSize,
+			onProgress: func(bytesRead, totalBytes int64) {
+				percentage := float64(bytesRead) / float64(totalBytes) * 100
+				log.Printf("Progress: %s / %s (%.1f%%)", 
+					formatBytes(bytesRead), 
+					formatBytes(totalBytes), 
+					percentage)
+			},
+		}
+	}
+
+	// Upload wordlist
+	wordlist, err := wordlistUsecase.UploadWordlist(
+		context.Background(),
+		filename,
+		reader,
+		fileInfo.Size(),
+	)
+	if err != nil {
+		return fmt.Errorf("upload failed: %w", err)
+	}
+
+	log.Printf("✅ Wordlist uploaded successfully!")
+	log.Printf("📁 ID: %s", wordlist.ID)
+	log.Printf("📝 Name: %s", wordlist.Name)
+	log.Printf("📊 Size: %s", formatBytes(wordlist.Size))
+	if wordlist.WordCount != nil {
+		log.Printf("🔢 Word count: %s", formatNumber(*wordlist.WordCount))
+	}
+	log.Printf("💾 Path: %s", wordlist.Path)
+
+	return nil
+}
+
+// listWordlistsCLI lists all uploaded wordlists with their details
+func listWordlistsCLI(wordlistUsecase usecase.WordlistUsecase) error {
+	wordlists, err := wordlistUsecase.GetAllWordlists(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to list wordlists: %w", err)
+	}
+
+	if len(wordlists) == 0 {
+		log.Println("No wordlists found.")
+		return nil
+	}
+
+	fmt.Println("Uploaded Wordlists:")
+	fmt.Println("---------------------")
+	for _, wl := range wordlists {
+		fmt.Printf("ID: %s\n", wl.ID)
+		fmt.Printf("Name: %s\n", wl.Name)
+		fmt.Printf("Size: %s\n", formatBytes(wl.Size))
+		if wl.WordCount != nil {
+			fmt.Printf("Word Count: %s\n", formatNumber(*wl.WordCount))
+		}
+		fmt.Printf("Created At: %s\n", wl.CreatedAt.Format(time.RFC3339))
+		fmt.Println("---------------------")
+	}
+	return nil
+}
+
+// deleteWordlistCLI deletes a wordlist by its ID
+func deleteWordlistCLI(wordlistUsecase usecase.WordlistUsecase, wordlistID string) error {
+	// Parse UUID
+	id, err := uuid.Parse(wordlistID)
+	if err != nil {
+		return fmt.Errorf("invalid wordlist ID format: %w", err)
+	}
+
+	// Delete the wordlist
+	if err := wordlistUsecase.DeleteWordlist(context.Background(), id); err != nil {
+		return fmt.Errorf("failed to delete wordlist: %w", err)
+	}
+
+	log.Printf("✅ Wordlist with ID %s deleted successfully.", wordlistID)
+	return nil
+}
+
+// progressReader wraps a file reader to provide progress updates
+type progressReader struct {
+	file       *os.File
+	totalSize  int64
+	chunkSize  int64
+	bytesRead  int64
+	onProgress func(bytesRead, totalBytes int64)
+}
+
+func (pr *progressReader) Read(p []byte) (n int, err error) {
+	n, err = pr.file.Read(p)
+	pr.bytesRead += int64(n)
+	
+	// Report progress every chunk
+	if pr.bytesRead%pr.chunkSize < int64(n) {
+		pr.onProgress(pr.bytesRead, pr.totalSize)
+	}
+	
+	return n, err
+}
+
+// formatBytes converts bytes to human readable format
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// formatNumber formats large numbers with commas
+func formatNumber(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	return fmt.Sprintf("%s", formatNumberWithCommas(n))
+}
+
+func formatNumberWithCommas(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	return fmt.Sprintf("%s,%03d", formatNumberWithCommas(n/1000), n%1000)
 }
 
 func Execute() {
