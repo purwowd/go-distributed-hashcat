@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
@@ -17,6 +18,7 @@ type wordlistRepository struct {
 	db          *database.SQLiteDB
 	cache       cache.Cache
 	getByIDStmt *sql.Stmt
+	getByOrigNameStmt *sql.Stmt
 	getAllStmt  *sql.Stmt
 	deleteStmt  *sql.Stmt
 }
@@ -42,6 +44,13 @@ func (r *wordlistRepository) prepareStatements() {
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getByID statement: %v", err))
+	}
+
+	r.getByOrigNameStmt, err = r.db.DB().Prepare(`
+		SELECT id FROM wordlists WHERE orig_name = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByOrigName statement: %v", err))
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
@@ -76,14 +85,20 @@ func (r *wordlistRepository) Create(ctx context.Context, wordlist *domain.Wordli
 		wordlist.CreatedAt,
 	)
 
-	if err == nil {
-		// Cache the new wordlist
-		r.cache.Set(ctx, "wordlist:"+wordlist.ID.String(), wordlist)
-		// Invalidate list cache
-		r.cache.Delete(ctx, "wordlists:all")
+	if err != nil {
+		// Check if it's a duplicate orig_name constraint violation
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") && strings.Contains(err.Error(), "orig_name") {
+			return fmt.Errorf("file already exists: %s", wordlist.OrigName)
+		}
+		return err
 	}
 
-	return err
+	// Cache the new wordlist
+	r.cache.Set(ctx, "wordlist:"+wordlist.ID.String(), wordlist)
+	// Invalidate list cache
+	r.cache.Delete(ctx, "wordlists:all")
+
+	return nil
 }
 
 func (r *wordlistRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error) {
@@ -126,6 +141,27 @@ func (r *wordlistRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	r.cache.Set(ctx, cacheKey, &wordlist)
 
 	return &wordlist, nil
+}
+
+func (r *wordlistRepository) GetByOrigName(ctx context.Context, origName string) (*domain.Wordlist, error) {
+	var idStr string
+	
+	err := r.getByOrigNameStmt.QueryRowContext(ctx, origName).Scan(&idStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("wordlist not found")
+		}
+		return nil, err
+	}
+
+	// Parse UUID
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid wordlist ID format: %w", err)
+	}
+
+	// Get full wordlist details using existing GetByID method
+	return r.GetByID(ctx, id)
 }
 
 func (r *wordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, error) {

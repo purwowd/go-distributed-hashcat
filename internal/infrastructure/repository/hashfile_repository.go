@@ -17,6 +17,7 @@ type hashFileRepository struct {
 	db          *database.SQLiteDB
 	cache       cache.Cache
 	getByIDStmt *sql.Stmt
+	getByOrigNameStmt *sql.Stmt
 	getAllStmt  *sql.Stmt
 	deleteStmt  *sql.Stmt
 }
@@ -42,6 +43,13 @@ func (r *hashFileRepository) prepareStatements() {
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getByID statement: %v", err))
+	}
+
+	r.getByOrigNameStmt, err = r.db.DB().Prepare(`
+		SELECT id FROM hash_files WHERE orig_name = ? LIMIT 1
+	`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare getByOrigName statement: %v", err))
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
@@ -178,4 +186,22 @@ func (r *hashFileRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return err
+}
+
+func (r *hashFileRepository) GetByOrigName(ctx context.Context, origName string) (*domain.HashFile, error) {
+	var idStr string
+	err := r.getByOrigNameStmt.QueryRowContext(ctx, origName).Scan(&idStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("hash file not found")
+		}
+		return nil, err
+	}
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hash file ID format: %w", err)
+	}
+
+	return r.GetByID(ctx, id)
 }
