@@ -182,7 +182,7 @@ Agent Exited (Status: offline, Port: 8080)
 
 **Database State:**
 ```
-GPU-Agent, 172.15.1.94, 8081, offline, GPU, 3730b5d6, ...
+GPU-Agent, 30.30.30.39, 8081, offline, GPU, 3730b5d6, ...
 ```
 - Status: offline (updated by system)
 - Port: 8081 (failed to update)
@@ -198,7 +198,7 @@ GPU-Agent, 172.15.1.94, 8081, offline, GPU, 3730b5d6, ...
 
 **Database State:**
 ```
-GPU-Agent, 172.15.1.94, 8080, offline, GPU, 3730b5d6, ...
+GPU-Agent, 30.30.30.39, 8080, offline, GPU, 3730b5d6, ...
 ```
 - Status: offline (successfully updated)
 - Port: 8080 (successfully restored)

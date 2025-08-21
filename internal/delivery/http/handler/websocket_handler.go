@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,9 +15,28 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		// Allow connections from localhost in development
 		origin := r.Header.Get("Origin")
-		return origin == "http://localhost:3000" || origin == "http://localhost:5173" || origin == ""
+		
+		// Allow localhost connections
+		if origin == "http://localhost:3000" || origin == "http://localhost:5173" || origin == "" {
+			return true
+		}
+		
+		// Allow connections from common development IP ranges
+		if strings.HasPrefix(origin, "http://172.15.") || 
+		   strings.HasPrefix(origin, "http://192.168.") || 
+		   strings.HasPrefix(origin, "http://10.") ||
+		   strings.HasPrefix(origin, "http://30.30.30.") ||
+		   strings.HasPrefix(origin, "http://127.0.0.1") {
+			return true
+		}
+		
+		// For development mode, allow all origins
+		if os.Getenv("GIN_MODE") == "debug" {
+			return true
+		}
+		
+		return false
 	},
 }
 

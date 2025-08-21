@@ -43,7 +43,7 @@ echo "--------------------------------------------"
 echo "Starting agent with new IP and capabilities..."
 STARTUP_RESPONSE=$(curl -s -X POST http://localhost:1337/api/v1/agents/startup \
   -H "Content-Type: application/json" \
-  -d "{\"name\": \"$AGENT_NAME\", \"agent_key\": \"$AGENT_KEY\", \"ip_address\": \"172.15.1.94\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
+  -d "{\"name\": \"$AGENT_NAME\", \"agent_key\": \"$AGENT_KEY\", \"ip_address\": \"30.30.30.39\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
   -w "\nHTTP Status: %{http_code}")
 
 echo "Startup Response:"
@@ -69,7 +69,7 @@ echo "----------------------------------------------------------------"
 echo "Starting agent again with same data..."
 STARTUP_AGAIN_RESPONSE=$(curl -s -X POST http://localhost:1337/api/v1/agents/startup \
   -H "Content-Type: application/json" \
-  -d "{\"name\": \"$AGENT_NAME\", \"agent_key\": \"$AGENT_KEY\", \"ip_address\": \"172.15.1.94\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
+  -d "{\"name\": \"$AGENT_NAME\", \"agent_key\": \"$AGENT_KEY\", \"ip_address\": \"30.30.30.39\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
   -w "\nHTTP Status: %{http_code}")
 
 echo "Startup Again Response:"
@@ -105,7 +105,7 @@ echo "--------------------------------------------------------------------------
 echo "Starting agent with wrong name (should fail)..."
 STARTUP_WRONG_NAME_RESPONSE=$(curl -s -X POST http://localhost:1337/api/v1/agents/startup \
   -H "Content-Type: application/json" \
-  -d "{\"name\": \"wrong-name\", \"agent_key\": \"$AGENT_KEY\", \"ip_address\": \"172.15.1.94\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
+  -d "{\"name\": \"wrong-name\", \"agent_key\": \"$AGENT_KEY\", \"ip_address\": \"30.30.30.39\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
   -w "\nHTTP Status: %{http_code}")
 
 echo "Startup Wrong Name Response:"
@@ -118,7 +118,7 @@ echo "------------------------------------------------------------------"
 echo "Starting agent with invalid agent key (should fail)..."
 STARTUP_INVALID_KEY_RESPONSE=$(curl -s -X POST http://localhost:1337/api/v1/agents/startup \
   -H "Content-Type: application/json" \
-  -d "{\"name\": \"$AGENT_NAME\", \"agent_key\": \"invalid-key\", \"ip_address\": \"172.15.1.94\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
+  -d "{\"name\": \"$AGENT_NAME\", \"agent_key\": \"invalid-key\", \"ip_address\": \"30.30.30.39\", \"port\": 8080, \"capabilities\": \"CPU\"}" \
   -w "\nHTTP Status: %{http_code}")
 
 echo "Startup Invalid Key Response:"

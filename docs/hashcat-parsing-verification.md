@@ -306,7 +306,7 @@ func detectCapabilitiesBasic() string {
 ### **Complete Startup Log**
 
 ```
-2025/08/14 22:10:05 ✅ IP address validation passed: 172.15.1.94 is a valid local IP
+2025/08/14 22:10:05 ✅ IP address validation passed: 30.30.30.39 is a valid local IP
 2025/08/14 22:10:05 🔍 Auto-detected capabilities using hashcat -I: CPU
 2025/08/14 22:10:05 🔄 Updating capabilities from '' to 'CPU'
 2025/08/14 22:10:05 ✅ Capabilities updated successfully
