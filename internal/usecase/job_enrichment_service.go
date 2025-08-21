@@ -254,7 +254,7 @@ func (s *jobEnrichmentService) EnrichJobs(ctx context.Context, jobs []domain.Job
 		enrichedJobs[i] = domain.EnrichedJob{
 			Job:          job,
 			AgentName:    s.getAgentName(job.AgentID),
-			WordlistName: s.getWordlistName(job.Wordlist),
+			WordlistName: s.getWordlistNameByJob(job),
 			HashFileName: s.getHashFileName(job.HashFileID, job.HashFile),
 		}
 	}
@@ -283,7 +283,14 @@ func (s *jobEnrichmentService) extractMissingWordlistIDs(jobs []domain.Job) []uu
 	seen := make(map[uuid.UUID]bool)
 
 	for _, job := range jobs {
-		if job.Wordlist != "" {
+		// Prioritize WordlistID (new field) over Wordlist (legacy field)
+		if job.WordlistID != nil && !seen[*job.WordlistID] {
+			seen[*job.WordlistID] = true
+			if _, cached := s.cache.getWordlist(*job.WordlistID); !cached {
+				missingIDs = append(missingIDs, *job.WordlistID)
+			}
+		} else if job.Wordlist != "" {
+			// Fallback to legacy Wordlist field
 			if id, err := uuid.Parse(job.Wordlist); err == nil && !seen[id] {
 				seen[id] = true
 				if _, cached := s.cache.getWordlist(id); !cached {
@@ -406,6 +413,32 @@ func (s *jobEnrichmentService) getWordlistName(wordlist string) string {
 
 	// Direct filename
 	return wordlist
+}
+
+// getWordlistNameByJob gets wordlist name from job, prioritizing WordlistID over Wordlist
+func (s *jobEnrichmentService) getWordlistNameByJob(job domain.Job) string {
+	// Prioritize WordlistID (new field) over Wordlist (legacy field)
+	if job.WordlistID != nil {
+		if wl, cached := s.cache.getWordlist(*job.WordlistID); cached {
+			if wl.OrigName != "" {
+				return wl.OrigName
+			}
+			return wl.Name
+		}
+		// Try to load directly from repository on cache miss
+		if wl, err := s.wordlistRepo.GetByID(context.Background(), *job.WordlistID); err == nil {
+			s.cache.setWordlist(*job.WordlistID, wl)
+			if wl.OrigName != "" {
+				return wl.OrigName
+			}
+			return wl.Name
+		}
+		// Final fallback for cache miss and repository failure
+		return job.WordlistID.String()[:8] + "..."
+	}
+
+	// Fallback to legacy Wordlist field
+	return s.getWordlistName(job.Wordlist)
 }
 
 func (s *jobEnrichmentService) getHashFileName(hashFileID *uuid.UUID, hashFilePath string) string {

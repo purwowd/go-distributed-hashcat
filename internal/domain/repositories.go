@@ -42,6 +42,7 @@ type JobRepository interface {
 type HashFileRepository interface {
 	Create(ctx context.Context, hashFile *HashFile) error
 	GetByID(ctx context.Context, id uuid.UUID) (*HashFile, error)
+	GetByOrigName(ctx context.Context, origName string) (*HashFile, error)
 	GetAll(ctx context.Context) ([]HashFile, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -50,6 +51,7 @@ type HashFileRepository interface {
 type WordlistRepository interface {
 	Create(ctx context.Context, wordlist *Wordlist) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Wordlist, error)
+	GetByOrigName(ctx context.Context, origName string) (*Wordlist, error)
 	GetAll(ctx context.Context) ([]Wordlist, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }

@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"go-distributed-hashcat/internal/usecase"
 
@@ -43,7 +44,19 @@ func (h *HashFileHandler) UploadHashFile(c *gin.Context) {
 		file.Size,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if strings.Contains(err.Error(), "file already exists") {
+			// Extract the filename from the error message
+			// Error format: "file already exists: filename.txt"
+			parts := strings.Split(err.Error(), ": ")
+			if len(parts) == 2 {
+				filename := parts[1]
+				c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("%s already exists", filename)})
+			} else {
+				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload hash file"})
 		return
 	}
 

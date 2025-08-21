@@ -17,6 +17,7 @@ import (
 type WordlistUsecase interface {
 	UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error)
 	GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error)
+	GetByOrigName(ctx context.Context, origName string) (*domain.Wordlist, error)
 	GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error)
 	DeleteWordlist(ctx context.Context, id uuid.UUID) error
 }
@@ -34,6 +35,12 @@ func NewWordlistUsecase(wordlistRepo domain.WordlistRepository, uploadDir string
 }
 
 func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error) {
+	// Check if wordlist with same original name already exists
+	existingWordlist, err := u.wordlistRepo.GetByOrigName(ctx, name)
+	if err == nil && existingWordlist != nil {
+		return nil, fmt.Errorf("file already exists: %s", name)
+	}
+
 	// Create upload directory if it doesn't exist
 	wordlistDir := filepath.Join(u.uploadDir, "wordlists")
 	if err := os.MkdirAll(wordlistDir, 0755); err != nil {
@@ -87,6 +94,14 @@ func (u *wordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*domai
 	wordlist, err := u.wordlistRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get wordlist: %w", err)
+	}
+	return wordlist, nil
+}
+
+func (u *wordlistUsecase) GetByOrigName(ctx context.Context, origName string) (*domain.Wordlist, error) {
+	wordlist, err := u.wordlistRepo.GetByOrigName(ctx, origName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get wordlist by original name: %w", err)
 	}
 	return wordlist, nil
 }

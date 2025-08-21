@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -32,6 +33,14 @@ func (m *MockWordlistRepository) GetByID(ctx context.Context, id uuid.UUID) (*do
 	return args.Get(0).(*domain.Wordlist), args.Error(1)
 }
 
+func (m *MockWordlistRepository) GetByOrigName(ctx context.Context, origName string) (*domain.Wordlist, error) {
+	args := m.Called(ctx, origName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Wordlist), args.Error(1)
+}
+
 func (m *MockWordlistRepository) GetAll(ctx context.Context) ([]domain.Wordlist, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]domain.Wordlist), args.Error(1)
@@ -51,13 +60,26 @@ func TestWordlistUsecase_UploadWordlist(t *testing.T) {
 		expectedError bool
 	}{
 		{
-			name:        "successful wordlist upload",
-			filename:    "rockyou.txt",
-			fileContent: "password\n123456\nadmin\ntest",
+			name: "successful wordlist upload",
 			mockSetup: func(repo *MockWordlistRepository) {
+				repo.On("GetByOrigName", mock.Anything, "test.txt").Return(nil, fmt.Errorf("wordlist not found"))
 				repo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Wordlist")).Return(nil)
 			},
 			expectedError: false,
+		},
+		{
+			name: "duplicate file name",
+			mockSetup: func(repo *MockWordlistRepository) {
+				existingWordlist := &domain.Wordlist{
+					ID:       uuid.New(),
+					Name:     "existing.txt",
+					OrigName: "test.txt",
+					Path:     "/tmp/wordlists/existing.txt",
+					Size:     1024,
+				}
+				repo.On("GetByOrigName", mock.Anything, "test.txt").Return(existingWordlist, nil)
+			},
+			expectedError: true,
 		},
 		{
 			name:        "repository error during creation",
@@ -156,6 +178,61 @@ func TestWordlistUsecase_GetWordlist(t *testing.T) {
 				assert.NotNil(t, wordlist)
 				assert.Equal(t, expectedWordlist.ID, wordlist.ID)
 				assert.Equal(t, expectedWordlist.Name, wordlist.Name)
+			}
+
+			mockRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestWordlistUsecase_GetByOrigName(t *testing.T) {
+	expectedWordlist := &domain.Wordlist{
+		ID:       uuid.New(),
+		Name:     "rockyou.txt",
+		OrigName: "rockyou.txt",
+		Path:     "/tmp/wordlists/rockyou.txt",
+		Size:     1024,
+	}
+
+	tests := []struct {
+		name          string
+		origName      string
+		mockSetup     func(*MockWordlistRepository)
+		expectedError bool
+	}{
+		{
+			name:     "successful wordlist retrieval by original name",
+			origName: "rockyou.txt",
+			mockSetup: func(repo *MockWordlistRepository) {
+				repo.On("GetByOrigName", mock.Anything, "rockyou.txt").Return(expectedWordlist, nil)
+			},
+			expectedError: false,
+		},
+		{
+			name:     "wordlist not found by original name",
+			origName: "nonexistent.txt",
+			mockSetup: func(repo *MockWordlistRepository) {
+				repo.On("GetByOrigName", mock.Anything, "nonexistent.txt").Return(nil, fmt.Errorf("wordlist not found"))
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockWordlistRepository)
+			tt.mockSetup(mockRepo)
+
+			usecase := usecase.NewWordlistUsecase(mockRepo, "/tmp/wordlists")
+			ctx := context.Background()
+
+			wordlist, err := usecase.GetByOrigName(ctx, tt.origName)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, expectedWordlist, wordlist)
 			}
 
 			mockRepo.AssertExpectations(t)

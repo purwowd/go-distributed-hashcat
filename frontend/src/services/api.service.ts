@@ -346,14 +346,25 @@ class ApiService {
             })
 
             if (!response.ok) {
-                throw new Error(`Upload failed: ${response.statusText}`)
+                // Try to get the error message from response body
+                let errorMessage = `Upload failed: ${response.statusText}`
+                try {
+                    const errorData = await response.json()
+                    if (errorData.error) {
+                        errorMessage = errorData.error
+                    }
+                } catch (parseError) {
+                    // If we can't parse the error response, use the default message
+                    console.warn('Could not parse error response:', parseError)
+                }
+                throw new Error(errorMessage)
             }
 
             const data = await response.json()
-            return data
+            return data.data || data // Handle both wrapped and unwrapped responses
         } catch (error) {
             console.error('Hash file upload failed:', error)
-            return null
+            throw error // Re-throw the error so the caller can handle it
         }
     }
 
@@ -400,14 +411,25 @@ class ApiService {
             })
 
             if (!response.ok) {
-                throw new Error(`Upload failed: ${response.statusText}`)
+                // Try to get the error message from response body
+                let errorMessage = `Upload failed: ${response.statusText}`
+                try {
+                    const errorData = await response.json()
+                    if (errorData.error) {
+                        errorMessage = errorData.error
+                    }
+                } catch (parseError) {
+                    // If we can't parse the error response, use the default message
+                    console.warn('Could not parse error response:', parseError)
+                }
+                throw new Error(errorMessage)
             }
 
             const data = await response.json()
-            return data
+            return data.data || data // Handle both wrapped and unwrapped responses
         } catch (error) {
             console.error('Wordlist upload failed:', error)
-            return null
+            throw error // Re-throw the error so the caller can handle it
         }
     }
 
