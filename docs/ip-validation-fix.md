@@ -5,7 +5,7 @@
 Sebelumnya, agent melakukan validasi IP yang salah dengan membandingkan IP yang diberikan dengan IP server dari URL. Ini menyebabkan error:
 
 ```
-❌ IP address mismatch: provided IP '172.15.1.94' does not match server IP '172.15.2.76'
+❌ IP address mismatch: provided IP '30.30.30.39' does not match server IP '172.15.2.76'
 ```
 
 ## Root Cause
@@ -131,7 +131,7 @@ Continue with detected IP
 sudo ./bin/agent \
   --server http://172.15.2.76:1337 \
   --name GPU-Agent \
-  --ip "172.15.1.94" \
+  --ip "30.30.30.39" \
   --agent-key "3730b5d6"
 ```
 
@@ -154,7 +154,7 @@ sudo ./bin/agent \
 
 **Expected Output:**
 ```
-❌ IP address validation failed: provided IP '192.168.999.999' is not a valid local IP address. Local IPs: [172.15.1.94 10.0.0.1]
+❌ IP address validation failed: provided IP '192.168.999.999' is not a valid local IP address. Local IPs: [30.30.30.39 10.0.0.1]
 ```
 
 ## Benefits

@@ -23,5 +23,5 @@ Capabilities will remain 'CPU' during entire agent lifecycle:
 
 ## Test Command
 ```bash
-sudo ./bin/agent --server http://172.15.2.76:1337 --name GPU-Agent --ip "172.15.1.94" --agent-key "3730b5d6"
+sudo ./bin/agent --server http://172.15.2.76:1337 --name GPU-Agent --ip "30.30.30.39" --agent-key "3730b5d6"
 ```

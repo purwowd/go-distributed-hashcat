@@ -4,7 +4,7 @@
 
 Sebelumnya, ketika menjalankan agent dengan command:
 ```bash
-sudo ./bin/agent --server http://30.30.30.102:1337 --name test-agent-003 --ip "172.15.1.94" --agent-key "d8675fb7"
+sudo ./bin/agent --server http://30.30.30.102:1337 --name test-agent-003 --ip "30.30.30.39" --agent-key "d8675fb7"
 ```
 
 Agent mengalami beberapa masalah:
@@ -24,7 +24,7 @@ Endpoint ini akan melakukan validasi dan update data agent saat startup:
 {
   "name": "test-agent-003",
   "agent_key": "d8675fb7",
-  "ip_address": "172.15.1.94",
+  "ip_address": "30.30.30.39",
   "port": 8080,
   "capabilities": "CPU"
 }
@@ -180,7 +180,7 @@ curl -X POST http://localhost:1337/api/v1/agents/startup \
   -d '{
     "name": "test-agent-003",
     "agent_key": "d8675fb7",
-    "ip_address": "172.15.1.94",
+    "ip_address": "30.30.30.39",
     "port": 8080,
     "capabilities": "CPU"
   }'
@@ -200,7 +200,7 @@ curl -X POST http://localhost:1337/api/v1/agents/heartbeat \
 sudo ./bin/agent \
   --server http://30.30.30.102:1337 \
   --name test-agent-003 \
-  --ip "172.15.1.94" \
+  --ip "30.30.30.39" \
   --agent-key "d8675fb7"
 ```
 

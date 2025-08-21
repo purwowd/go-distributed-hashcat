@@ -116,7 +116,7 @@ sudo ./bin/agent \
 
 **Expected Output:**
 ```
-✅ IP address validation passed: 172.15.1.94 is a valid local IP
+✅ IP address validation passed: 30.30.30.39 is a valid local IP
 🔍 Auto-detected capabilities using hashcat -I: CPU
 🔍 Detected device type: CPU
 ✅ CPU device detected: CPU
@@ -128,7 +128,7 @@ sudo ./bin/agent \
 
 **Database State:**
 ```
-GPU-Agent, 172.15.1.94, 8081, online, CPU, 3730b5d6, ...
+GPU-Agent, 30.30.30.39, 8081, online, CPU, 3730b5d6, ...
 ```
 
 ### **2. Agent Shutdown with Ctrl+C**
@@ -144,7 +144,7 @@ Agent exited
 
 **Database State:**
 ```
-GPU-Agent, 172.15.1.94, 8080, offline, CPU, 3730b5d6, ...
+GPU-Agent, 30.30.30.39, 8080, offline, CPU, 3730b5d6, ...
 ```
 
 ### **3. Agent with Specific Port**

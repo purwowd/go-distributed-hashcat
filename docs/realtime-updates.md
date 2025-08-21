@@ -28,7 +28,7 @@ Frontend sekarang mendukung **real-time updates** untuk agent status tanpa perlu
 cd frontend && npm run dev
 
 # Terminal 3: Agent
-sudo ./bin/agent --server http://172.15.2.76:1337 --name GPU-Agent --ip "172.15.1.94" --agent-key "3730b5d6"
+sudo ./bin/agent --server http://172.15.2.76:1337 --name GPU-Agent --ip "30.30.30.39" --agent-key "3730b5d6"
 ```
 
 ## Expected Results
