@@ -442,6 +442,16 @@ class DashboardApplication {
             // Track agent status changes to prevent duplicate notifications
             lastAgentStatuses: new Map(),
             
+            // Upload progress tracking
+            uploadProgress: 0,
+            uploadStatus: '',
+            uploadFileName: '',
+            uploadFileSize: 0,
+            uploadSpeed: '',
+            uploadStartTime: 0,
+            uploadEndTime: 0,
+            isUploading: false,
+            
             // Reactive data arrays - these will be updated by store subscriptions
             reactiveAgents: [] as any[],
             reactiveAgentKeys: [] as any[],
@@ -794,6 +804,191 @@ class DashboardApplication {
                 if (target !== this.agentTable.page) {
                     this.agentTable.page = target
                     await this.refreshAgentsTable()
+                }
+            },
+
+            // Server-side table helpers for Files
+            async refreshFilesTable() {
+                try {
+                    await fileStore.actions.fetchHashFiles()
+                    console.log('🔄 Files table refreshed')
+                } catch (error) {
+                    console.error('❌ Failed to refresh files table:', error)
+                    this.showNotification('Failed to refresh files table', 'error')
+                }
+            },
+
+            // Server-side table helpers for Wordlists
+            async refreshWordlistsTable() {
+                try {
+                    await wordlistStore.actions.fetchWordlists()
+                    console.log('🔄 Wordlists table refreshed')
+                } catch (error) {
+                    console.error('❌ Failed to refresh wordlists table:', error)
+                    this.showNotification('Failed to refresh wordlists table', 'error')
+                }
+            },
+
+            // Upload progress helper functions
+            startUploadProgress(file: File) {
+                this.isUploading = true
+                this.uploadProgress = 0
+                this.uploadStatus = 'Preparing upload...'
+                this.uploadFileName = file.name
+                this.uploadFileSize = file.size
+                this.uploadSpeed = ''
+                this.uploadStartTime = Date.now()
+                this.uploadEndTime = 0
+                
+                // Simulate progress updates for better UX
+                this.simulateProgress()
+            },
+
+            simulateProgress() {
+                const progressInterval = setInterval(() => {
+                    if (this.isUploading && this.uploadProgress < 90) {
+                        // Simulate realistic progress based on file size
+                        const fileSizeMB = this.uploadFileSize / (1024 * 1024)
+                        let increment = 1
+                        
+                        if (fileSizeMB > 100) {
+                            increment = 0.5 // Slower for large files
+                        } else if (fileSizeMB > 50) {
+                            increment = 1 // Medium speed for medium files
+                        } else {
+                            increment = 2 // Faster for small files
+                        }
+                        
+                        this.uploadProgress = Math.min(90, this.uploadProgress + increment)
+                        
+                        // Update status message
+                        if (this.uploadProgress < 30) {
+                            this.uploadStatus = 'Uploading...'
+                        } else if (this.uploadProgress < 70) {
+                            this.uploadStatus = 'Processing file...'
+                        } else {
+                            this.uploadStatus = 'Finalizing upload...'
+                        }
+                        
+                        // Calculate upload speed (simulated)
+                        const elapsed = Date.now() - this.uploadStartTime
+                        if (elapsed > 0) {
+                            const uploadedBytes = (this.uploadProgress / 100) * this.uploadFileSize
+                            const speedMBps = (uploadedBytes / (1024 * 1024)) / (elapsed / 1000)
+                            this.uploadSpeed = speedMBps.toFixed(2)
+                        }
+                    } else {
+                        clearInterval(progressInterval)
+                    }
+                }, 200)
+            },
+
+            completeUploadProgress() {
+                this.uploadProgress = 100
+                this.uploadStatus = 'Upload completed!'
+                this.uploadEndTime = Date.now()
+                this.isUploading = false
+                
+                // Auto-hide progress after 3 seconds
+                setTimeout(() => {
+                    this.resetUploadProgress()
+                }, 3000)
+            },
+
+            resetUploadProgress() {
+                this.uploadProgress = 0
+                this.uploadStatus = ''
+                this.uploadFileName = ''
+                this.uploadFileSize = 0
+                this.uploadSpeed = ''
+                this.uploadStartTime = 0
+                this.uploadEndTime = 0
+                this.isUploading = false
+            },
+
+
+
+            getUploadTimeElapsed(): string {
+                if (!this.uploadStartTime) return '0s'
+                const elapsed = Date.now() - this.uploadStartTime
+                const seconds = Math.floor(elapsed / 1000)
+                if (seconds < 60) return `${seconds}s`
+                const minutes = Math.floor(seconds / 60)
+                const remainingSeconds = seconds % 60
+                return `${minutes}m ${remainingSeconds}s`
+            },
+
+            // File size validation helper functions
+            validateFileSize(file: File, maxSizeGB: number = 1): { isValid: boolean; message: string; sizeInGB: number } {
+                const sizeInBytes = file.size
+                const sizeInMB = sizeInBytes / (1024 * 1024)
+                const sizeInGB = sizeInMB / 1024
+                
+                if (sizeInGB > maxSizeGB) {
+                    return {
+                        isValid: false,
+                        message: `File size (${sizeInGB.toFixed(2)} GB) exceeds the maximum allowed size of ${maxSizeGB} GB. Please use CLI upload for large files.`,
+                        sizeInGB: sizeInGB
+                    }
+                }
+                
+                return {
+                    isValid: true,
+                    message: `File size: ${sizeInMB.toFixed(2)} MB`,
+                    sizeInGB: sizeInGB
+                }
+            },
+
+            getFileSizeInfo(file: File): { sizeInBytes: number; sizeInMB: number; sizeInGB: number; formattedSize: string } {
+                const sizeInBytes = file.size
+                const sizeInMB = sizeInBytes / (1024 * 1024)
+                const sizeInGB = sizeInMB / 1024
+                
+                let formattedSize: string
+                if (sizeInGB >= 1) {
+                    formattedSize = `${sizeInGB.toFixed(2)} GB`
+                } else if (sizeInMB >= 1) {
+                    formattedSize = `${sizeInMB.toFixed(2)} MB`
+                } else {
+                    const sizeInKB = sizeInBytes / 1024
+                    formattedSize = `${sizeInKB.toFixed(2)} KB`
+                }
+                
+                return {
+                    sizeInBytes,
+                    sizeInMB,
+                    sizeInGB,
+                    formattedSize
+                }
+            },
+
+            getFileSizeWarning(file: File): { showWarning: boolean; warningType: 'info' | 'warning' | 'error'; message: string } {
+                const sizeInfo = this.getFileSizeInfo(file)
+                
+                if (sizeInfo.sizeInGB >= 1) {
+                    return {
+                        showWarning: true,
+                        warningType: 'error',
+                        message: `File size (${sizeInfo.formattedSize}) exceeds the 1GB limit. Please use CLI upload for files this large.`
+                    }
+                } else if (sizeInfo.sizeInMB >= 500) {
+                    return {
+                        showWarning: true,
+                        warningType: 'warning',
+                        message: `Large file detected (${sizeInfo.formattedSize}). Upload may take several minutes.`
+                    }
+                } else if (sizeInfo.sizeInMB >= 100) {
+                    return {
+                        showWarning: true,
+                        warningType: 'info',
+                        message: `Medium file size (${sizeInfo.formattedSize}). Upload should complete within a few minutes.`
+                    }
+                }
+                
+                return {
+                    showWarning: false,
+                    warningType: 'info',
+                    message: ''
                 }
             },
 
@@ -1166,21 +1361,62 @@ class DashboardApplication {
                     .replace(/^\s*yaml\s*$/gm, '')
                     .trim()
 
-                navigator.clipboard.writeText(cleanText).then(() => {
-                    // Enhanced visual feedback
-                    if (element) {
-                        element.classList.add('copied', 'copy-success')
-                        setTimeout(() => {
-                            element.classList.remove('copied')
-                        }, 2000)
-                        setTimeout(() => {
-                            element.classList.remove('copy-success')
-                        }, 600)
+                // Try modern Clipboard API first
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(cleanText).then(() => {
+                        // Enhanced visual feedback
+                        if (element) {
+                            element.classList.add('copied', 'copy-success')
+                            setTimeout(() => {
+                                element.classList.remove('copied')
+                            }, 2000)
+                            setTimeout(() => {
+                                element.classList.remove('copy-success')
+                            }, 600)
+                        }
+                        this.showNotification('Code copied to clipboard!', 'success')
+                    }).catch(() => {
+                        this.showNotification('Failed to copy to clipboard', 'error')
+                    })
+                    return
+                }
+                
+                // Fallback: Create temporary textarea element
+                const textArea = document.createElement('textarea')
+                textArea.value = cleanText
+                textArea.style.position = 'fixed'
+                textArea.style.left = '-999999px'
+                textArea.style.top = '-999999px'
+                document.body.appendChild(textArea)
+                textArea.focus()
+                textArea.select()
+                
+                try {
+                    const successful = document.execCommand('copy')
+                    if (successful) {
+                        // Enhanced visual feedback
+                        if (element) {
+                            element.classList.add('copied', 'copy-success')
+                            setTimeout(() => {
+                                element.classList.remove('copied')
+                            }, 2000)
+                            setTimeout(() => {
+                                element.classList.remove('copy-success')
+                            }, 600)
+                        }
+                        this.showNotification('Code copied to clipboard!', 'success')
+                    } else {
+                        throw new Error('execCommand copy failed')
                     }
-                    this.showNotification('Code copied to clipboard!', 'success')
-                }).catch(() => {
-                    this.showNotification('Failed to copy to clipboard', 'error')
-                })
+                } catch (fallbackErr) {
+                    // Last resort: show the text in a prompt
+                    const userInput = prompt('Copy this text manually:', cleanText)
+                    if (userInput !== null) {
+                        this.showNotification('Text displayed for manual copy', 'info')
+                    }
+                } finally {
+                    document.body.removeChild(textArea)
+                }
             },
 
             scrollToSection(id: string) {
@@ -1289,9 +1525,9 @@ class DashboardApplication {
                     
                     // Validate required fields - only agent_key is required now
                     if (!agentData.agent_key) {
-                    this.showNotification('Agent key is required. Please enter an agent key.', 'error')
-                    return
-                }
+                        this.showNotification('Agent key is required. Please enter an agent key.', 'error')
+                        return
+                    }
                 
                     // Set default port 8080 if port is empty or null
                     const processedData = { ...agentData }
@@ -1300,32 +1536,36 @@ class DashboardApplication {
                         console.log('🔧 Setting default port 8080 for agent')
                     }
                 
-                // Use updateAgentData instead of createAgent to only update data without changing status
-                const result = await agentStore.actions.updateAgentData(processedData)
-                if (result.success) {
-                    // Agent data updated successfully, show success notification and close modal
-                    this.showNotification(result.message || 'Agent data updated successfully!', 'success')
-                    this.closeAgentModal() // Close modal after success
-                } else {
-                    // Show specific error message
-                    if (result.error) {
-                        // Remove HTTP status prefix if present for better user experience
-                        let userMessage = result.error
+                    // Use updateAgentData instead of createAgent to only update data without changing status
+                    const result = await agentStore.actions.updateAgentData(processedData)
+                    if (result.success) {
+                        // Agent data updated successfully, show success notification and close modal
+                        this.showNotification(result.message || 'Agent data updated successfully!', 'success')
+                        this.closeAgentModal() // Close modal after success
                         
-                        // Remove HTTP status prefix if present
-                        if (userMessage.includes('HTTP 400: Bad Request - ')) {
-                            userMessage = userMessage.replace('HTTP 400: Bad Request - ', '')
-                        } else if (userMessage.includes('HTTP 409: Conflict - ')) {
-                            userMessage = userMessage.replace('HTTP 409: Conflict - ', '')
-                        } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
-                            userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '')
-                        }
-                        
-                        this.showNotification(userMessage, 'error')
+                        // ✅ Immediately refresh agents table to show new data
+                        await this.refreshAgentsTable()
+                        console.log('🔄 Agents table refreshed after creating new agent')
                     } else {
-                        this.showNotification('Failed to update agent data', 'error')
+                        // Show specific error message
+                        if (result.error) {
+                            // Remove HTTP status prefix if present for better user experience
+                            let userMessage = result.error
+                            
+                            // Remove HTTP status prefix if present
+                            if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                                userMessage = userMessage.replace('HTTP 400: Bad Request - ', '')
+                            } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                                userMessage = userMessage.replace('HTTP 409: Conflict - ', '')
+                            } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                                userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '')
+                            }
+                            
+                            this.showNotification(userMessage, 'error')
+                        } else {
+                            this.showNotification('Failed to update agent data', 'error')
+                        }
                     }
-                }
                 } catch (error) {
                     console.error('Error creating agent:', error)
                     this.showNotification('Failed to register agent', 'error')
@@ -1337,8 +1577,39 @@ class DashboardApplication {
 
             async copyAgentKey(agentKey: string) {
                 try {
-                    await navigator.clipboard.writeText(agentKey)
-                    this.showNotification('Agent key copied to clipboard!', 'success')
+                    // Try modern Clipboard API first
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(agentKey)
+                        this.showNotification('Agent key copied to clipboard!', 'success')
+                        return
+                    }
+                    
+                    // Fallback: Create temporary textarea element
+                    const textArea = document.createElement('textarea')
+                    textArea.value = agentKey
+                    textArea.style.position = 'fixed'
+                    textArea.style.left = '-999999px'
+                    textArea.style.top = '-999999px'
+                    document.body.appendChild(textArea)
+                    textArea.focus()
+                    textArea.select()
+                    
+                    try {
+                        const successful = document.execCommand('copy')
+                        if (successful) {
+                            this.showNotification('Agent key copied to clipboard!', 'success')
+                        } else {
+                            throw new Error('execCommand copy failed')
+                        }
+                    } catch (fallbackErr) {
+                        // Last resort: show the key in a prompt
+                        const userInput = prompt('Copy this agent key manually:', agentKey)
+                        if (userInput !== null) {
+                            this.showNotification('Agent key displayed for manual copy', 'info')
+                        }
+                    } finally {
+                        document.body.removeChild(textArea)
+                    }
                 } catch (err) {
                     console.error('Failed to copy agent key: ', err)
                     this.showNotification('Failed to copy agent key', 'error')
@@ -1346,43 +1617,57 @@ class DashboardApplication {
             },
             
             async createAgentKey(agentKeyData: any) {
-                // Use the new generateAgentKey action for creating agent keys
-                const result = await agentStore.actions.generateAgentKey(agentKeyData.name)
-                if (result) {
-                    this.showNotification('Agent Key Generated Successfully!', 'success')
-                    this.createdAgentKey = result
-                    if (result.agent_key) {
-                        this.agentKeyForm.agent_key = result.agent_key
-                    }
-                    // Auto-close modal after short delay
-                    setTimeout(() => {
-                        this.closeAgentKeyModal()
-                    }, 400)
-                } else {
-                    const state = agentStore.getState()
-                    const rawError = String(state.error || '')
-                    const err = rawError.toLowerCase()
-                    if (err.includes('already exists')) {
-                        // Extract agent name if present: "already exists <name>"
-                        const namePart = rawError.split('already exists')[1]?.trim() || agentKeyData.name
-                        this.showNotification(`Agent name '${namePart}' already exists`, 'error')
-                    } else if (state.error != null && String(state.error).trim() !== '') {
-                        // Try to extract user-friendly message from error
-                        let userMessage = String(state.error);
-                        
-                        // Remove HTTP status prefix if present
-                        if (userMessage.includes('HTTP 400: Bad Request - ')) {
-                            userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
-                        } else if (userMessage.includes('HTTP 409: Conflict - ')) {
-                            userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
-                        } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
-                            userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
+                try {
+                    this.isLoading = true
+                    
+                    // Use the new generateAgentKey action for creating agent keys
+                    const result = await agentStore.actions.generateAgentKey(agentKeyData.name)
+                    if (result) {
+                        this.showNotification('Agent Key Generated Successfully!', 'success')
+                        this.createdAgentKey = result
+                        if (result.agent_key) {
+                            this.agentKeyForm.agent_key = result.agent_key
                         }
                         
-                        this.showNotification(userMessage, 'error')
+                        // ✅ Immediately refresh agents table to show new data
+                        await this.refreshAgentsTable()
+                        console.log('🔄 Agents table refreshed after creating new agent key')
+                        
+                        // Auto-close modal after short delay
+                        setTimeout(() => {
+                            this.closeAgentKeyModal()
+                        }, 400)
                     } else {
-                        this.showNotification('Failed to generate agent key', 'error')
+                        const state = agentStore.getState()
+                        const rawError = String(state.error || '')
+                        const err = rawError.toLowerCase()
+                        if (err.includes('already exists')) {
+                            // Extract agent name if present: "already exists <name>"
+                            const namePart = rawError.split('already exists')[1]?.trim() || agentKeyData.name
+                            this.showNotification(`Agent name '${namePart}' already exists`, 'error')
+                        } else if (state.error != null && String(state.error).trim() !== '') {
+                            // Try to extract user-friendly message from error
+                            let userMessage = String(state.error);
+                            
+                            // Remove HTTP status prefix if present
+                            if (userMessage.includes('HTTP 400: Bad Request - ')) {
+                                userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
+                            } else if (userMessage.includes('HTTP 409: Conflict - ')) {
+                                userMessage = userMessage.replace('HTTP 409: Conflict - ', '');
+                            } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
+                                userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
+                            }
+                            
+                            this.showNotification(userMessage, 'error')
+                        } else {
+                            this.showNotification('Failed to generate agent key', 'error')
+                        }
                     }
+                } catch (error) {
+                    console.error('Error creating agent key:', error)
+                    this.showNotification('Failed to generate agent key', 'error')
+                } finally {
+                    this.isLoading = false
                 }
             },
 
@@ -2036,16 +2321,31 @@ class DashboardApplication {
                     return
                 }
                 
+                // Validate file size before upload
+                const sizeValidation = this.validateFileSize(file, 1) // 1GB limit
+                if (!sizeValidation.isValid) {
+                    this.showNotification(sizeValidation.message, 'error')
+                    return
+                }
+                
+                // Show file size info
+                const sizeInfo = this.getFileSizeInfo(file)
+                console.log(`📁 Uploading hash file: ${file.name} (${sizeInfo.formattedSize})`)
+                
                 try {
-                    this.isLoading = true
-                    this.showNotification(`Uploading ${file.name}...`, 'info')
+                    // Start progress tracking
+                    this.startUploadProgress(file)
                     
                     const result = await fileStore.actions.uploadHashFile(file)
                     if (result) {
-                        // Immediate UI update with uploaded file data
-                        await fileStore.actions.fetchHashFiles()
+                        // Complete progress
+                        this.completeUploadProgress()
                         
-                        this.showNotification('Hash file uploaded successfully!', 'success')
+                        // ✅ Immediately refresh files table to show new data
+                        await this.refreshFilesTable()
+                        console.log('🔄 Files table refreshed after uploading hash file')
+                        
+                        this.showNotification(`Hash file uploaded successfully! (${sizeInfo.formattedSize})`, 'success')
                         this.closeFileModal()
                         
                         // Scroll to Files tab if not already there
@@ -2053,13 +2353,19 @@ class DashboardApplication {
                             await this.switchTab('files')
                         }
                     } else {
-                        this.showNotification('Failed to upload hash file', 'error')
+                        // Check if there's a specific error message from the file store
+                        const fileStoreState = fileStore.getState()
+                        if (fileStoreState.error) {
+                            this.showNotification(fileStoreState.error, 'error')
+                        } else {
+                            this.showNotification('Failed to upload hash file', 'error')
+                        }
+                        this.resetUploadProgress()
                     }
                 } catch (error) {
                     console.error('Upload error:', error)
                     this.showNotification('Upload failed due to network error', 'error')
-                } finally {
-                    this.isLoading = false
+                    this.resetUploadProgress()
                 }
             },
 
@@ -2069,16 +2375,31 @@ class DashboardApplication {
                     return
                 }
                 
+                // Validate file size before upload
+                const sizeValidation = this.validateFileSize(file, 1) // 1GB limit
+                if (!sizeValidation.isValid) {
+                    this.showNotification(sizeValidation.message, 'error')
+                    return
+                }
+                
+                // Show file size info
+                const sizeInfo = this.getFileSizeInfo(file)
+                console.log(`📁 Uploading wordlist: ${file.name} (${sizeInfo.formattedSize})`)
+                
                 try {
-                    this.isLoading = true
-                    this.showNotification(`Uploading ${file.name}...`, 'info')
+                    // Start progress tracking
+                    this.startUploadProgress(file)
                     
                     const result = await wordlistStore.actions.uploadWordlist(file)
                     if (result) {
-                        // Immediate UI update with uploaded file data
-                        await wordlistStore.actions.fetchWordlists()
+                        // Complete progress
+                        this.completeUploadProgress()
                         
-                        this.showNotification('Wordlist uploaded successfully!', 'success')
+                        // ✅ Immediately refresh wordlists table to show new data
+                        await this.refreshWordlistsTable()
+                        console.log('🔄 Wordlists table refreshed after uploading wordlist')
+                        
+                        this.showNotification(`Wordlist uploaded successfully! (${sizeInfo.formattedSize})`, 'success')
                         this.closeWordlistModal()
                         
                         // Scroll to Wordlists tab if not already there
@@ -2086,13 +2407,19 @@ class DashboardApplication {
                             await this.switchTab('wordlists')
                         }
                     } else {
-                        this.showNotification('Failed to upload wordlist', 'error')
+                        // Check if there's a specific error message from the wordlist store
+                        const wordlistStoreState = wordlistStore.getState()
+                        if (wordlistStoreState.error) {
+                            this.showNotification(wordlistStoreState.error, 'error')
+                        } else {
+                            this.showNotification('Failed to upload wordlist', 'error')
+                        }
+                        this.resetUploadProgress()
                     }
                 } catch (error) {
                     console.error('Upload error:', error)
                     this.showNotification('Upload failed due to network error', 'error')
-                } finally {
-                    this.isLoading = false
+                    this.resetUploadProgress()
                 }
             },
 
@@ -2105,12 +2432,32 @@ class DashboardApplication {
                 const agent = this.agents.find((a: any) => a.id === id)
                 if (agent) {
                     this.openDeleteModal('agent', agent, async () => {
-                    const success = await agentStore.actions.deleteAgent(id)
-                    if (success) {
-                        this.showNotification('Agent deleted successfully!', 'success')
-                    } else {
-                        this.showNotification('Failed to delete agent', 'error')
-                    }
+                        const success = await agentStore.actions.deleteAgent(id)
+                        if (success) {
+                            this.showNotification('Agent deleted successfully!', 'success')
+                            
+                            // ✅ Immediately remove the deleted agent from reactive arrays for instant UI update
+                            if (this.reactiveAgents) {
+                                this.reactiveAgents = this.reactiveAgents.filter(a => a.id !== id)
+                            }
+                            if (this.reactiveAgentKeys) {
+                                this.reactiveAgentKeys = this.reactiveAgentKeys.filter(a => a.id !== id)
+                            }
+                            
+                            // ✅ Force Alpine.js reactivity update by creating a new array reference
+                            setTimeout(() => {
+                                if (this.reactiveAgents) {
+                                    this.reactiveAgents = [...this.reactiveAgents]
+                                }
+                                if (this.reactiveAgentKeys) {
+                                    this.reactiveAgentKeys = [...this.reactiveAgentKeys]
+                                }
+                            }, 0)
+                            
+                            console.log('🔄 Agent deleted and removed from UI immediately')
+                        } else {
+                            this.showNotification('Failed to delete agent', 'error')
+                        }
                     })
                 }
             },
@@ -2123,12 +2470,26 @@ class DashboardApplication {
                 const job = this.jobs.find((j: any) => j.id === id)
                 if (job) {
                     this.openDeleteModal('job', job, async () => {
-                    const success = await jobStore.actions.deleteJob(id)
-                    if (success) {
-                        this.showNotification('Job deleted successfully!', 'success')
-                    } else {
-                        this.showNotification('Failed to delete job', 'error')
-                    }
+                        const success = await jobStore.actions.deleteJob(id)
+                        if (success) {
+                            this.showNotification('Job deleted successfully!', 'success')
+                            
+                            // ✅ Immediately remove the deleted job from reactive arrays for instant UI update
+                            if (this.reactiveJobs) {
+                                this.reactiveJobs = this.reactiveJobs.filter(j => j.id !== id)
+                            }
+                            
+                            // ✅ Force Alpine.js reactivity update by creating a new array reference
+                            setTimeout(() => {
+                                if (this.reactiveJobs) {
+                                    this.reactiveJobs = [...this.reactiveJobs]
+                                }
+                            }, 0)
+                            
+                            console.log('🔄 Job deleted and removed from UI immediately')
+                        } else {
+                            this.showNotification('Failed to delete job', 'error')
+                        }
                     })
                 }
             },
@@ -2138,15 +2499,29 @@ class DashboardApplication {
                     this.showNotification('Error: No file ID provided', 'error')
                     return
                 }
-                const file = this.hashFiles.find((f: any) => f.id === id)
+                const file = this.hashFiles.find((a: any) => a.id === id)
                 if (file) {
                     this.openDeleteModal('file', file, async () => {
-                    const success = await fileStore.actions.deleteHashFile(id)
-                    if (success) {
-                        this.showNotification('Hash file deleted successfully!', 'success')
-                    } else {
-                        this.showNotification('Failed to delete hash file', 'error')
-                    }
+                        const success = await fileStore.actions.deleteHashFile(id)
+                        if (success) {
+                            this.showNotification('Hash file deleted successfully!', 'success')
+                            
+                            // ✅ Immediately remove the deleted file from reactive arrays for instant UI update
+                            if (this.reactiveHashFiles) {
+                                this.reactiveHashFiles = this.reactiveHashFiles.filter(f => f.id !== id)
+                            }
+                            
+                            // ✅ Force Alpine.js reactivity update by creating a new array reference
+                            setTimeout(() => {
+                                if (this.reactiveHashFiles) {
+                                    this.reactiveHashFiles = [...this.reactiveHashFiles]
+                                }
+                            }, 0)
+                            
+                            console.log('🔄 Hash file deleted and removed from UI immediately')
+                        } else {
+                            this.showNotification('Failed to delete hash file', 'error')
+                        }
                     })
                 }
             },
@@ -2159,12 +2534,26 @@ class DashboardApplication {
                 const wordlist = this.wordlists.find((w: any) => w.id === id)
                 if (wordlist) {
                     this.openDeleteModal('wordlist', wordlist, async () => {
-                    const success = await wordlistStore.actions.deleteWordlist(id)
-                    if (success) {
-                        this.showNotification('Wordlist deleted successfully!', 'success')
-                    } else {
-                        this.showNotification('Failed to delete wordlist', 'error')
-                    }
+                        const success = await wordlistStore.actions.deleteWordlist(id)
+                        if (success) {
+                            this.showNotification('Wordlist deleted successfully!', 'success')
+                            
+                            // ✅ Immediately remove the deleted wordlist from reactive arrays for instant UI update
+                            if (this.reactiveWordlists) {
+                                this.reactiveWordlists = this.reactiveWordlists.filter(w => w.id !== id)
+                            }
+                            
+                            // ✅ Force Alpine.js reactivity update by creating a new array reference
+                            setTimeout(() => {
+                                if (this.reactiveWordlists) {
+                                    this.reactiveWordlists = [...this.reactiveWordlists]
+                                }
+                            }, 0)
+                            
+                            console.log('🔄 Wordlist deleted and removed from UI immediately')
+                        } else {
+                            this.showNotification('Failed to delete wordlist', 'error')
+                        }
                     })
                 }
             },

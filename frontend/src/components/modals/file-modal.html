@@ -38,12 +38,15 @@
                                    @change="fileForm.file = $event.target.files[0]" 
                                    accept=".hccapx"
                                    required 
+                                   :disabled="isUploading"
                                    class="hidden" 
                                    id="hashFileInput">
-                            <label for="hashFileInput" class="upload-label">
+                            <label for="hashFileInput" 
+                                   :class="isUploading ? 'upload-label opacity-50 cursor-not-allowed' : 'upload-label'"
+                                   :style="isUploading ? 'pointer-events: none;' : ''">
                                 <div class="text-center py-6">
                                     <i class="fas fa-wifi text-3xl text-blue-500 mb-3"></i>
-                                    <p class="text-gray-700 font-medium">Drop .hccapx file here or click to browse</p>
+                                    <p class="text-gray-700 font-medium" x-text="isUploading ? 'Upload in progress...' : 'Drop .hccapx file here or click to browse'">Drop .hccapx file here or click to browse</p>
                                     <p class="text-gray-500 text-sm mt-1">Only supports: .hccapx (WiFi handshake files)</p>
                                 </div>
                             </label>
@@ -52,19 +55,63 @@
                             <div class="flex items-center space-x-2">
                                 <i class="fas fa-file-alt text-blue-600"></i>
                                 <span class="text-blue-800 font-medium text-sm" x-text="fileForm.file?.name">Selected file</span>
-                                <span class="text-blue-600 text-xs" x-text="fileForm.file ? formatFileSize(fileForm.file.size) : ''">Size</span>
+                                <span class="text-blue-600 text-xs" x-text="fileForm.file ? getFileSizeInfo(fileForm.file).formattedSize : ''">Size</span>
                             </div>
+                            
+                            <!-- File Size Warning -->
+                            <div x-show="fileForm.file && getFileSizeWarning(fileForm.file).showWarning" 
+                                 class="mt-3 p-3 rounded-lg border"
+                                 :class="getFileSizeWarning(fileForm.file).warningType === 'error' ? 'bg-red-50 border-red-200' : getFileSizeWarning(fileForm.file).warningType === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'">
+                                <div class="flex items-start">
+                                    <i class="fas fa-exclamation-triangle mr-2 mt-0.5"
+                                       :class="getFileSizeWarning(fileForm.file).warningType === 'error' ? 'text-red-600' : getFileSizeWarning(fileForm.file).warningType === 'warning' ? 'text-amber-600' : 'text-blue-600'"></i>
+                                    <div class="text-xs"
+                                         :class="getFileSizeWarning(fileForm.file).warningType === 'error' ? 'text-red-800' : getFileSizeWarning(fileForm.file).warningType === 'warning' ? 'text-amber-800' : 'text-blue-800'">
+                                        <p class="font-medium mb-1" x-text="getFileSizeWarning(fileForm.file).warningType === 'error' ? 'File Too Large' : getFileSizeWarning(fileForm.file).warningType === 'warning' ? 'Large File Warning' : 'File Size Info'"></p>
+                                        <p x-text="getFileSizeWarning(fileForm.file).message"></p>
+                                        
+                                        <!-- CLI Command for Large Files -->
+                                        <div x-show="getFileSizeWarning(fileForm.file).warningType === 'error'" class="mt-2 p-2 bg-red-100 rounded text-red-900">
+                                            <p class="font-medium mb-1">Use CLI Upload Instead:</p>
+                                            <code class="block font-mono text-xs">
+                                                ./server hashfile upload /path/to/your-file.hccapx --name "filename"
+                                            </code>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Upload Status Indicator -->
+                        <div x-show="isUploading" class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p class="text-xs text-blue-700 flex items-center">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                File selection is disabled during upload. Please wait for the current upload to complete.
+                            </p>
                         </div>
                     </div>
                     
                     <!-- Upload Progress -->
-                    <div x-show="isLoading" class="space-y-2">
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-medium text-gray-700">Uploading...</span>
-                            <span class="text-sm text-gray-600">Processing...</span>
+                    <div x-show="isUploading" class="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-blue-800" x-text="uploadStatus">Preparing...</span>
+                            <span class="text-sm text-blue-600 font-medium" x-text="uploadProgress + '%'">0%</span>
                         </div>
-                        <div class="progress-modern">
-                            <div class="progress-bar w-full animate-pulse"></div>
+                        
+                        <div class="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
+                            <div class="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                 :style="`width: ${uploadProgress}%`"></div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="text-center">
+                                <p class="text-blue-600">Speed</p>
+                                <p class="font-medium text-blue-800" x-text="uploadSpeed + ' MB/s'">0 MB/s</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-blue-600">Time</p>
+                                <p class="font-medium text-blue-800" x-text="getUploadTimeElapsed()">0s</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -73,17 +120,17 @@
                 <div class="bg-gray-50/50 border-t border-gray-100/50 px-5 py-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
                     <button type="button" 
                             @click="closeFileModal()" 
-                            :disabled="isLoading"
-                            :class="isLoading ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-secondary'"
+                            :disabled="isUploading"
+                            :class="isUploading ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-secondary'"
                             class="order-2 sm:order-1">
                         <i class="fas fa-times mr-2"></i>Cancel
                     </button>
                     <button type="submit" 
-                            :disabled="!fileForm.file || isLoading"
-                            :class="(!fileForm.file || isLoading) ? 'btn-primary opacity-50 cursor-not-allowed' : 'btn-primary'"
+                            :disabled="!fileForm.file || isUploading"
+                            :class="(!fileForm.file || isUploading) ? 'btn-primary opacity-50 cursor-not-allowed' : 'btn-primary'"
                             class="order-1 sm:order-2">
-                        <i :class="isLoading ? 'fas fa-spinner fa-spin mr-2' : 'fas fa-upload mr-2'"></i>
-                        <span x-text="isLoading ? 'Uploading...' : 'Upload File'">Upload File</span>
+                        <i :class="isUploading ? 'fas fa-spinner fa-spin mr-2' : 'fas fa-upload mr-2'"></i>
+                        <span x-text="isUploading ? 'Uploading...' : 'Upload File'">Upload File</span>
                     </button>
                 </div>
             </form>

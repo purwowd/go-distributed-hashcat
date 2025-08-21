@@ -160,6 +160,12 @@ func (s *SQLiteDB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_wordlists_size ON wordlists(size)`,
 		`CREATE INDEX IF NOT EXISTS idx_wordlists_created_at ON wordlists(created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_wordlists_word_count ON wordlists(word_count)`,
+		`CREATE INDEX IF NOT EXISTS idx_wordlists_orig_name ON wordlists(orig_name)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_wordlists_orig_name_unique ON wordlists(orig_name)`,
+		// Clean up duplicate orig_name entries (keep the most recent one)
+		`DELETE FROM wordlists WHERE id NOT IN (
+			SELECT MAX(id) FROM wordlists GROUP BY orig_name
+		)`,
 		// Composite indexes for common query patterns
 		`CREATE INDEX IF NOT EXISTS idx_agents_status_updated ON agents(status, updated_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_jobs_agent_status ON jobs(agent_id, status)`,

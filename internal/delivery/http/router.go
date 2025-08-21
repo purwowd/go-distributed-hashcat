@@ -37,7 +37,8 @@ func NewRouter(
 	router.Use(middleware.Gzip())
 	router.Use(middleware.Cache())
 	router.Use(middleware.SecurityHeaders())
-	router.Use(middleware.RequestTimeout(30 * time.Second))
+	// Increase timeout for large file downloads (wordlists can be several GB)
+	router.Use(middleware.RequestTimeout(10 * time.Minute))
 
 	// Standard middleware
 	router.Use(gin.Logger())

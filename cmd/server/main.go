@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	"go-distributed-hashcat/internal/infrastructure/database"
 	"go-distributed-hashcat/internal/infrastructure/repository"
 	"go-distributed-hashcat/internal/usecase"
+	"go-distributed-hashcat/internal/domain"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -298,6 +301,11 @@ Examples:
 
 		// Upload wordlist with CLI optimization
 		if err := uploadWordlistCLI(wordlistUsecase, filePath, customName, enableCount, chunkSize); err != nil {
+			if strings.Contains(err.Error(), "file already exists") {
+				log.Printf("Error: %v", err)
+				log.Printf("Use a different name with --name flag or delete the existing wordlist first")
+				os.Exit(1)
+			}
 			log.Fatalf("Failed to upload wordlist: %v", err)
 		}
 	},
@@ -372,6 +380,45 @@ Examples:
 	},
 }
 
+var wordlistCleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "Clean up duplicate wordlist entries",
+	Long: `Clean up duplicate wordlist entries by keeping only the most recent one for each original filename.
+
+This command will:
+- Find wordlists with duplicate orig_name
+- Keep the most recent entry (by created_at)
+- Delete older duplicate entries
+- Clean up associated physical files
+
+Examples:
+  ./server wordlist cleanup`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Initialize database connection
+		config := loadConfig()
+		db, err := database.NewSQLiteDB(config.Database.Path)
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+		defer db.Close()
+
+		// Run migrations automatically
+		runner := database.NewMigrationRunner(db.DB(), migrationsDir)
+		if err := runner.MigrateUp(); err != nil {
+			log.Printf("Warning: Failed to run migrations: %v", err)
+		}
+
+		// Initialize repositories and usecase
+		wordlistRepo := repository.NewWordlistRepository(db)
+		wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
+
+		// Cleanup duplicate wordlists
+		if err := cleanupWordlistsCLI(wordlistUsecase); err != nil {
+			log.Fatalf("Failed to cleanup wordlists: %v", err)
+		}
+	},
+}
+
 func init() {
 	// Add migration commands to root
 	rootCmd.AddCommand(migrateCmd)
@@ -385,6 +432,7 @@ func init() {
 	wordlistCmd.AddCommand(wordlistUploadCmd)
 	wordlistCmd.AddCommand(wordlistListCmd)
 	wordlistCmd.AddCommand(wordlistDeleteCmd)
+	wordlistCmd.AddCommand(wordlistCleanupCmd)
 
 	// Flags
 	migrateCmd.PersistentFlags().StringVar(&migrationsDir, "migrations-dir", migrationsDir, "Directory containing migration files")
@@ -452,14 +500,14 @@ func uploadWordlistCLI(wordlistUsecase usecase.WordlistUsecase, filePath, custom
 		return fmt.Errorf("upload failed: %w", err)
 	}
 
-	log.Printf("✅ Wordlist uploaded successfully!")
-	log.Printf("📁 ID: %s", wordlist.ID)
-	log.Printf("📝 Name: %s", wordlist.Name)
-	log.Printf("📊 Size: %s", formatBytes(wordlist.Size))
+	log.Printf("Wordlist uploaded successfully!")
+	log.Printf("ID: %s", wordlist.ID)
+	log.Printf("Name: %s", wordlist.Name)
+	log.Printf("Size: %s", formatBytes(wordlist.Size))
 	if wordlist.WordCount != nil {
-		log.Printf("🔢 Word count: %s", formatNumber(*wordlist.WordCount))
+		log.Printf("Word count: %s", formatNumber(*wordlist.WordCount))
 	}
-	log.Printf("💾 Path: %s", wordlist.Path)
+	log.Printf("Path: %s", wordlist.Path)
 
 	return nil
 }
@@ -504,7 +552,70 @@ func deleteWordlistCLI(wordlistUsecase usecase.WordlistUsecase, wordlistID strin
 		return fmt.Errorf("failed to delete wordlist: %w", err)
 	}
 
-	log.Printf("✅ Wordlist with ID %s deleted successfully.", wordlistID)
+	log.Printf("Wordlist with ID %s deleted successfully.", wordlistID)
+	return nil
+}
+
+// cleanupWordlistsCLI cleans up duplicate wordlist entries by keeping only the most recent one for each original filename.
+func cleanupWordlistsCLI(wordlistUsecase usecase.WordlistUsecase) error {
+	log.Println("Starting wordlist cleanup...")
+
+	// Get all wordlists
+	wordlists, err := wordlistUsecase.GetAllWordlists(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get all wordlists for cleanup: %w", err)
+	}
+
+	if len(wordlists) == 0 {
+		log.Println("No wordlists to cleanup.")
+		return nil
+	}
+
+	// Group wordlists by original filename
+	wordlistGroups := make(map[string][]domain.Wordlist)
+	for _, wl := range wordlists {
+		originalName := wl.OrigName
+		if originalName == "" {
+			originalName = wl.Name // Fallback to name if original name is empty
+		}
+		wordlistGroups[originalName] = append(wordlistGroups[originalName], wl)
+	}
+
+	// Find duplicates and clean them up
+	var totalDeleted int
+	for originalName, group := range wordlistGroups {
+		if len(group) > 1 {
+			log.Printf("Found %d duplicates for '%s'", len(group), originalName)
+			
+			// Sort by created_at to keep the most recent one
+			sort.Slice(group, func(i, j int) bool {
+				return group[i].CreatedAt.Before(group[j].CreatedAt)
+			})
+			
+			// Keep the first one (most recent) and delete the rest
+			toKeep := group[0]
+			toDelete := group[1:]
+			
+			log.Printf("Keeping: %s (ID: %s, Created: %s)", toKeep.Name, toKeep.ID, toKeep.CreatedAt.Format(time.RFC3339))
+			
+			for _, wl := range toDelete {
+				log.Printf("Deleting duplicate: %s (ID: %s, Created: %s)", wl.Name, wl.ID, wl.CreatedAt.Format(time.RFC3339))
+				
+				if err := wordlistUsecase.DeleteWordlist(context.Background(), wl.ID); err != nil {
+					log.Printf("Failed to delete duplicate %s (ID: %s): %v", wl.Name, wl.ID, err)
+					continue
+				}
+				totalDeleted++
+			}
+		}
+	}
+
+	if totalDeleted == 0 {
+		log.Println("No duplicate wordlists found.")
+	} else {
+		log.Printf("Cleanup completed. %d duplicate entries removed.", totalDeleted)
+	}
+	
 	return nil
 }
 

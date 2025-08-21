@@ -33,6 +33,10 @@ func NewHashFileUsecase(hashFileRepo domain.HashFileRepository, uploadDir string
 }
 
 func (u *hashFileUsecase) UploadHashFile(ctx context.Context, name string, content io.Reader, size int64) (*domain.HashFile, error) {
+	// Duplicate check by original name
+	if existing, err := u.hashFileRepo.GetByOrigName(ctx, name); err == nil && existing != nil {
+		return nil, fmt.Errorf("file already exists: %s", name)
+	}
 	// Create upload directory if it doesn't exist
 	if err := os.MkdirAll(u.uploadDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create upload directory: %w", err)
