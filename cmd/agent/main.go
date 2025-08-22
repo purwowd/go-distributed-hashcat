@@ -1170,7 +1170,7 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	// Parse time for ETA calculation: Time.Started.....: Fri Aug 22 00:21:56 2025 (4 mins, 29 secs)
 	timeStartedRegex := regexp.MustCompile(`Time\.Started\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
 	timeEstimatedRegex := regexp.MustCompile(`Time\.Estimated\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
-	
+
 	// Multiple speed regex patterns for different hashcat output formats
 	speedRegexes := []*regexp.Regexp{
 		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s`),                  // Standard format: Speed.#1........: 123456 H/s
@@ -1238,7 +1238,7 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				mins, _ := strconv.Atoi(matches[1])
 				secs, _ := strconv.Atoi(matches[2])
 				totalSeconds := mins*60 + secs
-				
+
 				// Calculate ETA as current time + duration
 				etaTime := time.Now().Add(time.Duration(totalSeconds) * time.Second)
 				etaStr := etaTime.Format(time.RFC3339)
@@ -1247,12 +1247,12 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				log.Printf("🔍 DEBUG: ETA calculated from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
 			}
 
-			// Parse time estimated duration for ETA calculation  
+			// Parse time estimated duration for ETA calculation
 			if matches := timeEstimatedRegex.FindStringSubmatch(output); len(matches) > 2 {
 				mins, _ := strconv.Atoi(matches[1])
 				secs, _ := strconv.Atoi(matches[2])
 				totalSeconds := mins*60 + secs
-				
+
 				// Calculate ETA as current time + remaining time
 				etaTime := time.Now().Add(time.Duration(totalSeconds) * time.Second)
 				etaStr := etaTime.Format(time.RFC3339)
