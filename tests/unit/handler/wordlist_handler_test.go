@@ -2,7 +2,6 @@ package handler_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,48 +13,20 @@ import (
 
 	"go-distributed-hashcat/internal/delivery/http/handler"
 	"go-distributed-hashcat/internal/domain"
+	"go-distributed-hashcat/tests/unit"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-// MockWordlistUsecase is a mock implementation of usecase.WordlistUsecase
-type MockWordlistUsecase struct {
-	mock.Mock
-}
 
-func (m *MockWordlistUsecase) UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error) {
-	args := m.Called(ctx, name, content, size)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Wordlist), args.Error(1)
-}
-
-func (m *MockWordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Wordlist), args.Error(1)
-}
-
-func (m *MockWordlistUsecase) GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]domain.Wordlist), args.Error(1)
-}
-
-func (m *MockWordlistUsecase) DeleteWordlist(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
 
 func TestWordlistHandler_UploadWordlist(t *testing.T) {
 	tests := []struct {
 		name           string
 		setupRequest   func() (*http.Request, error)
-		mockSetup      func(*MockWordlistUsecase)
+		mockSetup      func(*unit.MockWordlistUsecase)
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
@@ -81,7 +52,7 @@ func TestWordlistHandler_UploadWordlist(t *testing.T) {
 				req.Header.Set("Content-Type", writer.FormDataContentType())
 				return req, nil
 			},
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				expectedWordlist := &domain.Wordlist{
 					ID:       uuid.New(),
 					Name:     "rockyou.txt",
@@ -104,7 +75,7 @@ func TestWordlistHandler_UploadWordlist(t *testing.T) {
 			setupRequest: func() (*http.Request, error) {
 				return http.NewRequest("POST", "/wordlists", strings.NewReader(""))
 			},
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -137,7 +108,7 @@ func TestWordlistHandler_UploadWordlist(t *testing.T) {
 				req.Header.Set("Content-Type", writer.FormDataContentType())
 				return req, nil
 			},
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				mockUsecase.On("UploadWordlist", mock.Anything, "test.txt", mock.Anything, mock.AnythingOfType("int64")).Return(nil, errors.New("failed to save file"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -152,12 +123,12 @@ func TestWordlistHandler_UploadWordlist(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockUsecase := new(MockWordlistUsecase)
+			mockUsecase := new(unit.MockWordlistUsecase)
 			tt.mockSetup(mockUsecase)
 
 			handler := handler.NewWordlistHandler(mockUsecase)
 			router := setupTestRouter()
-			router.POST("/wordlists", handler.UploadWordlist)
+			router.GET("/wordlists/:id", handler.GetWordlist)
 
 			req, err := tt.setupRequest()
 			assert.NoError(t, err)
@@ -178,14 +149,14 @@ func TestWordlistHandler_GetWordlist(t *testing.T) {
 	tests := []struct {
 		name           string
 		wordlistID     string
-		mockSetup      func(*MockWordlistUsecase)
+		mockSetup      func(*unit.MockWordlistUsecase)
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
 			name:       "successful wordlist retrieval",
 			wordlistID: wordlistID.String(),
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				expectedWordlist := &domain.Wordlist{
 					ID:       wordlistID,
 					Name:     "rockyou.txt",
@@ -207,7 +178,7 @@ func TestWordlistHandler_GetWordlist(t *testing.T) {
 		{
 			name:       "invalid wordlist ID",
 			wordlistID: "invalid-uuid",
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -221,7 +192,7 @@ func TestWordlistHandler_GetWordlist(t *testing.T) {
 		{
 			name:       "wordlist not found",
 			wordlistID: wordlistID.String(),
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				mockUsecase.On("GetWordlist", mock.Anything, wordlistID).Return(nil, errors.New("wordlist not found"))
 			},
 			expectedStatus: http.StatusNotFound,
@@ -236,7 +207,7 @@ func TestWordlistHandler_GetWordlist(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockUsecase := new(MockWordlistUsecase)
+			mockUsecase := new(unit.MockWordlistUsecase)
 			tt.mockSetup(mockUsecase)
 
 			handler := handler.NewWordlistHandler(mockUsecase)
@@ -259,13 +230,13 @@ func TestWordlistHandler_GetWordlist(t *testing.T) {
 func TestWordlistHandler_GetAllWordlists(t *testing.T) {
 	tests := []struct {
 		name           string
-		mockSetup      func(*MockWordlistUsecase)
+		mockSetup      func(*unit.MockWordlistUsecase)
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
 			name: "successful wordlists retrieval",
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				wordlists := []domain.Wordlist{
 					{
 						ID:       uuid.New(),
@@ -293,7 +264,7 @@ func TestWordlistHandler_GetAllWordlists(t *testing.T) {
 		},
 		{
 			name: "no wordlists found",
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				mockUsecase.On("GetAllWordlists", mock.Anything).Return([]domain.Wordlist{}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -307,7 +278,7 @@ func TestWordlistHandler_GetAllWordlists(t *testing.T) {
 		},
 		{
 			name: "usecase error",
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				mockUsecase.On("GetAllWordlists", mock.Anything).Return([]domain.Wordlist{}, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -322,7 +293,7 @@ func TestWordlistHandler_GetAllWordlists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockUsecase := new(MockWordlistUsecase)
+			mockUsecase := new(unit.MockWordlistUsecase)
 			tt.mockSetup(mockUsecase)
 
 			handler := handler.NewWordlistHandler(mockUsecase)
@@ -348,14 +319,14 @@ func TestWordlistHandler_DeleteWordlist(t *testing.T) {
 	tests := []struct {
 		name           string
 		wordlistID     string
-		mockSetup      func(*MockWordlistUsecase)
+		mockSetup      func(*unit.MockWordlistUsecase)
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
 			name:       "successful wordlist deletion",
 			wordlistID: wordlistID.String(),
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				mockUsecase.On("DeleteWordlist", mock.Anything, wordlistID).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -369,7 +340,7 @@ func TestWordlistHandler_DeleteWordlist(t *testing.T) {
 		{
 			name:       "invalid wordlist ID",
 			wordlistID: "invalid-uuid",
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -383,7 +354,7 @@ func TestWordlistHandler_DeleteWordlist(t *testing.T) {
 		{
 			name:       "wordlist not found",
 			wordlistID: wordlistID.String(),
-			mockSetup: func(mockUsecase *MockWordlistUsecase) {
+			mockSetup: func(mockUsecase *unit.MockWordlistUsecase) {
 				mockUsecase.On("DeleteWordlist", mock.Anything, wordlistID).Return(errors.New("wordlist not found"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -398,7 +369,7 @@ func TestWordlistHandler_DeleteWordlist(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockUsecase := new(MockWordlistUsecase)
+			mockUsecase := new(unit.MockWordlistUsecase)
 			tt.mockSetup(mockUsecase)
 
 			handler := handler.NewWordlistHandler(mockUsecase)

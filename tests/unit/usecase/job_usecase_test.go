@@ -92,6 +92,14 @@ func (m *MockHashFileRepository) GetByID(ctx context.Context, id uuid.UUID) (*do
 	return args.Get(0).(*domain.HashFile), args.Error(1)
 }
 
+func (m *MockHashFileRepository) GetByOrigName(ctx context.Context, origName string) (*domain.HashFile, error) {
+	args := m.Called(ctx, origName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.HashFile), args.Error(1)
+}
+
 func (m *MockHashFileRepository) GetAll(ctx context.Context) ([]domain.HashFile, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]domain.HashFile), args.Error(1)
