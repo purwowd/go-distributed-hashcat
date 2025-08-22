@@ -1165,6 +1165,12 @@ func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
 func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
 	// Parse hashcat output for progress updates
 	progressRegex := regexp.MustCompile(`Progress\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
+	// Parse restore point for total words: Restore.Point....: 756856/758561 (99.78%)
+	restorePointRegex := regexp.MustCompile(`Restore\.Point\.+:\s*(\d+)/(\d+)\s*\([\d.]+%\)`)
+	// Parse time for ETA calculation: Time.Started.....: Fri Aug 22 00:21:56 2025 (4 mins, 29 secs)
+	timeStartedRegex := regexp.MustCompile(`Time\.Started\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
+	timeEstimatedRegex := regexp.MustCompile(`Time\.Estimated\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
+	
 	// Multiple speed regex patterns for different hashcat output formats
 	speedRegexes := []*regexp.Regexp{
 		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s`),                  // Standard format: Speed.#1........: 123456 H/s
@@ -1183,6 +1189,7 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	var currentProgress float64
 	var currentSpeed int64
 	var currentETA *string
+	var currentTotalWords int64
 
 	scanner := func(reader io.Reader) {
 		buf := make([]byte, 1024)
@@ -1217,6 +1224,41 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				currentProgress, _ = strconv.ParseFloat(matches[3], 64)
 				hasUpdate = true
 				log.Printf("🔍 DEBUG: Progress parsed: %.2f%%", currentProgress)
+			}
+
+			// Parse restore point for total words
+			if matches := restorePointRegex.FindStringSubmatch(output); len(matches) > 2 {
+				currentTotalWords, _ = strconv.ParseInt(matches[2], 10, 64)
+				hasUpdate = true
+				log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
+			}
+
+			// Parse time started duration for ETA calculation
+			if matches := timeStartedRegex.FindStringSubmatch(output); len(matches) > 2 {
+				mins, _ := strconv.Atoi(matches[1])
+				secs, _ := strconv.Atoi(matches[2])
+				totalSeconds := mins*60 + secs
+				
+				// Calculate ETA as current time + duration
+				etaTime := time.Now().Add(time.Duration(totalSeconds) * time.Second)
+				etaStr := etaTime.Format(time.RFC3339)
+				currentETA = &etaStr
+				hasUpdate = true
+				log.Printf("🔍 DEBUG: ETA calculated from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
+			}
+
+			// Parse time estimated duration for ETA calculation  
+			if matches := timeEstimatedRegex.FindStringSubmatch(output); len(matches) > 2 {
+				mins, _ := strconv.Atoi(matches[1])
+				secs, _ := strconv.Atoi(matches[2])
+				totalSeconds := mins*60 + secs
+				
+				// Calculate ETA as current time + remaining time
+				etaTime := time.Now().Add(time.Duration(totalSeconds) * time.Second)
+				etaStr := etaTime.Format(time.RFC3339)
+				currentETA = &etaStr
+				hasUpdate = true
+				log.Printf("🔍 DEBUG: ETA calculated from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
 			}
 
 			// Parse speed using multiple regex patterns (independent of progress)
@@ -1256,9 +1298,9 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				log.Printf("🔍 DEBUG: ETA parsed: %s", etaStr)
 			}
 
-			// Send update if we have any new data (progress, speed, or ETA)
+			// Send update if we have any new data (progress, speed, ETA, or total words)
 			if hasUpdate {
-				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA)
+				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA, currentTotalWords)
 			}
 		}
 	}
@@ -1305,7 +1347,7 @@ func (a *Agent) sendInitialJobData(job *domain.Job) {
 	}
 }
 
-func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed int64, eta *string) {
+func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed int64, eta *string, totalWords int64) {
 	// Get current job data to include attack_mode and rules
 	var attackMode int
 	var rules string
@@ -1322,6 +1364,7 @@ func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed 
 		Speed      int64   `json:"speed"`
 		ETA        *string `json:"eta,omitempty"`
 		Progress   float64 `json:"progress"`
+		TotalWords int64   `json:"total_words"`
 	}{
 		AgentID:    a.ID.String(),
 		AttackMode: attackMode,
@@ -1329,6 +1372,7 @@ func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed 
 		Speed:      speed,
 		ETA:        eta,
 		Progress:   progress,
+		TotalWords: totalWords,
 	}
 
 	jsonData, _ := json.Marshal(req)
@@ -1348,7 +1392,11 @@ func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed 
 		body, _ := io.ReadAll(resp.Body)
 		log.Printf("❌ Job data update failed with status %d: %s", resp.StatusCode, string(body))
 	} else {
-		log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+		if totalWords > 0 {
+			log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s, Total Words: %d)", progress, speed, totalWords)
+		} else {
+			log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+		}
 	}
 }
 
