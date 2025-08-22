@@ -63,7 +63,6 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		AttackMode:     req.AttackMode,
 		HashFile:       hashFile.Path,
 		HashFileID:     &hashFileID,
-		Wordlist:       req.Wordlist,
 		Rules:          req.Rules,
 		Progress:       0,
 		Speed:          0,
@@ -71,13 +70,18 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		ProcessedWords: 0,
 	}
 
-	// Handle wordlist ID if provided
+	// Handle wordlist ID if provided - prioritize WordlistID over Wordlist
 	if req.WordlistID != "" {
 		wordlistID, err := uuid.Parse(req.WordlistID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid wordlist ID: %w", err)
 		}
 		job.WordlistID = &wordlistID
+		// Clear Wordlist field when WordlistID is provided for consistency
+		job.Wordlist = ""
+	} else {
+		// Fallback to legacy Wordlist field only if WordlistID is not provided
+		job.Wordlist = req.Wordlist
 	}
 
 	// Handle agent assignment (single or multiple)
