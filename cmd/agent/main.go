@@ -1179,6 +1179,11 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	}
 	etaRegex := regexp.MustCompile(`ETA\.+:\s*(\d+):(\d+):(\d+)`)
 
+	// Track current values to preserve them between updates
+	var currentProgress float64
+	var currentSpeed int64
+	var currentETA *string
+
 	scanner := func(reader io.Reader) {
 		buf := make([]byte, 1024)
 		for {
@@ -1204,52 +1209,56 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				}
 			}
 
+			// Parse progress and speed independently
+			var hasUpdate bool
+
 			// Parse progress
 			if matches := progressRegex.FindStringSubmatch(output); len(matches) > 3 {
-				progress, _ := strconv.ParseFloat(matches[3], 64)
+				currentProgress, _ = strconv.ParseFloat(matches[3], 64)
+				hasUpdate = true
+				log.Printf("🔍 DEBUG: Progress parsed: %.2f%%", currentProgress)
+			}
 
-				// Parse speed using multiple regex patterns
-				var speed int64
-				speedFound := false
-				for i, speedRegex := range speedRegexes {
-					if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 1 {
-						speed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
-						log.Printf("🔍 DEBUG: Speed parsed: %d H/s from pattern %d: '%s'", speed, i+1, speedMatches[0])
-						speedFound = true
-						break
-					}
+			// Parse speed using multiple regex patterns (independent of progress)
+			speedFound := false
+			for i, speedRegex := range speedRegexes {
+				if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 1 {
+					currentSpeed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
+					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from pattern %d: '%s'", currentSpeed, i+1, speedMatches[0])
+					speedFound = true
+					hasUpdate = true
+					break
 				}
-				if !speedFound {
-					log.Printf("⚠️  DEBUG: Speed parsing failed for all patterns. Output: '%s'", strings.TrimSpace(output))
-					for i, speedRegex := range speedRegexes {
-						log.Printf("🔍 DEBUG: Speed regex pattern %d: %s", i+1, speedRegex.String())
-					}
-
-					// Fallback: Try to extract any number followed by H/s
-					fallbackRegex := regexp.MustCompile(`(\d+)\s*H/s`)
-					if fallbackMatches := fallbackRegex.FindStringSubmatch(output); len(fallbackMatches) > 1 {
-						speed, _ = strconv.ParseInt(fallbackMatches[1], 10, 64)
-						log.Printf("🔍 DEBUG: Speed parsed with fallback: %d H/s", speed)
-						speedFound = true
-					}
+			}
+			if !speedFound {
+				// Fallback: Try to extract any number followed by H/s
+				fallbackRegex := regexp.MustCompile(`(\d+)\s*H/s`)
+				if fallbackMatches := fallbackRegex.FindStringSubmatch(output); len(fallbackMatches) > 1 {
+					currentSpeed, _ = strconv.ParseInt(fallbackMatches[1], 10, 64)
+					log.Printf("🔍 DEBUG: Speed parsed with fallback: %d H/s", currentSpeed)
+					speedFound = true
+					hasUpdate = true
 				}
+			}
 
-				// Parse ETA
-				var eta *string
-				if etaMatches := etaRegex.FindStringSubmatch(output); len(etaMatches) > 3 {
-					hours, _ := strconv.Atoi(etaMatches[1])
-					minutes, _ := strconv.Atoi(etaMatches[2])
-					seconds, _ := strconv.Atoi(etaMatches[3])
+			// Parse ETA
+			if etaMatches := etaRegex.FindStringSubmatch(output); len(etaMatches) > 3 {
+				hours, _ := strconv.Atoi(etaMatches[1])
+				minutes, _ := strconv.Atoi(etaMatches[2])
+				seconds, _ := strconv.Atoi(etaMatches[3])
 
-					etaTime := time.Now().Add(time.Duration(hours)*time.Hour +
-						time.Duration(minutes)*time.Minute +
-						time.Duration(seconds)*time.Second)
-					etaStr := etaTime.Format(time.RFC3339)
-					eta = &etaStr
-				}
+				etaTime := time.Now().Add(time.Duration(hours)*time.Hour +
+					time.Duration(minutes)*time.Minute +
+					time.Duration(seconds)*time.Second)
+				etaStr := etaTime.Format(time.RFC3339)
+				currentETA = &etaStr
+				hasUpdate = true
+				log.Printf("🔍 DEBUG: ETA parsed: %s", etaStr)
+			}
 
-				// Send complete data to new endpoint
-				a.updateJobDataFromAgent(job.ID, progress, speed, eta)
+			// Send update if we have any new data (progress, speed, or ETA)
+			if hasUpdate {
+				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA)
 			}
 		}
 	}
