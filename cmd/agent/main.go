@@ -381,7 +381,7 @@ func (a *Agent) scanLocalFiles() error {
 	log.Printf("✅ SUCCESS: Scanned %d local files", len(a.LocalFiles))
 	log.Printf("🔍 DEBUG: Detailed file list:")
 	for filename, file := range a.LocalFiles {
-		log.Printf("  📄 %s -> %s (%s, %s, Hash: %s)", 
+		log.Printf("  📄 %s -> %s (%s, %s, Hash: %s)",
 			filename, file.Path, file.Type, formatFileSize(file.Size), file.Hash)
 	}
 
@@ -786,7 +786,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	log.Printf("  📋 Hash File: %s", job.HashFile)
 	log.Printf("  📋 Wordlist: %s", job.Wordlist)
 	log.Printf("  📋 Rules: %s", job.Rules)
-	
+
 	// Send initial job data to server immediately
 	a.sendInitialJobData(job)
 
@@ -799,7 +799,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		hashFileIDStr := job.HashFileID.String()
 		log.Printf("🔍 DEBUG: Looking for hash file with ID: %s", hashFileIDStr)
 		log.Printf("🔍 DEBUG: Current LocalFiles count: %d", len(a.LocalFiles))
-		
+
 		// Debug: Show all local hash file files
 		log.Printf("🔍 DEBUG: Available local hash files:")
 		for filename, localFile := range a.LocalFiles {
@@ -807,9 +807,9 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				log.Printf("  📄 %s -> %s (Size: %s)", filename, localFile.Path, formatFileSize(localFile.Size))
 			}
 		}
-		
+
 		localPath := a.findLocalHashFileByUUID(hashFileIDStr)
-		
+
 		if localPath != "" {
 			localHashFile = localPath
 			log.Printf("✅ SUCCESS: Using local hash file for ID %s: %s", hashFileIDStr, localPath)
@@ -817,7 +817,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			// Not found locally, download from server
 			log.Printf("⚠️  WARNING: Hash file %s not found locally, downloading from server...", hashFileIDStr)
 			log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/hashfiles/%s/download", a.ServerURL, hashFileIDStr)
-			
+
 			localHashFile, err = a.downloadHashFile(*job.HashFileID)
 			if err != nil {
 				log.Printf("❌ ERROR: Download failed for hash file %s: %v", hashFileIDStr, err)
@@ -840,7 +840,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		wordlistIDStr := job.WordlistID.String()
 		log.Printf("🔍 DEBUG: Looking for wordlist with ID: %s", wordlistIDStr)
 		log.Printf("🔍 DEBUG: Current LocalFiles count: %d", len(a.LocalFiles))
-		
+
 		// Debug: Show all local wordlist files
 		log.Printf("🔍 DEBUG: Available local wordlist files:")
 		for filename, localFile := range a.LocalFiles {
@@ -848,9 +848,9 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				log.Printf("  📄 %s -> %s (Size: %s)", filename, localFile.Path, formatFileSize(localFile.Size))
 			}
 		}
-		
+
 		localPath := a.findLocalWordlistByUUID(wordlistIDStr)
-		
+
 		if localPath != "" {
 			localWordlist = localPath
 			log.Printf("✅ SUCCESS: Using local wordlist for ID %s: %s", wordlistIDStr, localPath)
@@ -858,7 +858,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			// Not found locally, download from server
 			log.Printf("⚠️  WARNING: Wordlist %s not found locally, downloading from server...", wordlistIDStr)
 			log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/wordlists/%s/download", a.ServerURL, wordlistIDStr)
-			
+
 			downloadedPath, err := a.downloadWordlist(*job.WordlistID)
 			if err != nil {
 				log.Printf("❌ ERROR: Download failed for wordlist %s: %v", wordlistIDStr, err)
@@ -875,12 +875,12 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			if err := os.MkdirAll(tempDir, 0755); err != nil {
 				return fmt.Errorf("failed to create temp directory: %w", err)
 			}
-			
+
 			wordlistFile := filepath.Join(tempDir, fmt.Sprintf("wordlist-%s.txt", job.ID.String()))
 			if err := os.WriteFile(wordlistFile, []byte(job.Wordlist), 0644); err != nil {
 				return fmt.Errorf("failed to create wordlist file: %w", err)
 			}
-			
+
 			localWordlist = wordlistFile
 			log.Printf("📝 Created wordlist file from content: %s", localWordlist)
 			log.Printf("📋 Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
@@ -968,19 +968,22 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	if err := cmd.Wait(); err != nil {
 		// Check if hashcat found the password (exit code 0) or exhausted (exit code 1)
 		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode := exitError.ExitCode()
-			if exitCode == 1 {
+			switch exitCode := exitError.ExitCode(); exitCode {
+			case 1:
 				// Exhausted - not an error
 				a.completeJob(job.ID, "Password not found - exhausted")
 				a.cleanupJobFiles(job.ID)
 				return nil
-			} else if exitCode == 255 {
+			case 255:
 				// Exit code 255 usually means invalid arguments or file not found
 				// Check if this is due to password not being found vs other errors
 				// For now, treat exit 255 as password not found scenario
 				a.failJob(job.ID, "Password not found")
 				a.cleanupJobFiles(job.ID)
 				return nil
+			default:
+				// Other exit codes - log for debugging
+				log.Printf("⚠️  Hashcat exited with code %d: %v", exitCode, err)
 			}
 		}
 		// Cleanup on other errors too
@@ -1053,7 +1056,7 @@ func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
 		// Simple copy for small files
 		_, err = io.Copy(file, resp.Body)
 	}
-	
+
 	if err != nil {
 		os.Remove(localPath) // Clean up on error
 		return "", fmt.Errorf("failed to write file: %w", err)
@@ -1114,7 +1117,7 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 		// Simple copy for small files
 		_, err = io.Copy(file, resp.Body)
 	}
-	
+
 	if err != nil {
 		os.Remove(localPath) // Clean up on error
 		return "", fmt.Errorf("failed to write file: %w", err)
@@ -1162,8 +1165,24 @@ func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
 func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
 	// Parse hashcat output for progress updates
 	progressRegex := regexp.MustCompile(`Progress\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
-	speedRegex := regexp.MustCompile(`Speed\.+:\s*(\d+)\s*H/s`)
+	// Multiple speed regex patterns for different hashcat output formats
+	speedRegexes := []*regexp.Regexp{
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s`),                  // Standard format: Speed.#1........: 123456 H/s
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)`),      // With timing info: Speed.#1........: 123456 H/s (0.01ms)
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*$`),              // End of line
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\n`),             // With newline
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)\s*$`),  // With timing and end of line
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)\s*\n`), // With timing and newline
+		// More flexible patterns
+		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s`),             // Any Speed line with H/s
+		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s\s*\([^)]*\)`), // Any Speed line with H/s and timing
+	}
 	etaRegex := regexp.MustCompile(`ETA\.+:\s*(\d+):(\d+):(\d+)`)
+
+	// Track current values to preserve them between updates
+	var currentProgress float64
+	var currentSpeed int64
+	var currentETA *string
 
 	scanner := func(reader io.Reader) {
 		buf := make([]byte, 1024)
@@ -1175,32 +1194,71 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 
 			output := string(buf[:n])
 
+			// Debug: Log raw output for troubleshooting
+			if strings.Contains(output, "Speed") || strings.Contains(output, "Progress") {
+				log.Printf("🔍 DEBUG: Raw hashcat output: %s", strings.TrimSpace(output))
+			}
+
+			// Also log any line containing "Speed" for debugging
+			if strings.Contains(output, "Speed") {
+				lines := strings.Split(output, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "Speed") {
+						log.Printf("🔍 DEBUG: Speed line found: '%s'", strings.TrimSpace(line))
+					}
+				}
+			}
+
+			// Parse progress and speed independently
+			var hasUpdate bool
+
 			// Parse progress
 			if matches := progressRegex.FindStringSubmatch(output); len(matches) > 3 {
-				progress, _ := strconv.ParseFloat(matches[3], 64)
+				currentProgress, _ = strconv.ParseFloat(matches[3], 64)
+				hasUpdate = true
+				log.Printf("🔍 DEBUG: Progress parsed: %.2f%%", currentProgress)
+			}
 
-				// Parse speed
-				var speed int64
+			// Parse speed using multiple regex patterns (independent of progress)
+			speedFound := false
+			for i, speedRegex := range speedRegexes {
 				if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 1 {
-					speed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
+					currentSpeed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
+					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from pattern %d: '%s'", currentSpeed, i+1, speedMatches[0])
+					speedFound = true
+					hasUpdate = true
+					break
 				}
-
-				// Parse ETA
-				var eta *string
-				if etaMatches := etaRegex.FindStringSubmatch(output); len(etaMatches) > 3 {
-					hours, _ := strconv.Atoi(etaMatches[1])
-					minutes, _ := strconv.Atoi(etaMatches[2])
-					seconds, _ := strconv.Atoi(etaMatches[3])
-
-					etaTime := time.Now().Add(time.Duration(hours)*time.Hour +
-						time.Duration(minutes)*time.Minute +
-						time.Duration(seconds)*time.Second)
-					etaStr := etaTime.Format(time.RFC3339)
-					eta = &etaStr
+			}
+			if !speedFound {
+				// Fallback: Try to extract any number followed by H/s
+				fallbackRegex := regexp.MustCompile(`(\d+)\s*H/s`)
+				if fallbackMatches := fallbackRegex.FindStringSubmatch(output); len(fallbackMatches) > 1 {
+					currentSpeed, _ = strconv.ParseInt(fallbackMatches[1], 10, 64)
+					log.Printf("🔍 DEBUG: Speed parsed with fallback: %d H/s", currentSpeed)
+					speedFound = true
+					hasUpdate = true
 				}
+			}
 
-				// Send complete data to new endpoint
-				a.updateJobDataFromAgent(job.ID, progress, speed, eta)
+			// Parse ETA
+			if etaMatches := etaRegex.FindStringSubmatch(output); len(etaMatches) > 3 {
+				hours, _ := strconv.Atoi(etaMatches[1])
+				minutes, _ := strconv.Atoi(etaMatches[2])
+				seconds, _ := strconv.Atoi(etaMatches[3])
+
+				etaTime := time.Now().Add(time.Duration(hours)*time.Hour +
+					time.Duration(minutes)*time.Minute +
+					time.Duration(seconds)*time.Second)
+				etaStr := etaTime.Format(time.RFC3339)
+				currentETA = &etaStr
+				hasUpdate = true
+				log.Printf("🔍 DEBUG: ETA parsed: %s", etaStr)
+			}
+
+			// Send update if we have any new data (progress, speed, or ETA)
+			if hasUpdate {
+				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA)
 			}
 		}
 	}
@@ -1690,7 +1748,7 @@ func (a *Agent) chunkedDownloadWithProgress(src io.Reader, dst *os.File, totalSi
 		// Show progress every 5 seconds or every 50MB
 		if time.Since(lastProgress) >= 5*time.Second || totalWritten%50*1024*1024 < int64(n) {
 			progress := float64(totalWritten) / float64(totalSize) * 100
-			log.Printf("📊 Download progress: %s - %.1f%% (%s / %s)", 
+			log.Printf("📊 Download progress: %s - %.1f%% (%s / %s)",
 				filename, progress, formatFileSize(totalWritten), formatFileSize(totalSize))
 			lastProgress = time.Now()
 		}
@@ -1711,18 +1769,18 @@ func (a *Agent) chunkedDownloadWithProgress(src io.Reader, dst *os.File, totalSi
 func (a *Agent) findLocalWordlistByUUID(wordlistID string) string {
 	log.Printf("🔍 DEBUG: Starting search for wordlist UUID: %s", wordlistID)
 	log.Printf("🔍 DEBUG: Searching in LocalFiles map (%d files)...", len(a.LocalFiles))
-	
+
 	// First, check if we have any wordlist files locally
 	for filename, localFile := range a.LocalFiles {
 		if localFile.Type == "wordlist" {
 			log.Printf("🔍 DEBUG: Checking wordlist file: %s -> %s", filename, localFile.Path)
-			
+
 			// Check if the filename contains the UUID (common pattern: wordlist-UUID.txt)
 			if strings.Contains(filename, wordlistID) {
 				log.Printf("✅ SUCCESS: Found local wordlist by filename match: %s (UUID: %s)", filename, wordlistID)
 				return localFile.Path
 			}
-			
+
 			// Also check if the file path contains the UUID
 			if strings.Contains(localFile.Path, wordlistID) {
 				log.Printf("✅ SUCCESS: Found local wordlist by path match: %s (UUID: %s)", localFile.Path, wordlistID)
@@ -1730,14 +1788,14 @@ func (a *Agent) findLocalWordlistByUUID(wordlistID string) string {
 			}
 		}
 	}
-	
+
 	log.Printf("🔍 DEBUG: No match found in LocalFiles, checking temp directory...")
-	
+
 	// If no exact match found, try to find by scanning the temp directory
 	// This is useful when files are downloaded to temp but not yet moved to wordlists directory
 	tempDir := filepath.Join(a.UploadDir, "temp")
 	log.Printf("🔍 DEBUG: Scanning temp directory: %s", tempDir)
-	
+
 	if files, err := os.ReadDir(tempDir); err == nil {
 		log.Printf("🔍 DEBUG: Found %d files in temp directory", len(files))
 		for _, file := range files {
@@ -1753,7 +1811,7 @@ func (a *Agent) findLocalWordlistByUUID(wordlistID string) string {
 	} else {
 		log.Printf("⚠️  WARNING: Failed to read temp directory %s: %v", tempDir, err)
 	}
-	
+
 	log.Printf("❌ FAILED: No local wordlist found for UUID: %s", wordlistID)
 	log.Printf("🔍 DEBUG: Search completed for wordlist UUID: %s", wordlistID)
 	return ""
@@ -1764,18 +1822,18 @@ func (a *Agent) findLocalWordlistByUUID(wordlistID string) string {
 func (a *Agent) findLocalHashFileByUUID(hashFileID string) string {
 	log.Printf("🔍 DEBUG: Starting search for hash file UUID: %s", hashFileID)
 	log.Printf("🔍 DEBUG: Searching in LocalFiles map (%d files)...", len(a.LocalFiles))
-	
+
 	// First, check if we have any hash file files locally
 	for filename, localFile := range a.LocalFiles {
 		if localFile.Type == "hash_file" {
 			log.Printf("🔍 DEBUG: Checking hash file: %s -> %s", filename, localFile.Path)
-			
+
 			// Check if the filename contains the UUID (common pattern: hashfile-UUID.hccapx)
 			if strings.Contains(filename, hashFileID) {
 				log.Printf("✅ SUCCESS: Found local hash file by filename match: %s (UUID: %s)", filename, hashFileID)
 				return localFile.Path
 			}
-			
+
 			// Also check if the file path contains the UUID
 			if strings.Contains(localFile.Path, hashFileID) {
 				log.Printf("✅ SUCCESS: Found local hash file by path match: %s (UUID: %s)", localFile.Path, hashFileID)
@@ -1783,14 +1841,14 @@ func (a *Agent) findLocalHashFileByUUID(hashFileID string) string {
 			}
 		}
 	}
-	
+
 	log.Printf("🔍 DEBUG: No match found in LocalFiles, checking temp directory...")
-	
+
 	// If no exact match found, try to find by scanning the temp directory
 	// This is useful when files are downloaded to temp but not yet moved to hash-files directory
 	tempDir := filepath.Join(a.UploadDir, "temp")
 	log.Printf("🔍 DEBUG: Scanning temp directory: %s", tempDir)
-	
+
 	if files, err := os.ReadDir(tempDir); err == nil {
 		log.Printf("🔍 DEBUG: Found %d files in temp directory", len(files))
 		for _, file := range files {
@@ -1806,7 +1864,7 @@ func (a *Agent) findLocalHashFileByUUID(hashFileID string) string {
 	} else {
 		log.Printf("⚠️  WARNING: Failed to read temp directory %s: %v", tempDir, err)
 	}
-	
+
 	log.Printf("❌ FAILED: No local hash file found for UUID: %s", hashFileID)
 	log.Printf("🔍 DEBUG: Search completed for hash file UUID: %s", hashFileID)
 	return ""
