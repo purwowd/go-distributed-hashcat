@@ -1237,28 +1237,44 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			if matches := timeStartedRegex.FindStringSubmatch(output); len(matches) > 2 {
 				mins, _ := strconv.Atoi(matches[1])
 				secs, _ := strconv.Atoi(matches[2])
-				totalSeconds := mins*60 + secs
 
-				// Calculate ETA as current time + duration
-				etaTime := time.Now().Add(time.Duration(totalSeconds) * time.Second)
-				etaStr := etaTime.Format(time.RFC3339)
+				// Format ETA as human-readable duration instead of datetime
+				var etaStr string
+				if mins > 0 {
+					if secs > 0 {
+						etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
+					} else {
+						etaStr = fmt.Sprintf("%d mins", mins)
+					}
+				} else {
+					etaStr = fmt.Sprintf("%d secs", secs)
+				}
+
 				currentETA = &etaStr
 				hasUpdate = true
-				log.Printf("🔍 DEBUG: ETA calculated from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
+				log.Printf("🔍 DEBUG: ETA formatted from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
 			}
 
 			// Parse time estimated duration for ETA calculation
 			if matches := timeEstimatedRegex.FindStringSubmatch(output); len(matches) > 2 {
 				mins, _ := strconv.Atoi(matches[1])
 				secs, _ := strconv.Atoi(matches[2])
-				totalSeconds := mins*60 + secs
 
-				// Calculate ETA as current time + remaining time
-				etaTime := time.Now().Add(time.Duration(totalSeconds) * time.Second)
-				etaStr := etaTime.Format(time.RFC3339)
+				// Format ETA as human-readable duration instead of datetime
+				var etaStr string
+				if mins > 0 {
+					if secs > 0 {
+						etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
+					} else {
+						etaStr = fmt.Sprintf("%d mins", mins)
+					}
+				} else {
+					etaStr = fmt.Sprintf("%d secs", secs)
+				}
+
 				currentETA = &etaStr
 				hasUpdate = true
-				log.Printf("🔍 DEBUG: ETA calculated from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
+				log.Printf("🔍 DEBUG: ETA formatted from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
 			}
 
 			// Parse speed using multiple regex patterns (independent of progress)
@@ -1289,13 +1305,29 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				minutes, _ := strconv.Atoi(etaMatches[2])
 				seconds, _ := strconv.Atoi(etaMatches[3])
 
-				etaTime := time.Now().Add(time.Duration(hours)*time.Hour +
-					time.Duration(minutes)*time.Minute +
-					time.Duration(seconds)*time.Second)
-				etaStr := etaTime.Format(time.RFC3339)
+				// Format ETA as human-readable duration instead of datetime
+				var etaStr string
+				if hours > 0 {
+					if minutes > 0 && seconds > 0 {
+						etaStr = fmt.Sprintf("%d hrs %d mins %d secs", hours, minutes, seconds)
+					} else if minutes > 0 {
+						etaStr = fmt.Sprintf("%d hrs %d mins", hours, minutes)
+					} else {
+						etaStr = fmt.Sprintf("%d hrs %d secs", hours, seconds)
+					}
+				} else if minutes > 0 {
+					if seconds > 0 {
+						etaStr = fmt.Sprintf("%d mins %d secs", minutes, seconds)
+					} else {
+						etaStr = fmt.Sprintf("%d mins", minutes)
+					}
+				} else {
+					etaStr = fmt.Sprintf("%d secs", seconds)
+				}
+
 				currentETA = &etaStr
 				hasUpdate = true
-				log.Printf("🔍 DEBUG: ETA parsed: %s", etaStr)
+				log.Printf("🔍 DEBUG: ETA formatted: %s", etaStr)
 			}
 
 			// Send update if we have any new data (progress, speed, ETA, or total words)
