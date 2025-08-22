@@ -991,13 +991,36 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		return err
 	}
 
-	// Success - password found, now capture the actual password
+	// Hashcat completed successfully, but we need to verify if password was actually found
+	// and if it's in the wordlist assigned to this agent
+	log.Printf("🔍 DEBUG: Starting password verification for job %s", job.ID.String())
+	log.Printf("🔍 DEBUG: Agent wordlist: %q", job.Wordlist)
+	
 	password, err := a.extractPassword(job.ID)
 	if err != nil {
 		log.Printf("⚠️  Failed to extract password: %v", err)
-		a.completeJob(job.ID, "Password found (extraction failed)")
+		log.Printf("🔍 DEBUG: Password extraction failed, checking if password exists in wordlist")
+		// If we can't extract password, check if it's in our wordlist
+		if a.isPasswordInWordlist(job, "") {
+			log.Printf("🔍 DEBUG: Password found in wordlist (extraction failed)")
+			a.completeJob(job.ID, "Password found (extraction failed)")
+		} else {
+			log.Printf("🔍 DEBUG: Password NOT found in wordlist (extraction failed)")
+			a.failJob(job.ID, "Password not found")
+		}
 	} else {
-		a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
+		log.Printf("🔍 DEBUG: Password extracted successfully: %q", password)
+		// Verify that the found password is actually in the wordlist assigned to this agent
+		if a.isPasswordInWordlist(job, password) {
+			log.Printf("🔍 DEBUG: Password verification successful - marking as completed")
+			a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
+		} else {
+			// Password found by hashcat but not in our wordlist - this shouldn't happen
+			// but we'll mark it as failed to be safe
+			log.Printf("⚠️  Password '%s' found by hashcat but not in agent's wordlist", password)
+			log.Printf("🔍 DEBUG: Password verification failed - marking as failed")
+			a.failJob(job.ID, "Password not found")
+		}
 	}
 
 	// Cleanup outfile after job completion
@@ -1148,6 +1171,36 @@ func (a *Agent) extractPassword(jobID uuid.UUID) (string, error) {
 	}
 
 	return "", fmt.Errorf("no password found in outfile")
+}
+
+// isPasswordInWordlist checks if the given password exists in the wordlist assigned to this agent
+func (a *Agent) isPasswordInWordlist(job *domain.Job, password string) bool {
+	// If no password provided, we can't verify - return false to be safe
+	if password == "" {
+		return false
+	}
+	
+	// Get the wordlist content assigned to this agent
+	wordlistContent := job.Wordlist
+	if wordlistContent == "" {
+		log.Printf("⚠️  No wordlist content found in job")
+		return false
+	}
+	
+	// Split wordlist into individual words
+	words := strings.Split(wordlistContent, "\n")
+	
+	// Check if password exists in the wordlist
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == password {
+			log.Printf("✅ Password '%s' found in agent's wordlist", password)
+			return true
+		}
+	}
+	
+	log.Printf("❌ Password '%s' NOT found in agent's wordlist", password)
+	return false
 }
 
 func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {

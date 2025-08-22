@@ -623,7 +623,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 			agentWords := validWords[currentIndex:endIndex]
 			wordlistParts[agentSpeed.Agent.ID.String()] = agentWords
 
-			log.Printf("📦 Assigned %d words to %s: %v",
+			log.Printf("Assigned %d words to %s: %v",
 				len(agentWords),
 				agentSpeed.Agent.Name,
 				agentWords)
@@ -638,23 +638,24 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		job, err := h.jobUsecase.CreateJob(c.Request.Context(), &domain.CreateJobRequest{
 			HashFileID: request.HashFileID,
 			Wordlist:   strings.Join(words, "\n"), // Gabungkan array menjadi string
+			WordlistID: request.WordlistID,        // Set wordlist ID for parallel jobs
 			AgentID:    agentID,
 			Name:       fmt.Sprintf("Parallel Job - %s", wordlist.Name),
 		})
 		if err != nil {
-			log.Printf("❌ Failed to create job for agent %s: %v", agentID, err)
+			log.Printf("Failed to create job for agent %s: %v", agentID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create job"})
 			return
 		}
 
 		createdJobs = append(createdJobs, *job)
-		log.Printf("✅ Created job %s for agent %s with %d words",
+		log.Printf("Created job %s for agent %s with %d words",
 			job.ID.String(),
 			agentID,
 			len(words))
 	}
 
-	log.Printf("🎉 Successfully created %d parallel jobs", len(createdJobs))
+	log.Printf("Successfully created %d parallel jobs", len(createdJobs))
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Parallel jobs created successfully",
