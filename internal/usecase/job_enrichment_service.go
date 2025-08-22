@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -346,6 +347,9 @@ func (s *jobEnrichmentService) batchLoadWordlists(ctx context.Context, ids []uui
 		wordlist, err := s.wordlistRepo.GetByID(ctx, id)
 		if err == nil {
 			s.cache.setWordlist(id, wordlist)
+		} else {
+			// Log error for debugging but don't fail the entire batch
+			fmt.Printf("Warning: Failed to load wordlist %s: %v\n", id.String(), err)
 		}
 	}
 
@@ -394,14 +398,14 @@ func (s *jobEnrichmentService) getWordlistName(wordlist string) string {
 	// Try to parse as UUID
 	if id, err := uuid.Parse(wordlist); err == nil {
 		if wl, cached := s.cache.getWordlist(id); cached {
-			// Use Name (system filename) instead of OrigName for consistency with single agent
-			return wl.Name
+			// Use OrigName (original filename) for better user experience
+			return wl.OrigName
 		}
 		// Try to load directly from repository on cache miss
 		if wl, err := s.wordlistRepo.GetByID(context.Background(), id); err == nil {
 			s.cache.setWordlist(id, wl)
-			// Use Name (system filename) instead of OrigName for consistency with single agent
-			return wl.Name
+			// Use OrigName (original filename) for better user experience
+			return wl.OrigName
 		}
 		// Final fallback for cache miss and repository failure
 		return wordlist[:8] + "..."
@@ -416,14 +420,14 @@ func (s *jobEnrichmentService) getWordlistNameByJob(job domain.Job) string {
 	// Prioritize WordlistID (new field) over Wordlist (legacy field)
 	if job.WordlistID != nil {
 		if wl, cached := s.cache.getWordlist(*job.WordlistID); cached {
-			// Use Name (system filename) instead of OrigName for consistency with single agent
-			return wl.Name
+			// Use OrigName (original filename) for better user experience
+			return wl.OrigName
 		}
 		// Try to load directly from repository on cache miss
 		if wl, err := s.wordlistRepo.GetByID(context.Background(), *job.WordlistID); err == nil {
 			s.cache.setWordlist(*job.WordlistID, wl)
-			// Use Name (system filename) instead of OrigName for consistency with single agent
-			return wl.Name
+			// Use OrigName (original filename) for better user experience
+			return wl.OrigName
 		}
 		// Final fallback for cache miss and repository failure
 		return job.WordlistID.String()[:8] + "..."

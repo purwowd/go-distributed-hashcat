@@ -132,6 +132,9 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 						}
 						wordlistContent = validWords
 						totalWords = int64(len(wordlistContent))
+						
+						// Store wordlist content for distribution based on agent performance
+						// We'll distribute words based on agent capabilities and speed
 					}
 				}
 			}
@@ -181,36 +184,90 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 
 			// Create sub-jobs for each agent with distributed wordlist
 			var subJobs []*domain.Job
-			currentIndex := 0
 
+			// Calculate fair wordlist distribution with minimum requirements
+			// First pass: calculate minimum words for each agent
+			minWords := make([]int, len(agentPerformances))
+			totalMinWords := int64(0)
+			
 			for i, agentPerf := range agentPerformances {
-				// Calculate word count for this agent
-				wordCount := int(float64(totalWords) * agentPerf.Weight)
-				
-				// Ensure last agent gets remaining words
-				if i == len(agentPerformances)-1 {
-					wordCount = int(totalWords) - currentIndex
+				if strings.Contains(strings.ToLower(agentPerf.Capabilities), "gpu") {
+					minWords[i] = 4
+				} else {
+					minWords[i] = 2
 				}
+				totalMinWords += int64(minWords[i])
+			}
+			
+			// Check if we have enough words for minimum requirements
+			if totalMinWords > totalWords {
+				// Redistribute words fairly when not enough
+				wordsPerAgent := int(totalWords) / len(agentPerformances)
+				remainingWords := int(totalWords) % len(agentPerformances)
 				
-				// Ensure minimum words per agent
-				if wordCount < 1 {
-					wordCount = 1
+				for i := range minWords {
+					minWords[i] = wordsPerAgent
+					if i < remainingWords {
+						minWords[i]++
+					}
 				}
+			} else {
+				// We have enough words, distribute remaining words fairly
+				remainingWords := int(totalWords - totalMinWords)
+				wordsPerRemaining := remainingWords / len(agentPerformances)
+				extraWords := remainingWords % len(agentPerformances)
 				
-				// Get agent's wordlist segment
+				for i := range minWords {
+					minWords[i] += wordsPerRemaining
+					if i < extraWords {
+						minWords[i]++
+					}
+				}
+			}
+			
+			// Create sub-jobs with calculated word counts
+			for i, agentPerf := range agentPerformances {
+				wordCount := minWords[i]
+				
+				// Get agent's wordlist segment based on calculated word count
 				var agentWordlist string
 				if len(wordlistContent) > 0 {
-					endIndex := currentIndex + wordCount
+					// Calculate start and end index for this agent's wordlist segment
+					startIndex := 0
+					
+					// Calculate cumulative word count for previous agents
+					for j := 0; j < i; j++ {
+						startIndex += minWords[j]
+					}
+					
+					// Calculate end index for this agent
+					endIndex := startIndex + wordCount
 					if endIndex > len(wordlistContent) {
 						endIndex = len(wordlistContent)
 					}
 					
-					agentWords := wordlistContent[currentIndex:endIndex]
+					// Ensure startIndex doesn't exceed wordlist length
+					if startIndex >= len(wordlistContent) {
+						startIndex = len(wordlistContent) - 1
+					}
+					if startIndex < 0 {
+						startIndex = 0
+					}
+					
+					// Get wordlist segment for this agent
+					agentWords := wordlistContent[startIndex:endIndex]
 					agentWordlist = strings.Join(agentWords, "\n")
-					currentIndex = endIndex
 				} else {
 					// Fallback to original wordlist if we can't parse it
 					agentWordlist = req.Wordlist
+				}
+
+				// Parse wordlist ID for sub-job
+				var subJobWordlistID *uuid.UUID
+				if req.WordlistID != "" {
+					if wordlistID, err := uuid.Parse(req.WordlistID); err == nil {
+						subJobWordlistID = &wordlistID
+					}
 				}
 
 				subJob := &domain.Job{
@@ -222,6 +279,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					HashFile:       hashFile.Path,
 					HashFileID:     &hashFileID,
 					Wordlist:       agentWordlist, // Use distributed wordlist
+					WordlistID:     subJobWordlistID, // Set wordlist ID for multi agent
 					Rules:          req.Rules,
 					Progress:       0,
 					Speed:          0,
@@ -240,7 +298,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 				subJobs = append(subJobs, subJob)
 				
 				// Log distribution info
-				fmt.Printf("✅ Created job \"%s\" for agent %s with %d words (%.1f%%)\n", 
+				fmt.Printf("Created job \"%s\" for agent %s with %d words (%.1f%%)\n", 
 					subJob.Name, agentPerf.Name, wordCount, agentPerf.Weight*100)
 			}
 
@@ -366,12 +424,16 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 	now := time.Now()
 	
 	// Check if the result indicates failure (no password found)
+	var newStatus string
 	if result == "Password not found - exhausted" || strings.Contains(result, "Password not found") {
-		job.Status = "failed"
+		newStatus = "failed"
+		fmt.Printf("Job %s marked as FAILED - Result: %s\n", id.String(), result)
 	} else {
-		job.Status = "completed"
+		newStatus = "completed"
+		fmt.Printf("Job %s marked as COMPLETED - Result: %s\n", id.String(), result)
 	}
 	
+	job.Status = newStatus
 	job.Result = result
 	job.Progress = 100.0
 	job.CompletedAt = &now

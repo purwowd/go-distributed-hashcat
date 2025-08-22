@@ -1972,7 +1972,7 @@ class DashboardApplication {
                 return 30 // CPU gets 30% performance
             },
 
-            // Calculate assigned word count for agent
+            // Calculate assigned word count for agent using new fair distribution logic
             getAssignedWordCount(agent: any): number {
                 if (!this.distributedJobForm.wordlist_id) return 0
                 
@@ -1984,12 +1984,49 @@ class DashboardApplication {
                 
                 if (onlineAgents.length === 0) return 0
                 
-                // Calculate performance-based distribution
-                const totalPerformance = onlineAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
-                const agentPerformance = this.getAgentPerformanceScore(agent)
-                const performanceRatio = agentPerformance / totalPerformance
+                // Use new fair distribution logic (same as backend)
+                // First pass: calculate minimum words for each agent
+                const minWords: number[] = onlineAgents.map(a => {
+                    if (this.isGPUAgent(a)) {
+                        return 4 // GPU minimum 4 words
+                    } else {
+                        return 2 // CPU minimum 2 words
+                    }
+                })
                 
-                return Math.round(totalWords * performanceRatio)
+                const totalMinWords = minWords.reduce((sum, min) => sum + min, 0)
+                
+                // Check if we have enough words for minimum requirements
+                if (totalMinWords > totalWords) {
+                    // Redistribute words fairly when not enough
+                    const wordsPerAgent = Math.floor(totalWords / onlineAgents.length)
+                    const remainingWords = totalWords % onlineAgents.length
+                    
+                    for (let i = 0; i < minWords.length; i++) {
+                        minWords[i] = wordsPerAgent
+                        if (i < remainingWords) {
+                            minWords[i]++
+                        }
+                    }
+                } else {
+                    // We have enough words, distribute remaining words fairly
+                    const remainingWords = totalWords - totalMinWords
+                    const wordsPerRemaining = Math.floor(remainingWords / onlineAgents.length)
+                    const extraWords = remainingWords % onlineAgents.length
+                    
+                    for (let i = 0; i < minWords.length; i++) {
+                        minWords[i] += wordsPerRemaining
+                        if (i < extraWords) {
+                            minWords[i]++
+                        }
+                    }
+                }
+                
+                // Find this agent's index and return their word count
+                const agentIndex = onlineAgents.findIndex(a => a.id === agent.id)
+                if (agentIndex === -1) return 0
+                
+                return minWords[agentIndex]
             },
 
             // Get distribution method description
@@ -2021,7 +2058,7 @@ class DashboardApplication {
                 }
             },
 
-            // Calculate assigned word count for selected agent
+            // Calculate assigned word count for selected agent using new fair distribution logic
             getAssignedWordCountForSelected(agent: any): number {
                 if (!this.jobForm.wordlist_id) return 0
                 
@@ -2033,12 +2070,49 @@ class DashboardApplication {
                 
                 if (selectedAgents.length === 0) return 0
                 
-                // Calculate performance-based distribution
-                const totalPerformance = selectedAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
-                const agentPerformance = this.getAgentPerformanceScore(agent)
-                const performanceRatio = agentPerformance / totalPerformance
+                // Use new fair distribution logic (same as backend)
+                // First pass: calculate minimum words for each agent
+                const minWords: number[] = selectedAgents.map(a => {
+                    if (this.isGPUAgent(a)) {
+                        return 4 // GPU minimum 4 words
+                    } else {
+                        return 2 // CPU minimum 2 words
+                    }
+                })
                 
-                return Math.round(totalWords * performanceRatio)
+                const totalMinWords = minWords.reduce((sum, min) => sum + min, 0)
+                
+                // Check if we have enough words for minimum requirements
+                if (totalMinWords > totalWords) {
+                    // Redistribute words fairly when not enough
+                    const wordsPerAgent = Math.floor(totalWords / selectedAgents.length)
+                    const remainingWords = totalWords % selectedAgents.length
+                    
+                    for (let i = 0; i < minWords.length; i++) {
+                        minWords[i] = wordsPerAgent
+                        if (i < remainingWords) {
+                            minWords[i]++
+                        }
+                    }
+                } else {
+                    // We have enough words, distribute remaining words fairly
+                    const remainingWords = totalWords - totalMinWords
+                    const wordsPerRemaining = Math.floor(remainingWords / selectedAgents.length)
+                    const extraWords = remainingWords % selectedAgents.length
+                    
+                    for (let i = 0; i < minWords.length; i++) {
+                        minWords[i] += wordsPerRemaining
+                        if (i < extraWords) {
+                            minWords[i]++
+                        }
+                    }
+                }
+                
+                // Find this agent's index and return their word count
+                const agentIndex = selectedAgents.findIndex(a => a.id === agent.id)
+                if (agentIndex === -1) return 0
+                
+                return minWords[agentIndex]
             },
 
             // Get assigned percentage for selected agents (ensures total = 100%)
