@@ -394,17 +394,13 @@ func (s *jobEnrichmentService) getWordlistName(wordlist string) string {
 	// Try to parse as UUID
 	if id, err := uuid.Parse(wordlist); err == nil {
 		if wl, cached := s.cache.getWordlist(id); cached {
-			if wl.OrigName != "" {
-				return wl.OrigName
-			}
+			// Use Name (system filename) instead of OrigName for consistency with single agent
 			return wl.Name
 		}
 		// Try to load directly from repository on cache miss
 		if wl, err := s.wordlistRepo.GetByID(context.Background(), id); err == nil {
 			s.cache.setWordlist(id, wl)
-			if wl.OrigName != "" {
-				return wl.OrigName
-			}
+			// Use Name (system filename) instead of OrigName for consistency with single agent
 			return wl.Name
 		}
 		// Final fallback for cache miss and repository failure
@@ -420,17 +416,13 @@ func (s *jobEnrichmentService) getWordlistNameByJob(job domain.Job) string {
 	// Prioritize WordlistID (new field) over Wordlist (legacy field)
 	if job.WordlistID != nil {
 		if wl, cached := s.cache.getWordlist(*job.WordlistID); cached {
-			if wl.OrigName != "" {
-				return wl.OrigName
-			}
+			// Use Name (system filename) instead of OrigName for consistency with single agent
 			return wl.Name
 		}
 		// Try to load directly from repository on cache miss
 		if wl, err := s.wordlistRepo.GetByID(context.Background(), *job.WordlistID); err == nil {
 			s.cache.setWordlist(*job.WordlistID, wl)
-			if wl.OrigName != "" {
-				return wl.OrigName
-			}
+			// Use Name (system filename) instead of OrigName for consistency with single agent
 			return wl.Name
 		}
 		// Final fallback for cache miss and repository failure

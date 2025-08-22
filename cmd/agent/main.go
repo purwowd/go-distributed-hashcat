@@ -18,6 +18,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"bufio"
 
 	"go-distributed-hashcat/internal/domain"
 
@@ -786,6 +787,8 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	log.Printf("  📋 Hash File: %s", job.HashFile)
 	log.Printf("  📋 Wordlist: %s", job.Wordlist)
 	log.Printf("  📋 Rules: %s", job.Rules)
+	log.Printf("  📋 Total Words: %d", job.TotalWords)
+	log.Printf("  📋 Processed Words: %d", job.ProcessedWords)
 
 	// Send initial job data to server immediately
 	a.sendInitialJobData(job)
@@ -866,6 +869,21 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			}
 			localWordlist = downloadedPath
 			log.Printf("✅ SUCCESS: Downloaded wordlist from ID: %s to %s", wordlistIDStr, localWordlist)
+
+			// Verify wordlist file exists and has content
+			if fileInfo, err := os.Stat(localWordlist); err != nil {
+				log.Printf("❌ ERROR: Downloaded wordlist file not accessible: %v", err)
+				return fmt.Errorf("downloaded wordlist file not accessible: %w", err)
+			} else {
+				log.Printf("📊 Wordlist file info - Size: %s, Mode: %v, ModTime: %v",
+					formatFileSize(fileInfo.Size()), fileInfo.Mode(), fileInfo.ModTime())
+
+				// Check if file is empty
+				if fileInfo.Size() == 0 {
+					log.Printf("❌ ERROR: Downloaded wordlist file is empty (0 bytes)")
+					return fmt.Errorf("downloaded wordlist file is empty")
+				}
+			}
 		}
 	} else if job.Wordlist != "" {
 		// Check if wordlist contains newlines (indicating it's content, not a path)
@@ -877,13 +895,52 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			}
 
 			wordlistFile := filepath.Join(tempDir, fmt.Sprintf("wordlist-%s.txt", job.ID.String()))
+			log.Printf("📝 Creating wordlist file: %s (content length: %d bytes)", wordlistFile, len(job.Wordlist))
+
 			if err := os.WriteFile(wordlistFile, []byte(job.Wordlist), 0644); err != nil {
+				log.Printf("❌ ERROR: Failed to create wordlist file %s: %v", wordlistFile, err)
 				return fmt.Errorf("failed to create wordlist file: %w", err)
 			}
 
 			localWordlist = wordlistFile
-			log.Printf("📝 Created wordlist file from content: %s", localWordlist)
-			log.Printf("📋 Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
+			log.Printf("✅ SUCCESS: Created wordlist file from content: %s", localWordlist)
+
+			// Verify created wordlist file
+			if fileInfo, err := os.Stat(localWordlist); err != nil {
+				log.Printf("❌ ERROR: Created wordlist file not accessible: %v", err)
+				return fmt.Errorf("created wordlist file not accessible: %w", err)
+			} else {
+				log.Printf("📊 Created wordlist file info - Size: %s, Mode: %v, ModTime: %v",
+					formatFileSize(fileInfo.Size()), fileInfo.Mode(), fileInfo.ModTime())
+
+				// Count lines in wordlist
+				if content, err := os.ReadFile(localWordlist); err != nil {
+					log.Printf("⚠️ WARNING: Could not read wordlist content for line count: %v", err)
+				} else {
+					lines := strings.Split(string(content), "\n")
+					nonEmptyLines := 0
+					for _, line := range lines {
+						if strings.TrimSpace(line) != "" {
+							nonEmptyLines++
+						}
+					}
+					log.Printf("📊 Wordlist content analysis - Total lines: %d, Non-empty lines: %d", len(lines), nonEmptyLines)
+
+					// Show first few lines as preview
+					if len(lines) > 0 {
+						previewLines := 3
+						if len(lines) < previewLines {
+							previewLines = len(lines)
+						}
+						log.Printf("📋 Wordlist content preview (first %d lines):", previewLines)
+						for i := 0; i < previewLines; i++ {
+							if strings.TrimSpace(lines[i]) != "" {
+								log.Printf("  Line %d: %s", i+1, strings.TrimSpace(lines[i]))
+							}
+						}
+					}
+				}
+			}
 		} else {
 			// Fallback to wordlist filename resolution
 			if localPath, found := a.findLocalFile(job.Wordlist); found {
@@ -953,8 +1010,16 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
+		log.Printf("❌ ERROR: Failed to start hashcat command: %v", err)
+		log.Printf("🔍 DEBUG: Command details - Path: %s, Args: %v", cmd.Path, cmd.Args)
+		log.Printf("🔍 DEBUG: Working directory: %s", cmd.Dir)
+		log.Printf("🔍 DEBUG: Environment variables count: %d", len(cmd.Env))
 		return err
 	}
+
+	log.Printf("✅ SUCCESS: Hashcat command started successfully")
+	log.Printf("🔍 DEBUG: Process ID: %d", cmd.Process.Pid)
+	log.Printf("🔍 DEBUG: Command started at: %v", time.Now())
 
 	// Monitor output for progress updates
 	go a.monitorHashcatOutput(job, stdout, stderr)
@@ -966,29 +1031,50 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
+		log.Printf("⚠️ Hashcat command completed with error: %v", err)
+
 		// Check if hashcat found the password (exit code 0) or exhausted (exit code 1)
 		if exitError, ok := err.(*exec.ExitError); ok {
-			switch exitCode := exitError.ExitCode(); exitCode {
+			exitCode := exitError.ExitCode()
+			log.Printf("🔍 DEBUG: Hashcat exit code: %d", exitCode)
+			log.Printf("🔍 DEBUG: Exit error details: %s", exitError.Error())
+
+			switch exitCode {
 			case 1:
 				// Exhausted - not an error
+				log.Printf("✅ Hashcat completed: Password not found - exhausted (exit code 1)")
 				a.completeJob(job.ID, "Password not found - exhausted")
 				a.cleanupJobFiles(job.ID)
 				return nil
 			case 255:
 				// Exit code 255 usually means invalid arguments or file not found
+				log.Printf("❌ Hashcat failed with exit code 255 - checking for specific errors...")
+
 				// Check if this is due to password not being found vs other errors
 				// For now, treat exit 255 as password not found scenario
+				log.Printf("⚠️ Treating exit code 255 as password not found scenario")
 				a.failJob(job.ID, "Password not found")
 				a.cleanupJobFiles(job.ID)
 				return nil
 			default:
-				// Other exit codes - log for debugging
-				log.Printf("⚠️  Hashcat exited with code %d: %v", exitCode, err)
+				// Unknown exit code
+				log.Printf("❌ Hashcat failed with unknown exit code %d", exitCode)
+				log.Printf("🔍 DEBUG: This might indicate a system error or hashcat crash")
+				log.Printf("🔍 DEBUG: Check system resources, file permissions, and hashcat installation")
+				a.failJob(job.ID, fmt.Sprintf("Hashcat failed with exit code %d", exitCode))
+				a.cleanupJobFiles(job.ID)
+				return fmt.Errorf("hashcat failed with exit code %d: %w", exitCode, err)
 			}
+		} else {
+			// Non-exit error (e.g., process killed, signal received)
+			log.Printf("❌ Hashcat command failed with non-exit error: %v", err)
+			log.Printf("🔍 DEBUG: This might indicate process was killed or signal received")
+			a.failJob(job.ID, fmt.Sprintf("Hashcat execution failed: %v", err))
+			a.cleanupJobFiles(job.ID)
+			return fmt.Errorf("hashcat execution failed: %w", err)
 		}
-		// Cleanup on other errors too
-		a.cleanupJobFiles(job.ID)
-		return err
+	} else {
+		log.Printf("✅ Hashcat command completed successfully (exit code 0)")
 	}
 
 	// Success - password found, now capture the actual password
@@ -1162,183 +1248,26 @@ func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
 	}
 }
 
-func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
-	// Parse hashcat output for progress updates
-	progressRegex := regexp.MustCompile(`Progress\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
-	// Parse restore point for total words: Restore.Point....: 756856/758561 (99.78%)
-	restorePointRegex := regexp.MustCompile(`Restore\.Point\.+:\s*(\d+)/(\d+)\s*\([\d.]+%\)`)
-	// Parse time for ETA calculation: Time.Started.....: Fri Aug 22 00:21:56 2025 (4 mins, 29 secs)
-	timeStartedRegex := regexp.MustCompile(`Time\.Started\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
-	timeEstimatedRegex := regexp.MustCompile(`Time\.Estimated\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
-
-	// Multiple speed regex patterns for different hashcat output formats
-	speedRegexes := []*regexp.Regexp{
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s`),                  // Standard format: Speed.#1........: 123456 H/s
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)`),      // With timing info: Speed.#1........: 123456 H/s (0.01ms)
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*$`),              // End of line
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\n`),             // With newline
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)\s*$`),  // With timing and end of line
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)\s*\n`), // With timing and newline
-		// More flexible patterns
-		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s`),             // Any Speed line with H/s
-		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s\s*\([^)]*\)`), // Any Speed line with H/s and timing
-	}
-	etaRegex := regexp.MustCompile(`ETA\.+:\s*(\d+):(\d+):(\d+)`)
-
-	// Track current values to preserve them between updates
+func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.ReadCloser) {
+	log.Printf("🔍 DEBUG: Starting hashcat output monitoring for job %s", job.ID.String())
+	
+	// State tracking variables
 	var currentProgress float64
 	var currentSpeed int64
 	var currentETA *string
 	var currentTotalWords int64
-
-	scanner := func(reader io.Reader) {
-		buf := make([]byte, 1024)
-		for {
-			n, err := reader.Read(buf)
-			if err != nil {
-				return
-			}
-
-			output := string(buf[:n])
-
-			// Debug: Log raw output for troubleshooting
-			if strings.Contains(output, "Speed") || strings.Contains(output, "Progress") {
-				log.Printf("🔍 DEBUG: Raw hashcat output: %s", strings.TrimSpace(output))
-			}
-
-			// Also log any line containing "Speed" for debugging
-			if strings.Contains(output, "Speed") {
-				lines := strings.Split(output, "\n")
-				for _, line := range lines {
-					if strings.Contains(line, "Speed") {
-						log.Printf("🔍 DEBUG: Speed line found: '%s'", strings.TrimSpace(line))
-					}
-				}
-			}
-
-			// Parse progress and speed independently
-			var hasUpdate bool
-
-			// Parse progress
-			if matches := progressRegex.FindStringSubmatch(output); len(matches) > 3 {
-				currentProgress, _ = strconv.ParseFloat(matches[3], 64)
-				hasUpdate = true
-				log.Printf("🔍 DEBUG: Progress parsed: %.2f%%", currentProgress)
-			}
-
-			// Parse restore point for total words
-			if matches := restorePointRegex.FindStringSubmatch(output); len(matches) > 2 {
-				currentTotalWords, _ = strconv.ParseInt(matches[2], 10, 64)
-				hasUpdate = true
-				log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
-			}
-
-			// Parse time started duration for ETA calculation
-			if matches := timeStartedRegex.FindStringSubmatch(output); len(matches) > 2 {
-				mins, _ := strconv.Atoi(matches[1])
-				secs, _ := strconv.Atoi(matches[2])
-
-				// Format ETA as human-readable duration instead of datetime
-				var etaStr string
-				if mins > 0 {
-					if secs > 0 {
-						etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
-					} else {
-						etaStr = fmt.Sprintf("%d mins", mins)
-					}
-				} else {
-					etaStr = fmt.Sprintf("%d secs", secs)
-				}
-
-				currentETA = &etaStr
-				hasUpdate = true
-				log.Printf("🔍 DEBUG: ETA formatted from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
-			}
-
-			// Parse time estimated duration for ETA calculation
-			if matches := timeEstimatedRegex.FindStringSubmatch(output); len(matches) > 2 {
-				mins, _ := strconv.Atoi(matches[1])
-				secs, _ := strconv.Atoi(matches[2])
-
-				// Format ETA as human-readable duration instead of datetime
-				var etaStr string
-				if mins > 0 {
-					if secs > 0 {
-						etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
-					} else {
-						etaStr = fmt.Sprintf("%d mins", mins)
-					}
-				} else {
-					etaStr = fmt.Sprintf("%d secs", secs)
-				}
-
-				currentETA = &etaStr
-				hasUpdate = true
-				log.Printf("🔍 DEBUG: ETA formatted from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
-			}
-
-			// Parse speed using multiple regex patterns (independent of progress)
-			speedFound := false
-			for i, speedRegex := range speedRegexes {
-				if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 1 {
-					currentSpeed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
-					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from pattern %d: '%s'", currentSpeed, i+1, speedMatches[0])
-					speedFound = true
-					hasUpdate = true
-					break
-				}
-			}
-			if !speedFound {
-				// Fallback: Try to extract any number followed by H/s
-				fallbackRegex := regexp.MustCompile(`(\d+)\s*H/s`)
-				if fallbackMatches := fallbackRegex.FindStringSubmatch(output); len(fallbackMatches) > 1 {
-					currentSpeed, _ = strconv.ParseInt(fallbackMatches[1], 10, 64)
-					log.Printf("🔍 DEBUG: Speed parsed with fallback: %d H/s", currentSpeed)
-					speedFound = true
-					hasUpdate = true
-				}
-			}
-
-			// Parse ETA
-			if etaMatches := etaRegex.FindStringSubmatch(output); len(etaMatches) > 3 {
-				hours, _ := strconv.Atoi(etaMatches[1])
-				minutes, _ := strconv.Atoi(etaMatches[2])
-				seconds, _ := strconv.Atoi(etaMatches[3])
-
-				// Format ETA as human-readable duration instead of datetime
-				var etaStr string
-				if hours > 0 {
-					if minutes > 0 && seconds > 0 {
-						etaStr = fmt.Sprintf("%d hrs %d mins %d secs", hours, minutes, seconds)
-					} else if minutes > 0 {
-						etaStr = fmt.Sprintf("%d hrs %d mins", hours, minutes)
-					} else {
-						etaStr = fmt.Sprintf("%d hrs %d secs", hours, seconds)
-					}
-				} else if minutes > 0 {
-					if seconds > 0 {
-						etaStr = fmt.Sprintf("%d mins %d secs", minutes, seconds)
-					} else {
-						etaStr = fmt.Sprintf("%d mins", minutes)
-					}
-				} else {
-					etaStr = fmt.Sprintf("%d secs", seconds)
-				}
-
-				currentETA = &etaStr
-				hasUpdate = true
-				log.Printf("🔍 DEBUG: ETA formatted: %s", etaStr)
-			}
-
-			// Send update if we have any new data (progress, speed, ETA, or total words)
-			if hasUpdate {
-				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA, currentTotalWords)
-			}
-		}
-	}
-
-	go scanner(stdout)
-	go scanner(stderr)
+	var hasUpdate bool
+	
+	// Create scanner for stdout
+	stdoutScanner := bufio.NewScanner(stdout)
+	stderrScanner := bufio.NewScanner(stderr)
+	
+	// Increase buffer size for large outputs
+	const maxScanTokenSize = 1024 * 1024 // 1MB buffer
+	stdoutScanner.Buffer(make([]byte, maxScanTokenSize), maxScanTokenSize)
+	stderrScanner.Buffer(make([]byte, maxScanTokenSize), maxScanTokenSize)
+	
+	log.Printf("🔍 DEBUG: Output monitoring initialized with %d MB buffer", maxScanTokenSize/(1024*1024))
 }
 
 func (a *Agent) sendInitialJobData(job *domain.Job) {
