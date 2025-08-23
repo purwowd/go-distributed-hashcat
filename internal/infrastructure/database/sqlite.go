@@ -116,7 +116,7 @@ func (s *SQLiteDB) migrate() error {
 			agent_id TEXT,
 			progress REAL DEFAULT 0,
 			speed INTEGER DEFAULT 0,
-			eta DATETIME,
+			eta TEXT,
 			result TEXT,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
@@ -171,13 +171,48 @@ func (s *SQLiteDB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_jobs_agent_status ON jobs(agent_id, status)`,
 		`ALTER TABLE jobs ADD COLUMN hash_file_id TEXT REFERENCES hash_files(id)`,
 		`ALTER TABLE jobs ADD COLUMN wordlist_id TEXT REFERENCES wordlists(id)`,
+		`ALTER TABLE jobs ADD COLUMN total_words INTEGER DEFAULT 0`,
+		`ALTER TABLE jobs ADD COLUMN processed_words INTEGER DEFAULT 0`,
+		// Change ETA column type from DATETIME to TEXT for duration strings
+		`ALTER TABLE jobs RENAME TO jobs_old`,
+		`CREATE TABLE jobs (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			hash_type INTEGER NOT NULL,
+			attack_mode INTEGER NOT NULL,
+			hash_file TEXT NOT NULL,
+			hash_file_id TEXT,
+			wordlist TEXT NOT NULL,
+			wordlist_id TEXT,
+			rules TEXT,
+			agent_id TEXT,
+			progress REAL DEFAULT 0,
+			speed INTEGER DEFAULT 0,
+			eta TEXT,
+			result TEXT,
+			total_words INTEGER DEFAULT 0,
+			processed_words INTEGER DEFAULT 0,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			started_at DATETIME,
+			completed_at DATETIME,
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
+			FOREIGN KEY (hash_file_id) REFERENCES hash_files(id) ON DELETE SET NULL,
+			FOREIGN KEY (wordlist_id) REFERENCES wordlists(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO jobs SELECT * FROM jobs_old`,
+		`DROP TABLE jobs_old`,
 	}
 
 	for _, query := range queries {
 		if _, err := s.db.Exec(query); err != nil {
 			// Ignore "duplicate column" errors for ALTER TABLE
 			errMsg := err.Error()
-			if errMsg != "duplicate column name: hash_file_id" && errMsg != "duplicate column name: wordlist_id" {
+			if errMsg != "duplicate column name: hash_file_id" && 
+			   errMsg != "duplicate column name: wordlist_id" &&
+			   errMsg != "duplicate column name: total_words" &&
+			   errMsg != "duplicate column name: processed_words" {
 				return fmt.Errorf("failed to execute migration query: %s, error: %w", query, err)
 			}
 		}

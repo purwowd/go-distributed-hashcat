@@ -405,28 +405,43 @@ class ApiService {
             const formData = new FormData()
             formData.append('file', file)
 
-            const response = await fetch(`${this.baseUrl}/api/v1/wordlists/upload`, {
-                method: 'POST',
-                body: formData
-            })
+            // Create AbortController for timeout management
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000) // 30 minutes timeout
 
-            if (!response.ok) {
-                // Try to get the error message from response body
-                let errorMessage = `Upload failed: ${response.statusText}`
-                try {
-                    const errorData = await response.json()
-                    if (errorData.error) {
-                        errorMessage = errorData.error
+            try {
+                const response = await fetch(`${this.baseUrl}/api/v1/wordlists/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                })
+
+                clearTimeout(timeoutId)
+
+                if (!response.ok) {
+                    // Try to get the error message from response body
+                    let errorMessage = `Upload failed: ${response.statusText}`
+                    try {
+                        const errorData = await response.json()
+                        if (errorData.error) {
+                            errorMessage = errorData.error
+                        }
+                    } catch (parseError) {
+                        // If we can't parse the error response, use the default message
+                        console.warn('Could not parse error response:', parseError)
                     }
-                } catch (parseError) {
-                    // If we can't parse the error response, use the default message
-                    console.warn('Could not parse error response:', parseError)
+                    throw new Error(errorMessage)
                 }
-                throw new Error(errorMessage)
-            }
 
-            const data = await response.json()
-            return data.data || data // Handle both wrapped and unwrapped responses
+                const data = await response.json()
+                return data.data || data // Handle both wrapped and unwrapped responses
+            } catch (error: any) {
+                clearTimeout(timeoutId)
+                if (error.name === 'AbortError') {
+                    throw new Error('Upload timeout: File too large or connection too slow. Please use CLI upload for files larger than 1GB.')
+                }
+                throw error
+            }
         } catch (error) {
             console.error('Wordlist upload failed:', error)
             throw error // Re-throw the error so the caller can handle it

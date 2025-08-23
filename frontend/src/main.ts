@@ -451,6 +451,7 @@ class DashboardApplication {
             uploadStartTime: 0,
             uploadEndTime: 0,
             isUploading: false,
+            uploadElapsedTime: '0s', // Add reactive time property
             
             // Reactive data arrays - these will be updated by store subscriptions
             reactiveAgents: [] as any[],
@@ -609,6 +610,107 @@ class DashboardApplication {
             async init() {
                 // console.log('🔄 Initializing Alpine.js dashboard data...')
                 this.isAlpineInitialized = true
+                
+                // Track page load state to prevent error notifications during reload
+                let isPageLoading = true
+                let errorNotificationCooldown = false
+                let isPageVisible = true
+                
+                // Set page loading to false after initial load
+                setTimeout(() => {
+                    isPageLoading = false
+                    console.log('✅ Page load completed, error handling enabled')
+                }, 2000) // 2 second cooldown for page load
+                
+                // Track page visibility to prevent notifications when tab is not active
+                document.addEventListener('visibilitychange', () => {
+                    isPageVisible = !document.hidden
+                    console.log('Page visibility changed:', isPageVisible ? 'visible' : 'hidden')
+                })
+                
+                // Add global error handler to prevent crashes
+                window.addEventListener('error', (event) => {
+                    console.error('Global error caught:', event.error)
+                    console.log('Error details:', {
+                        message: event.error?.message,
+                        stack: event.error?.stack,
+                        filename: event.filename,
+                        lineno: event.lineno,
+                        colno: event.colno,
+                        timestamp: new Date().toISOString(),
+                        pageState: { isPageLoading, errorNotificationCooldown, isPageVisible }
+                    })
+                    
+                    // Don't show notifications during page load, cooldown, or when page is not visible
+                    if (isPageLoading || errorNotificationCooldown || !isPageVisible) {
+                        console.log('Filtered out error during page load, cooldown, or hidden page')
+                        return
+                    }
+                    
+                    // Filter out common browser errors that don't affect functionality
+                    if (event.error && typeof event.error === 'object') {
+                        const errorMessage = event.error.message || event.error.toString()
+                        
+                        // Only show notification for actual application errors
+                        if (errorMessage.includes('Cannot read property') ||
+                            errorMessage.includes('is not a function') ||
+                            errorMessage.includes('Unexpected token') ||
+                            errorMessage.includes('TypeError') ||
+                            errorMessage.includes('ReferenceError')) {
+                            
+                            console.warn('Showing error notification for application error:', errorMessage)
+                            this.showNotification('An unexpected error occurred. Please refresh the page.', 'error')
+                            
+                            // Set cooldown to prevent spam
+                            errorNotificationCooldown = true
+                            setTimeout(() => {
+                                errorNotificationCooldown = false
+                            }, 10000) // 10 second cooldown
+                        } else {
+                            console.log('Filtered out browser error:', errorMessage)
+                        }
+                    }
+                })
+                
+                window.addEventListener('unhandledrejection', (event) => {
+                    console.error('Unhandled promise rejection:', event.reason)
+                    console.log('Promise rejection details:', {
+                        reason: event.reason,
+                        reasonMessage: event.reason?.message || event.reason?.toString(),
+                        timestamp: new Date().toISOString(),
+                        pageState: { isPageLoading, errorNotificationCooldown, isPageVisible }
+                    })
+                    
+                    // Don't show notifications during page load, cooldown, or when page is not visible
+                    if (isPageLoading || errorNotificationCooldown || !isPageVisible) {
+                        console.log('Filtered out promise rejection during page load, cooldown, or hidden page')
+                        return
+                    }
+                    
+                    // Only show notification for actual network/API errors
+                    if (event.reason && typeof event.reason === 'object') {
+                        const reasonMessage = event.reason.message || event.reason.toString()
+                        
+                        if (reasonMessage.includes('fetch') || 
+                            reasonMessage.includes('network') ||
+                            reasonMessage.includes('timeout') ||
+                            reasonMessage.includes('500') ||
+                            reasonMessage.includes('404') ||
+                            reasonMessage.includes('Failed to fetch')) {
+                            
+                            console.warn('Showing network error notification for:', reasonMessage)
+                            this.showNotification('A network request failed. Please try again.', 'warning')
+                            
+                            // Set cooldown to prevent spam
+                            errorNotificationCooldown = true
+                            setTimeout(() => {
+                                errorNotificationCooldown = false
+                            }, 10000) // 10 second cooldown
+                        } else {
+                            console.log('Filtered out non-critical promise rejection:', reasonMessage)
+                        }
+                    }
+                })
                 
                 // Setup router listener
                 router.subscribe((route: string) => {
@@ -839,48 +941,102 @@ class DashboardApplication {
                 this.uploadSpeed = ''
                 this.uploadStartTime = Date.now()
                 this.uploadEndTime = 0
+                this.uploadElapsedTime = '0s' // Add reactive time property
                 
-                // Simulate progress updates for better UX
-                this.simulateProgress()
+                // For large files, show more detailed status
+                const sizeInfo = this.getFileSizeInfo(file)
+                if (sizeInfo.sizeInGB >= 1) {
+                    this.uploadStatus = `Large file detected (${sizeInfo.formattedSize}). Upload may take 5-15 minutes.`
+                }
+                
+                // Start progress tracking
+                this.startProgressTracking()
             },
 
-            simulateProgress() {
+            startProgressTracking() {
                 const progressInterval = setInterval(() => {
-                    if (this.isUploading && this.uploadProgress < 90) {
-                        // Simulate realistic progress based on file size
+                    if (this.isUploading && this.uploadProgress < 95) {
+                        // Calculate realistic progress based on file size and time
+                        const elapsed = Date.now() - this.uploadStartTime
                         const fileSizeMB = this.uploadFileSize / (1024 * 1024)
-                        let increment = 1
                         
-                        if (fileSizeMB > 100) {
-                            increment = 0.5 // Slower for large files
-                        } else if (fileSizeMB > 50) {
-                            increment = 1 // Medium speed for medium files
+                        // Update elapsed time for real-time display
+                        this.uploadElapsedTime = this.getUploadTimeElapsed()
+                        
+                        // Estimate progress based on file size and elapsed time
+                        let estimatedProgress = 0
+                        if (fileSizeMB > 1000) { // > 1GB
+                            // Large files: slower progress, more realistic
+                            estimatedProgress = Math.min(95, (elapsed / (15 * 60 * 1000)) * 100) // 15 minutes estimate
+                        } else if (fileSizeMB > 500) { // > 500MB
+                            estimatedProgress = Math.min(95, (elapsed / (8 * 60 * 1000)) * 100) // 8 minutes estimate
+                        } else if (fileSizeMB > 100) { // > 100MB
+                            estimatedProgress = Math.min(95, (elapsed / (3 * 60 * 1000)) * 100) // 3 minutes estimate
                         } else {
-                            increment = 2 // Faster for small files
+                            estimatedProgress = Math.min(95, (elapsed / (60 * 1000)) * 100) // 1 minute estimate
                         }
                         
-                        this.uploadProgress = Math.min(90, this.uploadProgress + increment)
+                        // Smooth progress update
+                        if (estimatedProgress > this.uploadProgress) {
+                            this.uploadProgress = Math.min(95, this.uploadProgress + 0.5)
+                        }
                         
-                        // Update status message
-                        if (this.uploadProgress < 30) {
-                            this.uploadStatus = 'Uploading...'
-                        } else if (this.uploadProgress < 70) {
-                            this.uploadStatus = 'Processing file...'
+                        // Update status message based on progress
+                        this.updateUploadStatus()
+                        
+                        // Calculate upload speed and ETA
+                        this.calculateUploadMetrics()
+                        
+                        // Force Alpine.js reactivity update for time display
+                        // Trigger reactivity by updating a reactive property
+                        this.uploadProgress = this.uploadProgress
                         } else {
+                        clearInterval(progressInterval)
+                    }
+                }, 100) // Update every 100ms for more responsive time display
+            },
+
+            updateUploadStatus() {
+                const fileSizeMB = this.uploadFileSize / (1024 * 1024)
+                const elapsed = Date.now() - this.uploadStartTime
+                const elapsedMinutes = Math.floor(elapsed / (60 * 1000))
+                
+                if (this.uploadProgress < 20) {
+                    this.uploadStatus = 'Initializing upload...'
+                } else if (this.uploadProgress < 40) {
+                    this.uploadStatus = 'Uploading file...'
+                } else if (this.uploadProgress < 70) {
+                    this.uploadStatus = 'Processing large file...'
+                } else if (this.uploadProgress < 90) {
                             this.uploadStatus = 'Finalizing upload...'
-                        }
-                        
-                        // Calculate upload speed (simulated)
+                } else {
+                    this.uploadStatus = 'Almost complete...'
+                }
+                
+                // Add time information for large files
+                if (fileSizeMB > 100) {
+                    this.uploadStatus += ` (${elapsedMinutes}m elapsed)`
+                }
+            },
+
+            calculateUploadMetrics() {
                         const elapsed = Date.now() - this.uploadStartTime
                         if (elapsed > 0) {
                             const uploadedBytes = (this.uploadProgress / 100) * this.uploadFileSize
                             const speedMBps = (uploadedBytes / (1024 * 1024)) / (elapsed / 1000)
                             this.uploadSpeed = speedMBps.toFixed(2)
+                    
+                    // Calculate ETA
+                    if (this.uploadProgress > 10) {
+                        const remainingBytes = this.uploadFileSize - uploadedBytes
+                        const etaSeconds = remainingBytes / (uploadedBytes / (elapsed / 1000))
+                        const etaMinutes = Math.ceil(etaSeconds / 60)
+                        
+                        if (etaMinutes > 0) {
+                            this.uploadStatus += ` - ETA: ~${etaMinutes}m`
                         }
-                    } else {
-                        clearInterval(progressInterval)
                     }
-                }, 200)
+                }
             },
 
             completeUploadProgress() {
@@ -912,22 +1068,34 @@ class DashboardApplication {
                 if (!this.uploadStartTime) return '0s'
                 const elapsed = Date.now() - this.uploadStartTime
                 const seconds = Math.floor(elapsed / 1000)
+                
+                // Handle very short times
+                if (seconds < 1) return '< 1s'
                 if (seconds < 60) return `${seconds}s`
+                
                 const minutes = Math.floor(seconds / 60)
                 const remainingSeconds = seconds % 60
-                return `${minutes}m ${remainingSeconds}s`
+                
+                if (minutes < 60) {
+                    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`
+                }
+                
+                const hours = Math.floor(minutes / 60)
+                const remainingMinutes = minutes % 60
+                return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`
             },
 
             // File size validation helper functions
-            validateFileSize(file: File, maxSizeGB: number = 1): { isValid: boolean; message: string; sizeInGB: number } {
+            validateFileSize(file: File, maxSizeGB: number = 10): { isValid: boolean; message: string; sizeInGB: number } {
                 const sizeInBytes = file.size
                 const sizeInMB = sizeInBytes / (1024 * 1024)
                 const sizeInGB = sizeInMB / 1024
                 
+                // Allow files up to 10GB with appropriate warnings
                 if (sizeInGB > maxSizeGB) {
                     return {
                         isValid: false,
-                        message: `File size (${sizeInGB.toFixed(2)} GB) exceeds the maximum allowed size of ${maxSizeGB} GB. Please use CLI upload for large files.`,
+                        message: `File size (${sizeInGB.toFixed(2)} GB) exceeds the maximum allowed size of ${maxSizeGB} GB. Please use CLI upload for extremely large files.`,
                         sizeInGB: sizeInGB
                     }
                 }
@@ -965,19 +1133,19 @@ class DashboardApplication {
             getFileSizeWarning(file: File): { showWarning: boolean; warningType: 'info' | 'warning' | 'error'; message: string } {
                 const sizeInfo = this.getFileSizeInfo(file)
                 
-                if (sizeInfo.sizeInGB >= 1) {
-                    return {
-                        showWarning: true,
-                        warningType: 'error',
-                        message: `File size (${sizeInfo.formattedSize}) exceeds the 1GB limit. Please use CLI upload for files this large.`
-                    }
-                } else if (sizeInfo.sizeInMB >= 500) {
+                if (sizeInfo.sizeInGB >= 5) {
                     return {
                         showWarning: true,
                         warningType: 'warning',
-                        message: `Large file detected (${sizeInfo.formattedSize}). Upload may take several minutes.`
+                        message: `Very large file detected (${sizeInfo.formattedSize}). Upload may take 15+ minutes. Please ensure stable connection.`
                     }
-                } else if (sizeInfo.sizeInMB >= 100) {
+                } else if (sizeInfo.sizeInGB >= 1) {
+                    return {
+                        showWarning: true,
+                        warningType: 'info',
+                        message: `Large file detected (${sizeInfo.formattedSize}). Upload may take 5-15 minutes.`
+                    }
+                } else if (sizeInfo.sizeInMB >= 500) {
                     return {
                         showWarning: true,
                         warningType: 'info',
@@ -1510,7 +1678,7 @@ class DashboardApplication {
             },
             closeDeleteModal() {
                 this.showDeleteModal = false
-                this.deleteModalConfig = { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null }
+                this.deleteModalConfig = { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null as any }
             },
             async confirmDelete() {
                 if (this.deleteModalConfig.confirmAction) {
@@ -1721,28 +1889,19 @@ class DashboardApplication {
             },
 
             async createJob(jobData: any) {
+                // Prevent multiple submissions
+                if (this.isLoading) {
+                    console.warn('Job creation already in progress, ignoring duplicate request')
+                    return
+                }
+                
                 try {
                     this.isLoading = true
+                    console.log('🚀 Starting job creation...', jobData)
                     
                     // Get wordlist details for backend requirement
                     const selectedWordlist = this.wordlists.find((w: any) => w.id === jobData.wordlist_id)
                     const wordlistName = selectedWordlist ? (selectedWordlist.orig_name || selectedWordlist.name) : 'unknown.txt'
-                    
-                    // Get wordlist content for distribution
-                    let wordlistContent = ''
-                    if (selectedWordlist && selectedWordlist.content) {
-                        wordlistContent = selectedWordlist.content
-                    } else if (selectedWordlist && selectedWordlist.path) {
-                        // Try to fetch wordlist content from server
-                        try {
-                            const response = await fetch(`/api/v1/wordlists/${selectedWordlist.id}/content`)
-                            if (response.ok) {
-                                wordlistContent = await response.text()
-                            }
-                        } catch (error) {
-                            console.warn('Failed to fetch wordlist content:', error)
-                        }
-                    }
                     
                     // Enhanced job creation with agent assignment
                     const jobPayload = {
@@ -1750,8 +1909,8 @@ class DashboardApplication {
                         hash_type: parseInt(jobData.hash_type),
                         attack_mode: parseInt(jobData.attack_mode),
                         hash_file_id: jobData.hash_file_id,
-                        wordlist: wordlistContent || wordlistName,  // Send content if available, otherwise name
-                        wordlist_id: jobData.wordlist_id,         // Optional reference ID
+                        wordlist: wordlistName,                   // Just send the name, not content
+                        wordlist_id: jobData.wordlist_id,         // This is what backend needs
                         agent_ids: jobData.agent_ids || []        // Include multiple agent assignments
                     }
                     
@@ -1759,12 +1918,14 @@ class DashboardApplication {
                     if (!jobPayload.name || !jobPayload.hash_file_id || !jobPayload.wordlist || 
                         jobPayload.hash_type === undefined || jobPayload.attack_mode === undefined) {
                         this.showNotification('Please fill in all required fields', 'error')
+                        this.isLoading = false
                         return
                     }
                     
                     // Validate agent assignment is required
                     if (!jobPayload.agent_ids || jobPayload.agent_ids.length === 0) {
                         this.showNotification('Please select at least one agent to run this job', 'error')
+                        this.isLoading = false
                         return
                     }
                     
@@ -1772,6 +1933,7 @@ class DashboardApplication {
                     const selectedAgents = this.agents.filter((a: any) => jobPayload.agent_ids.includes(a.id))
                     if (selectedAgents.length !== jobPayload.agent_ids.length) {
                         this.showNotification('Some selected agents were not found', 'error')
+                        this.isLoading = false
                         return
                     }
                     
@@ -1779,12 +1941,36 @@ class DashboardApplication {
                     if (offlineAgents.length > 0) {
                         const agentNames = offlineAgents.map((a: any) => a.name).join(', ')
                         this.showNotification(`Cannot create job: Agents "${agentNames}" are offline`, 'error')
+                        this.isLoading = false
                         return
                     }
                     
-
+                    // Add timeout protection for job creation
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('Job creation timeout - request took too long')), 30000) // 30 seconds
+                    })
                     
-                    const result = await jobStore.actions.createJob(jobPayload)
+                    // Add retry mechanism for network errors
+                    let result = null
+                    let retryCount = 0
+                    const maxRetries = 2
+                    
+                    while (retryCount <= maxRetries && !result) {
+                        try {
+                            const createJobPromise = jobStore.actions.createJob(jobPayload)
+                            result = await Promise.race([createJobPromise, timeoutPromise])
+                            break
+                        } catch (retryError) {
+                            retryCount++
+                            if (retryCount <= maxRetries) {
+                                console.warn(`Job creation attempt ${retryCount} failed, retrying...`, retryError)
+                                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)) // Exponential backoff
+                            } else {
+                                throw retryError
+                            }
+                        }
+                    }
+                    
                     if (result) {
                         this.showNotification('Job created successfully!', 'success')
                         this.showJobModal = false
@@ -1810,10 +1996,40 @@ class DashboardApplication {
                     }
                 } catch (error) {
                     console.error('Job creation error:', error)
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-                    this.showNotification(`Failed to create job: ${errorMessage}`, 'error')
+                    let errorMessage = 'Unknown error occurred'
+                    let errorType: 'error' | 'warning' | 'info' | 'success' = 'error'
+                    
+                    if (error instanceof Error) {
+                        if (error.message.includes('timeout')) {
+                            errorMessage = 'Request timeout - please try again'
+                            errorType = 'warning'
+                        } else if (error.message.includes('fetch') || error.message.includes('network')) {
+                            errorMessage = 'Network error - please check your connection and try again'
+                            errorType = 'warning'
+                        } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
+                            errorMessage = 'Server error - please try again later'
+                            errorType = 'warning'
+                        } else {
+                            errorMessage = error.message
+                        }
+                    }
+                    
+                    this.showNotification(`Failed to create job: ${errorMessage}`, errorType)
+                    
+                    // Reset form state on error
+                    this.showJobModal = false
+                    this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
+                    
+                    // Log detailed error for debugging
+                    console.error('Detailed job creation error:', {
+                        error: error,
+                        jobData: jobData,
+                        timestamp: new Date().toISOString(),
+                        userAgent: navigator.userAgent
+                    })
                 } finally {
                     this.isLoading = false
+                    console.log('🏁 Job creation process completed')
                 }
             },
             
@@ -2449,16 +2665,27 @@ class DashboardApplication {
                     return
                 }
                 
-                // Validate file size before upload
-                const sizeValidation = this.validateFileSize(file, 1) // 1GB limit
+                // Get file size info
+                const sizeInfo = this.getFileSizeInfo(file)
+                console.log(`📁 Uploading wordlist: ${file.name} (${sizeInfo.formattedSize})`)
+                
+                // Check file size and provide appropriate guidance
+                if (sizeInfo.sizeInGB >= 2) {
+                    // For very large files, show custom warning modal
+                    const useCLI = await this.showLargeFileWarningModal(file.name, sizeInfo.formattedSize)
+                    
+                    if (!useCLI) {
+                        this.showNotification('Upload canceled. Use CLI upload for large files.', 'info')
+                        return
+                    }
+                }
+                
+                // Validate file size before upload (now supports up to 10GB)
+                const sizeValidation = this.validateFileSize(file, 10)
                 if (!sizeValidation.isValid) {
                     this.showNotification(sizeValidation.message, 'error')
                     return
                 }
-                
-                // Show file size info
-                const sizeInfo = this.getFileSizeInfo(file)
-                console.log(`📁 Uploading wordlist: ${file.name} (${sizeInfo.formattedSize})`)
                 
                 try {
                     // Start progress tracking
@@ -2490,9 +2717,20 @@ class DashboardApplication {
                         }
                         this.resetUploadProgress()
                     }
-                } catch (error) {
+                } catch (error: any) {
                     console.error('Upload error:', error)
+                    
+                    // Provide specific guidance for timeout errors
+                    if (error.message && error.message.includes('timeout')) {
+                        this.showNotification(
+                            `Upload timeout untuk file ${sizeInfo.formattedSize}. ` +
+                            `Gunakan CLI upload: ./server wordlist upload "${file.name}" --chunk 100 --count=false`, 
+                            'error'
+                        )
+                    } else {
                     this.showNotification('Upload failed due to network error', 'error')
+                    }
+                    
                     this.resetUploadProgress()
                 }
             },
@@ -2743,6 +2981,100 @@ class DashboardApplication {
                 }
             },
 
+            // Show custom large file warning modal
+            showLargeFileWarningModal(filename: string, fileSize: string): Promise<boolean> {
+                return new Promise((resolve) => {
+                    // Create modal HTML with clean, modern styling
+                    const modalHTML = `
+                        <div id="large-file-warning-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                            <div class="bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-2xl border border-gray-700">
+                                <!-- Header -->
+                                <div class="flex items-center mb-4">
+                                    <div class="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center mr-3">
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-lg font-semibold text-white">Large File Warning</h3>
+                                </div>
+                                
+                                <!-- Content -->
+                                <div class="text-gray-300 mb-6">
+                                    <p class="mb-3">
+                                        <span class="text-yellow-400 font-medium">File is very large (${fileSize})</span>. Uploading via web interface may timeout or fail.
+                                    </p>
+                                    
+                                    <div class="bg-gray-700 rounded-lg p-3 mb-4">
+                                        <p class="text-sm text-gray-300 mb-2">
+                                            <span class="text-blue-400 font-medium">Recommendation:</span> Use CLI upload for large files:
+                                        </p>
+                                        <div class="bg-gray-900 rounded p-2 font-mono text-xs text-green-400 break-all">
+                                            ./server wordlist upload "${filename}" --name "custom_name" --chunk 100 --count=true
+                                        </div>
+                                    </div>
+                                    
+                                    <p class="text-sm text-gray-400">
+                                        Do you still want to continue uploading via the web interface?
+                                    </p>
+                                </div>
+                                
+                                <!-- Buttons -->
+                                <div class="flex space-x-3">
+                                    <button id="cancel-upload" class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors duration-200">
+                                        Cancel
+                                    </button>
+                                    <button id="continue-upload" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
+                                        Continue
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `
+                    
+                    // Add modal to DOM
+                    document.body.insertAdjacentHTML('beforeend', modalHTML)
+                    
+                    // Get modal elements
+                    const modal = document.getElementById('large-file-warning-modal')
+                    const cancelBtn = document.getElementById('cancel-upload')
+                    const continueBtn = document.getElementById('continue-upload')
+                    
+                    // Add event listeners
+                    const cleanup = () => {
+                        if (modal) {
+                            modal.remove()
+                        }
+                    }
+                    
+                    cancelBtn?.addEventListener('click', () => {
+                        cleanup()
+                        resolve(false)
+                    })
+                    
+                    continueBtn?.addEventListener('click', () => {
+                        cleanup()
+                        resolve(true)
+                    })
+                    
+                    // Close on outside click
+                    modal?.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            cleanup()
+                            resolve(false)
+                        }
+                    })
+                    
+                    // Close on Escape key
+                    const handleEscape = (e: KeyboardEvent) => {
+                        if (e.key === 'Escape') {
+                            cleanup()
+                            resolve(false)
+                            document.removeEventListener('keydown', handleEscape)
+                        }
+                    }
+                    document.addEventListener('keydown', handleEscape)
+                })
+            },
 
         }))
 
