@@ -2,9 +2,11 @@ package usecase
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,20 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// formatBytes converts bytes to human readable format
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
 
 type WordlistUsecase interface {
 	UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error)
@@ -56,15 +72,29 @@ func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, conte
 	filename := fmt.Sprintf("%s%s", fileID.String(), ext)
 	filePath := filepath.Join(wordlistDir, filename)
 
-	// Create the file
+	// Create the file with buffered I/O for better performance
 	file, err := os.Create(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
 
-	// Copy content to file and count words
-	wordCount, written, err := u.copyAndCountWords(file, content)
+	// Use buffered writer for better performance
+	bufferedFile := bufio.NewWriterSize(file, 64*1024) // 64KB buffer
+	defer bufferedFile.Flush()
+
+	// Copy content to file with progress tracking for large files
+	var wordCount int64
+	var written int64
+	
+	if size > 100*1024*1024 { // > 100MB
+		// For large files, use progress tracking
+		wordCount, written, err = u.copyAndCountWordsWithProgress(bufferedFile, content, size)
+	} else {
+		// For smaller files, use regular method
+		wordCount, written, err = u.copyAndCountWords(bufferedFile, content)
+	}
+	
 	if err != nil {
 		// Clean up on error
 		os.Remove(filePath)
@@ -162,4 +192,50 @@ func (u *wordlistUsecase) copyAndCountWords(dst io.Writer, src io.Reader) (int64
 	}
 
 	return wordCount, bytesWritten, nil
+}
+
+// copyAndCountWordsWithProgress handles large files with progress tracking
+func (u *wordlistUsecase) copyAndCountWordsWithProgress(writer io.Writer, reader io.Reader, totalSize int64) (int64, int64, error) {
+	var wordCount int64
+	var written int64
+	buffer := make([]byte, 32*1024) // 32KB buffer for reading
+	
+	// Progress tracking variables
+	lastProgress := int64(0)
+	progressInterval := int64(10 * 1024 * 1024) // Log every 10MB
+	
+	for {
+		n, err := reader.Read(buffer)
+		if n > 0 {
+			// Write to file
+			wn, werr := writer.Write(buffer[:n])
+			if werr != nil {
+				return wordCount, written, werr
+			}
+			written += int64(wn)
+			
+			// Count words in this buffer
+			wordCount += int64(bytes.Count(buffer[:n], []byte{'\n'}))
+			
+			// Progress tracking
+			if written-lastProgress >= progressInterval {
+				progress := float64(written) / float64(totalSize) * 100
+				log.Printf("Upload progress: %s / %s (%.1f%%)", 
+					formatBytes(written), 
+					formatBytes(totalSize), 
+					progress)
+				lastProgress = written
+			}
+		}
+		
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return wordCount, written, err
+		}
+	}
+	
+	log.Printf("Upload completed: %s written, %d words counted", formatBytes(written), wordCount)
+	return wordCount, written, nil
 }

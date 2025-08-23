@@ -867,6 +867,17 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			localWordlist = downloadedPath
 			log.Printf("✅ SUCCESS: Downloaded wordlist from ID: %s to %s", wordlistIDStr, localWordlist)
 		}
+		
+		// Read the wordlist content and populate job.Wordlist for password verification
+		if localWordlist != "" {
+			content, err := os.ReadFile(localWordlist)
+			if err != nil {
+				log.Printf("⚠️  WARNING: Failed to read wordlist content from %s: %v", localWordlist, err)
+			} else {
+				job.Wordlist = string(content)
+				log.Printf("📋 Loaded wordlist content (%d bytes) for password verification", len(content))
+			}
+		}
 	} else if job.Wordlist != "" {
 		// Check if wordlist contains newlines (indicating it's content, not a path)
 		if strings.Contains(job.Wordlist, "\n") {
@@ -884,11 +895,23 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			localWordlist = wordlistFile
 			log.Printf("📝 Created wordlist file from content: %s", localWordlist)
 			log.Printf("📋 Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
+			
+			// job.Wordlist already contains content, no need to read from file
+			log.Printf("📋 Wordlist content already available (%d bytes) for password verification", len(job.Wordlist))
 		} else {
 			// Fallback to wordlist filename resolution
 			if localPath, found := a.findLocalFile(job.Wordlist); found {
 				localWordlist = localPath
 				log.Printf("📁 Using local wordlist: %s", localWordlist)
+				
+				// Read the wordlist content and populate job.Wordlist for password verification
+				content, err := os.ReadFile(localPath)
+				if err != nil {
+					log.Printf("⚠️  WARNING: Failed to read wordlist content from %s: %v", localPath, err)
+				} else {
+					job.Wordlist = string(content)
+					log.Printf("📋 Loaded wordlist content (%d bytes) for password verification", len(content))
+				}
 			} else {
 				// Try to parse as UUID and download
 				if wordlistUUID, err := uuid.Parse(job.Wordlist); err == nil {
@@ -898,10 +921,28 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 					}
 					localWordlist = downloadedPath
 					log.Printf("📥 Downloaded wordlist: %s", localWordlist)
+					
+					// Read the wordlist content and populate job.Wordlist for password verification
+					content, err := os.ReadFile(downloadedPath)
+					if err != nil {
+						log.Printf("⚠️  WARNING: Failed to read wordlist content from %s: %v", downloadedPath, err)
+					} else {
+						job.Wordlist = string(content)
+						log.Printf("📋 Loaded wordlist content (%d bytes) for password verification", len(content))
+					}
 				} else {
 					// If not UUID, use as direct path
 					localWordlist = job.Wordlist
 					log.Printf("⚠️  Using wordlist path directly: %s", localWordlist)
+					
+					// Try to read the wordlist content and populate job.Wordlist for password verification
+					content, err := os.ReadFile(job.Wordlist)
+					if err != nil {
+						log.Printf("⚠️  WARNING: Failed to read wordlist content from %s: %v", job.Wordlist, err)
+					} else {
+						job.Wordlist = string(content)
+						log.Printf("📋 Loaded wordlist content (%d bytes) for password verification", len(content))
+					}
 				}
 			}
 		}
@@ -994,7 +1035,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	// Hashcat completed successfully, but we need to verify if password was actually found
 	// and if it's in the wordlist assigned to this agent
 	log.Printf("🔍 DEBUG: Starting password verification for job %s", job.ID.String())
-	log.Printf("🔍 DEBUG: Agent wordlist: %q", job.Wordlist)
+	// log.Printf("🔍 DEBUG: Agent wordlist: %q", job.Wordlist)
 	
 	password, err := a.extractPassword(job.ID)
 	if err != nil {
@@ -1226,15 +1267,23 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 
 	// Multiple speed regex patterns for different hashcat output formats
 	speedRegexes := []*regexp.Regexp{
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s`),                  // Standard format: Speed.#1........: 123456 H/s
+		// Most specific patterns first (highest priority)
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\([^)]*\)`),      // With timing info: 480.4 kH/s (278.35ms)
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)`),                  // Decimal + unit: 480.4 kH/s
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*$`),              // End of line
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\n`),             // With newline
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\([^)]*\)\s*$`),  // With timing and end of line
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\([^)]*\)\s*\n`), // With timing and newline
+		// Legacy patterns untuk backward compatibility
 		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)`),      // With timing info: Speed.#1........: 123456 H/s (0.01ms)
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*$`),              // End of line
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\n`),             // With newline
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)\s*$`),  // With timing and end of line
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)\s*\n`), // With timing and newline
-		// More flexible patterns
-		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s`),             // Any Speed line with H/s
-		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s\s*\([^)]*\)`), // Any Speed line with H/s and timing
+		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s`),                  // Standard format: Speed.#1........: 123456 H/s
+		// Specific patterns for common units that might be missed (higher priority)
+		regexp.MustCompile(`Speed[^:]*:.*?(\d+\.?\d*).*?(MH/s)`),                  // Specifically for MH/s
+		regexp.MustCompile(`Speed[^:]*:.*?(\d+\.?\d*).*?(GH/s)`),                  // Specifically for GH/s
+		// More flexible patterns (lowest priority) - catch all remaining cases
+		regexp.MustCompile(`Speed[^:]*:.*?(\d+\.?\d*).*?([kmg]?H/s)`),             // Any Speed line with decimal + unit (flexible spacing)
+		regexp.MustCompile(`Speed[^:]*:\s*(\d+\.?\d*)\s*([kmg]?H/s)`),             // Any Speed line with decimal + unit
+		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s`),             // Any Speed line with integer H/s
 	}
 	etaRegex := regexp.MustCompile(`ETA\.+:\s*(\d+):(\d+):(\d+)`)
 
@@ -1333,9 +1382,47 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			// Parse speed using multiple regex patterns (independent of progress)
 			speedFound := false
 			for i, speedRegex := range speedRegexes {
-				if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 1 {
-					currentSpeed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
-					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from pattern %d: '%s'", currentSpeed, i+1, speedMatches[0])
+				if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 2 {
+					// Parse decimal number (e.g., 480.4)
+					speedValue, err := strconv.ParseFloat(speedMatches[1], 64)
+					if err != nil {
+						log.Printf("⚠️  WARNING: Failed to parse speed value '%s': %v", speedMatches[1], err)
+						continue
+					}
+					
+					// Parse unit (e.g., H/s, kH/s, MH/s, GH/s)
+					unit := speedMatches[2]
+					
+					// Convert to base H/s
+					var speedInHps int64
+					switch strings.ToLower(unit) {
+					case "h/s":
+						speedInHps = int64(speedValue)
+					case "kh/s":
+						speedInHps = int64(speedValue * 1000)
+					case "mh/s":
+						speedInHps = int64(speedValue * 1000000)
+					case "gh/s":
+						speedInHps = int64(speedValue * 1000000000)
+					default:
+						log.Printf("⚠️  WARNING: Unknown speed unit '%s', treating as H/s", unit)
+						speedInHps = int64(speedValue)
+					}
+					
+					currentSpeed = speedInHps
+					log.Printf("🔍 DEBUG: Speed parsed: %.2f %s = %d H/s from pattern %d: '%s'", speedValue, unit, speedInHps, i+1, speedMatches[0])
+					speedFound = true
+					hasUpdate = true
+					break
+				} else if len(speedMatches) > 1 {
+					// Legacy pattern without unit (just H/s)
+					speedValue, err := strconv.ParseInt(speedMatches[1], 10, 64)
+					if err != nil {
+						log.Printf("⚠️  WARNING: Failed to parse speed value '%s': %v", speedMatches[1], err)
+						continue
+					}
+					currentSpeed = speedValue
+					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from pattern %d: '%s'", speedValue, i+1, speedMatches[0])
 					speedFound = true
 					hasUpdate = true
 					break
@@ -1343,12 +1430,31 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			}
 			if !speedFound {
 				// Fallback: Try to extract any number followed by H/s
-				fallbackRegex := regexp.MustCompile(`(\d+)\s*H/s`)
-				if fallbackMatches := fallbackRegex.FindStringSubmatch(output); len(fallbackMatches) > 1 {
-					currentSpeed, _ = strconv.ParseInt(fallbackMatches[1], 10, 64)
-					log.Printf("🔍 DEBUG: Speed parsed with fallback: %d H/s", currentSpeed)
-					speedFound = true
-					hasUpdate = true
+				fallbackRegex := regexp.MustCompile(`(\d+\.?\d*)\s*([kmg]?H/s)`)
+				if fallbackMatches := fallbackRegex.FindStringSubmatch(output); len(fallbackMatches) > 2 {
+					speedValue, err := strconv.ParseFloat(fallbackMatches[1], 64)
+					if err != nil {
+						log.Printf("⚠️  WARNING: Failed to parse speed value '%s': %v", fallbackMatches[1], err)
+					} else {
+						unit := fallbackMatches[2]
+						var speedInHps int64
+						switch strings.ToLower(unit) {
+						case "h/s":
+							speedInHps = int64(speedValue)
+						case "kh/s":
+							speedInHps = int64(speedValue * 1000)
+						case "mh/s":
+							speedInHps = int64(speedValue * 1000000)
+						case "gh/s":
+							speedInHps = int64(speedValue * 1000000000)
+						default:
+							speedInHps = int64(speedValue)
+						}
+						currentSpeed = speedInHps
+						log.Printf("🔍 DEBUG: Speed parsed with fallback: %.2f %s = %d H/s", speedValue, unit, speedInHps)
+						speedFound = true
+						hasUpdate = true
+					}
 				}
 			}
 
@@ -1478,9 +1584,17 @@ func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed 
 		log.Printf("❌ Job data update failed with status %d: %s", resp.StatusCode, string(body))
 	} else {
 		if totalWords > 0 {
-			log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s, Total Words: %d)", progress, speed, totalWords)
+			if eta != nil && *eta != "" {
+				log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s, ETA: %s, Total Words: %d)", progress, speed, *eta, totalWords)
+			} else {
+				log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s, Total Words: %d)", progress, speed, totalWords)
+			}
 		} else {
-			log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+			if eta != nil && *eta != "" {
+				log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s, ETA: %s)", progress, speed, *eta)
+			} else {
+				log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+			}
 		}
 	}
 }

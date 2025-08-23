@@ -37,7 +37,7 @@ type Job struct {
 	AgentIDs       []uuid.UUID `json:"agent_ids,omitempty" db:"-"` // Multiple agents (not stored in DB, computed)
 	Progress       float64     `json:"progress" db:"progress"`
 	Speed          int64       `json:"speed" db:"speed"` // Hash rate dalam H/s
-	ETA            *time.Time  `json:"eta" db:"eta"`     // Estimated time of completion
+	ETA            *string     `json:"eta" db:"eta"`     // Estimated time of completion (duration string like "5 mins 34 secs")
 	Result         string      `json:"result" db:"result"`
 	TotalWords     int64       `json:"total_words" db:"total_words"`         // Total dictionary words untuk job ini
 	ProcessedWords int64       `json:"processed_words" db:"processed_words"` // Words yang sudah diproses

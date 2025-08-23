@@ -132,7 +132,7 @@ func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error {
 		wordlistID = &wordlistIDStr
 	}
 
-	var eta *time.Time
+	var eta *string
 	if job.ETA != nil {
 		eta = job.ETA
 	}
@@ -410,7 +410,7 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 	var agentIDStr sql.NullString
 	var hashFileIDStr sql.NullString
 	var wordlistIDStr sql.NullString
-	var eta sql.NullTime
+	var eta sql.NullString
 	var startedAt sql.NullTime
 	var completedAt sql.NullTime
 
@@ -461,7 +461,7 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 	}
 
 	if eta.Valid {
-		job.ETA = &eta.Time
+		job.ETA = &eta.String
 	}
 
 	if startedAt.Valid {
@@ -484,7 +484,7 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 		var agentIDStr sql.NullString
 		var hashFileIDStr sql.NullString
 		var wordlistIDStr sql.NullString
-		var eta sql.NullTime
+		var eta sql.NullString
 		var startedAt sql.NullTime
 		var completedAt sql.NullTime
 
@@ -531,7 +531,7 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 		}
 
 		if eta.Valid {
-			job.ETA = &eta.Time
+			job.ETA = &eta.String
 		}
 
 		if startedAt.Valid {
