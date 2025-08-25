@@ -124,7 +124,7 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 			agentID = ""
 		}
 		if ej.ETA != nil {
-			etaStr = ej.ETA.Format(time.RFC3339)
+			etaStr = *ej.ETA
 		} else {
 			etaStr = ""
 		}
@@ -678,12 +678,14 @@ func (h *JobHandler) UpdateJobDataFromAgent(c *gin.Context) {
 	}
 
 	var req struct {
-		AgentID    string  `json:"agent_id" binding:"required"`
-		AttackMode int     `json:"attack_mode"`
-		Rules      string  `json:"rules"`
-		Speed      int64   `json:"speed"`
-		ETA        *string `json:"eta,omitempty"`
-		Progress   float64 `json:"progress"`
+		AgentID        string  `json:"agent_id" binding:"required"`
+		AttackMode     int     `json:"attack_mode"`
+		Rules          string  `json:"rules"`
+		Speed          int64   `json:"speed"`
+		ETA            *string `json:"eta,omitempty"`
+		Progress       float64 `json:"progress"`
+		TotalWords     int64   `json:"total_words,omitempty"`
+		ProcessedWords int64   `json:"processed_words,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -719,11 +721,21 @@ func (h *JobHandler) UpdateJobDataFromAgent(c *gin.Context) {
 		job.AgentID = &agentID
 	}
 
-	// Parse ETA if provided
+	// Parse ETA if provided (agent sends duration string like "5 mins 34 secs")
 	if req.ETA != nil && *req.ETA != "" {
-		if etaTime, err := time.Parse(time.RFC3339, *req.ETA); err == nil {
-			job.ETA = &etaTime
-		}
+		// Store ETA as string duration, not as timestamp
+		// This will be displayed directly in frontend
+		job.ETA = req.ETA
+	}
+
+	// Update total words if provided
+	if req.TotalWords > 0 {
+		job.TotalWords = req.TotalWords
+	}
+	
+	// Update processed words if provided
+	if req.ProcessedWords > 0 {
+		job.ProcessedWords = req.ProcessedWords
 	}
 
 	// Update the job in database immediately

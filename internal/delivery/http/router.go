@@ -37,8 +37,10 @@ func NewRouter(
 	router.Use(middleware.Gzip())
 	router.Use(middleware.Cache())
 	router.Use(middleware.SecurityHeaders())
-	// Increase timeout for large file downloads (wordlists can be several GB)
-	router.Use(middleware.RequestTimeout(10 * time.Minute))
+	// Upload progress tracking for large files
+	router.Use(middleware.UploadProgressMiddleware())
+	// Increase timeout for large file uploads and downloads (wordlists can be several GB)
+	router.Use(middleware.RequestTimeout(30 * time.Minute))
 
 	// Standard middleware
 	router.Use(gin.Logger())
@@ -171,6 +173,10 @@ func NewRouter(
 		wordlists := v1.Group("/wordlists")
 		{
 			wordlists.POST("/upload", wordlistHandler.UploadWordlist)
+			// New: Chunked upload endpoints for large files
+			wordlists.POST("/upload/init", wordlistHandler.InitChunkedUpload)
+			wordlists.POST("/upload/chunk", wordlistHandler.UploadChunk)
+			wordlists.POST("/upload/finalize", wordlistHandler.FinalizeChunkedUpload)
 			wordlists.GET("/", wordlistHandler.GetAllWordlists)
 			wordlists.GET("/:id", wordlistHandler.GetWordlist)
 			wordlists.GET("/:id/content", wordlistHandler.GetWordlistContent)

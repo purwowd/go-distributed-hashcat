@@ -39,8 +39,24 @@ func (s *JobProgressService) UpdateJobProgress(ctx context.Context, jobID uuid.U
 		remainingWords := job.TotalWords - processedWords
 		if remainingWords > 0 {
 			etaSeconds := float64(remainingWords) / float64(speed)
-			eta := time.Now().Add(time.Duration(etaSeconds) * time.Second)
-			job.ETA = &eta
+			etaDuration := time.Duration(etaSeconds) * time.Second
+			
+			// Format ETA as human-readable duration string
+			var etaStr string
+			minutes := int(etaDuration.Minutes())
+			seconds := int(etaDuration.Seconds()) % 60
+			
+			if minutes > 0 {
+				if seconds > 0 {
+					etaStr = fmt.Sprintf("%d mins %d secs", minutes, seconds)
+				} else {
+					etaStr = fmt.Sprintf("%d mins", minutes)
+				}
+			} else {
+				etaStr = fmt.Sprintf("%d secs", seconds)
+			}
+			
+			job.ETA = &etaStr
 		}
 	}
 
@@ -71,7 +87,8 @@ func (s *JobProgressService) UpdateJobResult(ctx context.Context, jobID uuid.UUI
 	if status == "completed" || status == "failed" {
 		now := time.Now()
 		job.CompletedAt = &now
-		job.ETA = nil // Clear ETA when completed
+		etaStr := ""
+		job.ETA = &etaStr // Clear ETA when completed
 	}
 
 	// Update job

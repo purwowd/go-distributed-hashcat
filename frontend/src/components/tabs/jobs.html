@@ -91,7 +91,7 @@
                     </div>
                     <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex justify-between items-center mt-1 text-xs text-gray-500">
                         <span x-show="job.speed" x-text="`${formatNumber(job.speed || 0)} H/s`"></span>
-                        <!-- <span x-show="job.eta" x-text="`ETA: ${formatDate(job.eta)}`"></span> -->
+                        <span x-show="job.eta && job.eta !== ''" x-text="`ETA: ${job.eta}`"></span>
                     </div>
                 </div>
                 
@@ -161,7 +161,7 @@
                                     </div>
                                     <div x-show="job.status === 'running' && (job.speed || job.eta)" class="flex items-center space-x-2 mt-1">
                                         <span x-show="job.speed" class="text-xs text-gray-500" x-text="`${formatNumber(job.speed || 0)} H/s`"></span>
-                                        <!-- ETA display removed as requested -->
+                                        <span x-show="job.eta && job.eta !== ''" class="text-xs text-gray-500" x-text="`ETA: ${job.eta}`"></span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3">
