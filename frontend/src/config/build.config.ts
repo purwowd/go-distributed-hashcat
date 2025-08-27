@@ -29,7 +29,7 @@ export interface BuildConfig {
 export const configs: Record<string, BuildConfig> = {
     development: {
         mode: 'development',
-        apiBaseUrl: 'http://172.15.1.196:1337',
+        apiBaseUrl: 'http://30.30.30.39:1337',
         components: [
             { name: 'navigation', path: '/components/layout/navigation.html', preload: true },
             { name: 'overview', path: '/components/tabs/overview.html', preload: true },
