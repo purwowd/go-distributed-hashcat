@@ -1049,10 +1049,8 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		}
 	}
 
-	// Build hashcat command with UUID-based outfile
+	// Build hashcat command (no outfile needed, using stdout)
 	tempDir := filepath.Join(a.UploadDir, "temp")
-	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", job.ID.String()))
-	log.Printf("📁 Outfile will be: %s", outfile)
 	
 	// Debug: Verify hashcat will use the same wordlist
 	log.Printf("🔍 DEBUG: Hashcat wordlist verification:")
@@ -1125,20 +1123,18 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	// Use absolute paths for all files to avoid working directory issues
 	absHashFile, _ := filepath.Abs(localHashFile)
 	absWordlist, _ := filepath.Abs(localWordlist)
-	absOutfile, _ := filepath.Abs(outfile)
 	
 	log.Printf("🔍 DEBUG: Absolute file paths:")
 	log.Printf("  📋 Hash file: %s", absHashFile)
 	log.Printf("  📋 Wordlist: %s", absWordlist)
-	log.Printf("  📋 Outfile: %s", absOutfile)
 	
 	// Build hashcat command with fallback mechanism
-	args := buildHashcatCommand(mappedHashType, job.AttackMode, absHashFile, absWordlist, absOutfile, job.Rules)
+	args := buildHashcatCommand(mappedHashType, job.AttackMode, absHashFile, absWordlist, job.Rules)
 	
 	log.Printf("🔨 DEBUG: Final hashcat command:")
 	log.Printf("  📋 Hash File: %s", absHashFile)
 	log.Printf("  📋 Wordlist: %s", absWordlist)
-	log.Printf("  📋 Outfile: %s", absOutfile)
+
 	log.Printf("  📋 Hash Type: %d (mapped from %d)", mappedHashType, job.HashType)
 	log.Printf("  📋 Attack Mode: %d", job.AttackMode)
 	if job.Rules != "" {
@@ -1158,10 +1154,10 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	}
 
 	// Try to run hashcat with fallback to original hash type if needed
-	return a.runHashcatWithFallback(job, args, mappedHashType, absHashFile, absWordlist, absOutfile, tempDir)
+	return a.runHashcatWithFallback(job, args, mappedHashType, absHashFile, absWordlist, tempDir)
 }
 
-func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist string, outfile string, rules string) []string {
+func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist string, rules string) []string {
 	args := []string{
 		"-m", strconv.Itoa(hashType),
 		"-a", strconv.Itoa(attackMode),
@@ -1170,8 +1166,7 @@ func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist
 		"-w", "4",
 		"--status",
 		"--status-timer=2",
-		"--outfile", outfile,
-		"--outfile-format", "2", // Format: hash:plain
+		// Remove --outfile and --outfile-format flags to use stdout instead
 		"--show",
 	}
 	
@@ -1183,7 +1178,7 @@ func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist
 	return args
 }
 
-func (a *Agent) runHashcatWithFallback(job *domain.Job, args []string, hashType int, hashFile string, wordlist string, outfile string, tempDir string) error {
+func (a *Agent) runHashcatWithFallback(job *domain.Job, args []string, hashType int, hashFile string, wordlist string, tempDir string) error {
 	// Log working directory and environment for debugging
 	log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
 	log.Printf("🔍 DEBUG: PATH environment: %s", os.Getenv("PATH"))
@@ -1208,7 +1203,7 @@ func (a *Agent) runHashcatWithFallback(job *domain.Job, args []string, hashType 
 	// If mapped hash type failed and it's different from original, try original
 	if hashType != job.HashType {
 		log.Printf("🔄 Mapped hash type %d failed, trying original hash type %d", hashType, job.HashType)
-		fallbackArgs := buildHashcatCommand(job.HashType, job.AttackMode, hashFile, wordlist, outfile, job.Rules)
+		fallbackArgs := buildHashcatCommand(job.HashType, job.AttackMode, hashFile, wordlist, job.Rules)
 		log.Printf("🔨 Attempting hashcat with fallback hash type %d", job.HashType)
 		log.Printf("🔨 Fallback command: hashcat %v", fallbackArgs)
 		
@@ -1259,8 +1254,11 @@ func (a *Agent) runHashcatCommand(job *domain.Job, args []string, tempDir string
 		return err
 	}
 
-	// Monitor output for progress updates
-	go a.monitorHashcatOutput(job, stdout, stderr)
+	// Create a channel to capture password from stdout
+	passwordChan := make(chan string, 1)
+	
+	// Monitor output for progress updates and password capture
+	go a.monitorHashcatOutput(job, stdout, stderr, passwordChan)
 
 	// Monitor job status for cancellation/pause
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1331,16 +1329,21 @@ func (a *Agent) runHashcatCommand(job *domain.Job, args []string, tempDir string
 	// If we get here, hashcat completed successfully
 	log.Printf("✅ Hashcat completed successfully without error (exit code 0)")
 	
-	// Continue with password verification and job completion
-	// Extract outfile path from args
-	outfile := ""
-	for i, arg := range args {
-		if arg == "--outfile" && i+1 < len(args) {
-			outfile = args[i+1]
-			break
-		}
+	// Wait a bit for password to be captured from stdout
+	time.Sleep(100 * time.Millisecond)
+	
+	// Get captured password from channel
+	var capturedPassword string
+	select {
+	case password := <-passwordChan:
+		capturedPassword = password
+		log.Printf("🔍 DEBUG: Password captured from stdout: %q", capturedPassword)
+	default:
+		log.Printf("🔍 DEBUG: No password captured from stdout")
 	}
-	return a.handleHashcatSuccess(job, outfile)
+	
+	// Continue with password verification and job completion
+	return a.handleHashcatSuccess(job, capturedPassword)
 }
 
 func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
@@ -1770,7 +1773,7 @@ func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
 	}
 }
 
-func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
+func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader, passwordChan chan string) {
 
 	// Track current values to preserve them between updates
 	var currentProgress float64
@@ -1878,87 +1881,7 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			}
 		}
 		
-		return
-	}
-	
-	// Helper function to parse ETA like "2:34:56"
-	parseETA := func(etaStr string) string {
-		// Handle different ETA formats
-		etaStr = strings.TrimSpace(etaStr)
-		
-		// Format: "2:34:56" (HH:MM:SS)
-		if strings.Contains(etaStr, ":") {
-			parts := strings.Split(etaStr, ":")
-			if len(parts) == 3 {
-				if hours, err1 := strconv.Atoi(parts[0]); err1 == nil {
-					if minutes, err2 := strconv.Atoi(parts[1]); err2 == nil {
-						if seconds, err3 := strconv.Atoi(parts[2]); err3 == nil {
-							if hours > 0 {
-								if minutes > 0 && seconds > 0 {
-									return fmt.Sprintf("%d hrs %d mins %d secs", hours, minutes, seconds)
-								} else if minutes > 0 {
-									return fmt.Sprintf("%d hrs %d mins", hours, minutes)
-								} else {
-									return fmt.Sprintf("%d hrs %d secs", hours, seconds)
-								}
-							} else if minutes > 0 {
-								if seconds > 0 {
-									return fmt.Sprintf("%d mins %d secs", minutes, seconds)
-								} else {
-									return fmt.Sprintf("%d mins", minutes)
-								}
-							} else {
-								return fmt.Sprintf("%d secs", seconds)
-							}
-						}
-					}
-				}
-			}
-		}
-		
-		// Format: "2h 34m 56s" or similar
-		if strings.Contains(etaStr, "h") || strings.Contains(etaStr, "m") || strings.Contains(etaStr, "s") {
-			words := strings.Fields(etaStr)
-			var hours, minutes, seconds int
-			
-			for _, word := range words {
-				if strings.Contains(word, "h") {
-					if h, err := strconv.Atoi(strings.TrimSuffix(word, "h")); err == nil {
-						hours = h
-					}
-				} else if strings.Contains(word, "m") {
-					if m, err := strconv.Atoi(strings.TrimSuffix(word, "m")); err == nil {
-						minutes = m
-					}
-				} else if strings.Contains(word, "s") {
-					if s, err := strconv.Atoi(strings.TrimSuffix(word, "s")); err == nil {
-						seconds = s
-					}
-				}
-			}
-			
-			if hours > 0 || minutes > 0 || seconds > 0 {
-				if hours > 0 {
-					if minutes > 0 && seconds > 0 {
-						return fmt.Sprintf("%d hrs %d mins %d secs", hours, minutes, seconds)
-					} else if minutes > 0 {
-						return fmt.Sprintf("%d hrs %d mins", hours, minutes)
-					} else {
-						return fmt.Sprintf("%d hrs %d secs", hours, seconds)
-					}
-				} else if minutes > 0 {
-					if seconds > 0 {
-						return fmt.Sprintf("%d mins %d secs", minutes, seconds)
-					} else {
-						return fmt.Sprintf("%d mins", minutes)
-					}
-				} else {
-					return fmt.Sprintf("%d secs", seconds)
-				}
-			}
-		}
-		
-		return ""
+		return 0, false
 	}
 
 	// Monitor stderr for error messages
@@ -2003,7 +1926,7 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 		}
 	}()
 
-	// Monitor stdout for progress updates
+	// Monitor stdout for progress updates and password capture
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
@@ -2012,6 +1935,31 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			
 			if line == "" {
 				continue
+			}
+			
+			// Check for password in hashcat output (format: hash:password)
+			if strings.Contains(line, ":") && !strings.Contains(line, "Progress") && 
+			   !strings.Contains(line, "Speed") && !strings.Contains(line, "Status") &&
+			   !strings.Contains(line, "Time") && !strings.Contains(line, "Words") &&
+			   !strings.Contains(line, "Session") && !strings.Contains(line, "Device") &&
+			   !strings.Contains(line, "Hash") && !strings.Contains(line, "Guess") &&
+			   !strings.Contains(line, "Backend") && !strings.Contains(line, "OpenCL") &&
+			   !strings.Contains(line, "hashcat") && !strings.Contains(line, "Restore") &&
+			   !strings.Contains(line, "Candidates") {
+				// This looks like a password line (hash:password format)
+				parts := strings.Split(line, ":")
+				if len(parts) >= 2 {
+					password := strings.TrimSpace(parts[1])
+					if password != "" && password != "password" {
+						log.Printf("🔍 DEBUG: Potential password found in output: %q", password)
+						select {
+						case passwordChan <- password:
+							log.Printf("✅ Password sent to channel: %q", password)
+						default:
+							log.Printf("⚠️ Password channel full, password: %q", password)
+						}
+					}
+				}
 			}
 			
 			// Debug: Log raw output for troubleshooting
@@ -2053,27 +2001,27 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				}
 			}
 			
-					// Parse restore point for total words using split
-		if strings.Contains(key, "Restore.Point") {
-			if restoreParts := strings.Split(value, "/"); len(restoreParts) >= 2 {
-				if totalStr := strings.TrimSpace(strings.Split(restoreParts[1], "(")[0]); totalStr != "" {
-					if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
-						currentTotalWords = total
-						log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
+			// Parse restore point for total words using split
+			if strings.Contains(key, "Restore.Point") {
+				if restoreParts := strings.Split(value, "/"); len(restoreParts) >= 2 {
+					if totalStr := strings.TrimSpace(strings.Split(restoreParts[1], "(")[0]); totalStr != "" {
+						if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
+							currentTotalWords = total
+							log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
+						}
 					}
 				}
 			}
-		}
-		
-		// Parse restore sub info (new format in v6.1.1)
-		if strings.Contains(key, "Restore.Sub") {
-			log.Printf("🔍 DEBUG: Restore sub info: %s", value)
-		}
-		
-		// Parse candidates info (new format in v6.1.1)
-		if strings.Contains(key, "Candidates") {
-			log.Printf("🔍 DEBUG: Candidates: %s", value)
-		}
+			
+			// Parse restore sub info (new format in v6.1.1)
+			if strings.Contains(key, "Restore.Sub") {
+				log.Printf("🔍 DEBUG: Restore sub info: %s", value)
+			}
+			
+			// Parse candidates info (new format in v6.1.1)
+			if strings.Contains(key, "Candidates") {
+				log.Printf("🔍 DEBUG: Candidates: %s", value)
+			}
 			
 			// Parse words processed using split
 			if strings.Contains(key, "Words.Processed") {
@@ -2091,95 +2039,99 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				}
 			}
 			
-					// Parse words rejected using split
-		if strings.Contains(key, "Words.Rejected") {
-			if rejected, err := strconv.ParseInt(value, 10, 64); err == nil {
-				currentWordsRejected = rejected
-				log.Printf("🔍 DEBUG: Words rejected parsed: %d", currentWordsRejected)
-			}
-		}
-		
-		// Parse rejected info (new format in v6.1.1)
-		if strings.Contains(key, "Rejected") {
-			if rejectedParts := strings.Split(value, "/"); len(rejectedParts) >= 2 {
-				if rejectedStr := strings.TrimSpace(rejectedParts[0]); rejectedStr != "" {
-					if rejected, err := strconv.ParseInt(rejectedStr, 10, 64); err == nil {
-						currentWordsRejected = rejected
-						if totalStr := strings.TrimSpace(strings.Split(rejectedParts[1], "(")[0]); totalStr != "" {
-							if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
-								if percentStr := strings.TrimSpace(strings.Split(rejectedParts[1], "(")[1]); strings.Contains(percentStr, "%") {
-									if percentEnd := strings.Index(percentStr, "%"); percentEnd != -1 {
-										if percent, err := strconv.ParseFloat(percentStr[:percentEnd], 64); err == nil {
-											log.Printf("🔍 DEBUG: Rejected parsed: %d/%d (%.2f%%)", currentWordsRejected, total, percent)
-										}
-									}
-								}
-							}
-						}
-					}
+			// Parse words rejected using split
+			if strings.Contains(key, "Words.Rejected") {
+				if rejected, err := strconv.ParseInt(value, 10, 64); err == nil {
+					currentWordsRejected = rejected
+					log.Printf("🔍 DEBUG: Words rejected parsed: %d", currentWordsRejected)
 				}
 			}
-		}
 			
-			// Parse recovery info using split
+			// Parse recovered hashes using split
 			if strings.Contains(key, "Recovered") {
-				if recoveryParts := strings.Split(value, "/"); len(recoveryParts) >= 2 {
-					if recoveredStr := strings.TrimSpace(recoveryParts[0]); recoveredStr != "" {
+				if recoveredParts := strings.Split(value, "/"); len(recoveredParts) >= 2 {
+					if recoveredStr := strings.TrimSpace(recoveredParts[0]); recoveredStr != "" {
 						if recovered, err := strconv.ParseInt(recoveredStr, 10, 64); err == nil {
 							currentRecovered = recovered
-							if totalStr := strings.TrimSpace(strings.Split(recoveryParts[1], "(")[0]); totalStr != "" {
-								if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
-									currentTotalHashes = total
-									if percentStr := strings.TrimSpace(strings.Split(recoveryParts[1], "(")[1]); strings.Contains(percentStr, "%") {
-										if percentEnd := strings.Index(percentStr, "%"); percentEnd != -1 {
-											if percent, err := strconv.ParseFloat(percentStr[:percentEnd], 64); err == nil {
-												log.Printf("🔍 DEBUG: Recovery parsed: %d/%d (%.2f%%)", currentRecovered, currentTotalHashes, percent)
-											}
-										}
-									}
-								}
-							}
+							log.Printf("🔍 DEBUG: Recovered hashes parsed: %d", currentRecovered)
+						}
+					}
+					if totalStr := strings.TrimSpace(recoveredParts[1]); totalStr != "" {
+						if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
+							currentTotalHashes = total
+							log.Printf("🔍 DEBUG: Total hashes parsed: %d", currentTotalHashes)
 						}
 					}
 				}
 			}
 			
-					// Parse session name using split
-		if strings.Contains(key, "Session.Name") {
-			currentSessionName = value
-			log.Printf("🔍 DEBUG: Session name parsed: %s", currentSessionName)
-		}
-		
-		// Parse session info (new format in v6.1.1)
-		if strings.Contains(key, "Session") {
-			currentSessionName = value
-			log.Printf("🔍 DEBUG: Session parsed: %s", currentSessionName)
-		}
-		
-		// Parse hash name (new format in v6.1.1)
-		if strings.Contains(key, "Hash.Name") {
-			log.Printf("🔍 DEBUG: Hash name: %s", value)
-		}
-		
-		// Parse hash target (new format in v6.1.1)
-		if strings.Contains(key, "Hash.Target") {
-			log.Printf("🔍 DEBUG: Hash target: %s", value)
-		}
-		
-		// Parse guess base (new format in v6.1.1)
-		if strings.Contains(key, "Guess.Base") {
-			log.Printf("🔍 DEBUG: Guess base: %s", value)
-		}
-		
-		// Parse guess queue (new format in v6.1.1)
-		if strings.Contains(key, "Guess.Queue") {
-			log.Printf("🔍 DEBUG: Guess queue: %s", value)
-		}
-		
-		// Parse status (new format in v6.1.1)
-		if strings.Contains(key, "Status") {
-			log.Printf("🔍 DEBUG: Status: %s", value)
-		}
+			// Parse speed using split
+			if strings.Contains(key, "Speed.#1") {
+				if speed, ok := parseSpeed(value); ok {
+					currentSpeed = speed
+					log.Printf("🔍 DEBUG: Speed parsed: %d H/s", currentSpeed)
+				}
+			}
+			
+			// Parse ETA using split
+			if strings.Contains(key, "ETA") {
+				if timeStart := strings.Index(value, "("); timeStart != -1 {
+					if timeEnd := strings.Index(value, ")"); timeEnd != -1 {
+						timeStr := value[timeStart+1:timeEnd]
+						if mins, secs, ok := parseTimeDuration(timeStr); ok {
+							var etaStr string
+							if mins > 0 {
+								if secs > 0 {
+									etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
+								} else {
+									etaStr = fmt.Sprintf("%d mins", mins)
+								}
+							} else {
+								etaStr = fmt.Sprintf("%d secs", secs)
+							}
+							currentETA = &etaStr
+							log.Printf("🔍 DEBUG: ETA formatted (%d mins, %d secs): %s", mins, secs, etaStr)
+						}
+					}
+				}
+			}
+			
+			// Parse session name using split
+			if strings.Contains(key, "Session.Name") {
+				currentSessionName = value
+				log.Printf("🔍 DEBUG: Session name parsed: %s", currentSessionName)
+			}
+			
+			// Parse session info (new format in v6.1.1)
+			if strings.Contains(key, "Session") {
+				currentSessionName = value
+				log.Printf("🔍 DEBUG: Session parsed: %s", currentSessionName)
+			}
+			
+			// Parse hash name (new format in v6.1.1)
+			if strings.Contains(key, "Hash.Name") {
+				log.Printf("🔍 DEBUG: Hash name: %s", value)
+			}
+			
+			// Parse hash target (new format in v6.1.1)
+			if strings.Contains(key, "Hash.Target") {
+				log.Printf("🔍 DEBUG: Hash target: %s", value)
+			}
+			
+			// Parse guess base (new format in v6.1.1)
+			if strings.Contains(key, "Guess.Base") {
+				log.Printf("🔍 DEBUG: Guess base: %s", value)
+			}
+			
+			// Parse guess queue (new format in v6.1.1)
+			if strings.Contains(key, "Guess.Queue") {
+				log.Printf("🔍 DEBUG: Guess queue: %s", value)
+			}
+			
+			// Parse status (new format in v6.1.1)
+			if strings.Contains(key, "Status") {
+				log.Printf("🔍 DEBUG: Status: %s", value)
+			}
 			
 			// Parse hashcat version using split
 			if strings.Contains(line, "hashcat (v") {
@@ -2218,76 +2170,29 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 					} else {
 						currentDeviceID = line[deviceStart+1:]
 					}
+					currentDeviceID = line[deviceStart+1:]
 					log.Printf("🔍 DEBUG: Device ID parsed (special case): %s", currentDeviceID)
 				}
 			}
 			
-					// Parse time started duration using split
-		if strings.Contains(key, "Time.Started") {
-			if timeStart := strings.Index(value, "("); timeStart != -1 {
-				if timeEnd := strings.Index(value, ")"); timeEnd != -1 {
-					timeStr := value[timeStart+1:timeEnd]
-					if mins, secs, ok := parseTimeDuration(timeStr); ok {
-						var etaStr string
-						if mins > 0 {
-							if secs > 0 {
-								etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
+			// Parse time started duration using split
+			if strings.Contains(key, "Time.Started") {
+				if timeStart := strings.Index(value, "("); timeStart != -1 {
+					if timeEnd := strings.Index(value, ")"); timeEnd != -1 {
+						timeStr := value[timeStart+1:timeEnd]
+						if mins, secs, ok := parseTimeDuration(timeStr); ok {
+							var etaStr string
+							if mins > 0 {
+								if secs > 0 {
+									etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
+								} else {
+									etaStr = fmt.Sprintf("%d mins", mins)
+								}
 							} else {
-								etaStr = fmt.Sprintf("%d mins", mins)
+								etaStr = fmt.Sprintf("%d secs", secs)
 							}
-						} else {
-							etaStr = fmt.Sprintf("%d secs", secs)
-						}
-						currentETA = &etaStr
-						log.Printf("🔍 DEBUG: ETA formatted from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
-					}
-				}
-			}
-		}
-		
-		// Parse time estimated duration using split
-		if strings.Contains(key, "Time.Estimated") {
-			if timeStart := strings.Index(value, "("); timeStart != -1 {
-				if timeEnd := strings.Index(value, ")"); timeEnd != -1 {
-					timeStr := value[timeStart+1:timeEnd]
-					if mins, secs, ok := parseTimeDuration(timeStr); ok {
-						var etaStr string
-						if mins > 0 {
-							if secs > 0 {
-								etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
-							} else {
-								etaStr = fmt.Sprintf("%d mins", mins)
-							}
-						} else {
-							etaStr = fmt.Sprintf("%d secs", secs)
-						}
-						currentETA = &etaStr
-						log.Printf("🔍 DEBUG: ETA formatted from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
-					}
-				}
-			}
-		}
-			
-			// Parse speed using split (multiple patterns for different formats)
-			if strings.Contains(key, "Speed") {
-				if speed, ok := parseSpeed(value); ok {
-					currentSpeed = speed
-					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from: %s", currentSpeed, value)
-				}
-			}
-			
-			// Parse ETA using split
-			if strings.Contains(key, "ETA") {
-				if etaStr := parseETA(value); etaStr != "" {
-					currentETA = &etaStr
-					log.Printf("🔍 DEBUG: ETA formatted: %s", etaStr)
-				} else {
-					// Fallback: try to parse ETA directly from the value
-					if strings.Contains(value, ":") {
-						etaStr := parseETA(value)
-						if etaStr != "" {
 							currentETA = &etaStr
-							log.Printf("🔍 DEBUG: ETA formatted (fallback): %s", etaStr)
+							log.Printf("🔍 DEBUG: ETA formatted from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
 						}
 					}
 				}
@@ -3206,40 +3111,38 @@ func testHashcatBasic() error {
 }
 
 // Handle successful hashcat execution
-func (a *Agent) handleHashcatSuccess(job *domain.Job, outfile string) error {
+func (a *Agent) handleHashcatSuccess(job *domain.Job, capturedPassword string) error {
 	// Hashcat completed successfully, but we need to verify if password was actually found
 	// and if it's in the wordlist assigned to this agent
 	log.Printf("🔍 DEBUG: Starting password verification for job %s", job.ID.String())
 	
-	password, err := a.extractPassword(job.ID)
-	if err != nil {
-		log.Printf("⚠️  Failed to extract password: %v", err)
-		log.Printf("🔍 DEBUG: Password extraction failed, checking if password exists in wordlist")
-		// If we can't extract password, check if it's in our wordlist
+	if capturedPassword == "" {
+		log.Printf("⚠️  No password captured from stdout")
+		log.Printf("🔍 DEBUG: Password capture failed, checking if password exists in wordlist")
+		// If we can't capture password, check if it's in our wordlist
 		if a.isPasswordInWordlist(job, "") {
-			log.Printf("🔍 DEBUG: Password found in wordlist (extraction failed)")
-			a.completeJob(job.ID, "Password found (extraction failed)")
+			log.Printf("🔍 DEBUG: Password found in wordlist (capture failed)")
+			a.completeJob(job.ID, "Password found (capture failed)")
 		} else {
-			log.Printf("🔍 DEBUG: Password NOT found in wordlist (extraction failed)")
+			log.Printf("🔍 DEBUG: Password NOT found in wordlist (capture failed)")
 			a.failJob(job.ID, "Password not found")
 		}
 	} else {
-		log.Printf("🔍 DEBUG: Password extracted successfully: %q", password)
+		log.Printf("🔍 DEBUG: Password captured successfully: %q", capturedPassword)
 		// Verify that the found password is actually in the wordlist assigned to this agent
-		if a.isPasswordInWordlist(job, password) {
+		if a.isPasswordInWordlist(job, capturedPassword) {
 			log.Printf("🔍 DEBUG: Password verification successful - marking as completed")
-			a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
+			a.completeJob(job.ID, fmt.Sprintf("Password found: %s", capturedPassword))
 		} else {
 			// Password found by hashcat but not in our wordlist - this shouldn't happen
 			// but we'll mark it as failed to be safe
-			log.Printf("⚠️  Password '%s' found by hashcat but not in agent's wordlist", password)
+			log.Printf("⚠️  Password '%s' found by hashcat but not in agent's wordlist", capturedPassword)
 			log.Printf("🔍 DEBUG: Password verification failed - marking as failed")
 			a.failJob(job.ID, "Password not found")
 		}
 	}
 
-	// Cleanup outfile after job completion
-	a.cleanupJobFiles(job.ID)
+	// No need to cleanup outfile since we're not using it anymore
 	return nil
 }
 
