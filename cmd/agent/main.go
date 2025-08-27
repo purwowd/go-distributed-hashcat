@@ -171,6 +171,12 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Fatalf("❌ Failed to initialize directories: %v", err)
 	}
 
+	// Pindahkan file yang sudah ada di temp ke directory yang sesuai
+	log.Printf("🔍 DEBUG: Moving existing files from temp to correct directories...")
+	if err := agent.moveFilesToCorrectDirectories(); err != nil {
+		log.Printf("⚠️ Warning: Failed to move existing files: %v", err)
+	}
+
 	if err := agent.scanLocalFiles(); err != nil {
 		log.Printf("⚠️ Warning: Failed to scan local files: %v", err)
 	}
@@ -359,9 +365,71 @@ func (a *Agent) initializeDirectories() error {
 	return nil
 }
 
+// moveFilesToCorrectDirectories moves files from temp directory to their correct locations
+func (a *Agent) moveFilesToCorrectDirectories() error {
+	tempDir := filepath.Join(a.UploadDir, "temp")
+	wordlistDir := filepath.Join(a.UploadDir, "wordlists")
+	hashFileDir := filepath.Join(a.UploadDir, "hash-files")
+
+	// Buat directory jika belum ada
+	if err := os.MkdirAll(wordlistDir, 0755); err != nil {
+		return fmt.Errorf("failed to create wordlist directory: %w", err)
+	}
+	if err := os.MkdirAll(hashFileDir, 0755); err != nil {
+		return fmt.Errorf("failed to create hash file directory: %w", err)
+	}
+
+	// Scan temp directory
+	files, err := os.ReadDir(tempDir)
+	if err != nil {
+		return fmt.Errorf("failed to read temp directory: %w", err)
+	}
+
+	var movedCount int
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		filename := file.Name()
+		sourcePath := filepath.Join(tempDir, filename)
+		
+		// Pindahkan berdasarkan tipe file
+		if a.detectFileType(filename) == "wordlist" {
+			destPath := filepath.Join(wordlistDir, filename)
+			if err := os.Rename(sourcePath, destPath); err != nil {
+				log.Printf("⚠️  Failed to move wordlist %s: %v", filename, err)
+			} else {
+				log.Printf("✅ Moved wordlist %s to wordlists directory", filename)
+				movedCount++
+			}
+		} else if a.detectFileType(filename) == "hash_file" {
+			destPath := filepath.Join(hashFileDir, filename)
+			if err := os.Rename(sourcePath, destPath); err != nil {
+				log.Printf("⚠️  Failed to move hash file %s: %v", filename, err)
+			} else {
+				log.Printf("✅ Moved hash file %s to hash-files directory", filename)
+				movedCount++
+			}
+		}
+	}
+
+	if movedCount > 0 {
+		log.Printf("🎯 Successfully moved %d files to correct directories", movedCount)
+	}
+
+	return nil
+}
+
 func (a *Agent) scanLocalFiles() error {
 	log.Println("🔍 DEBUG: Starting local files scan...")
 	log.Printf("🔍 DEBUG: Upload directory: %s", a.UploadDir)
+
+	// Pindahkan file dari temp ke directory yang sesuai
+	log.Printf("🔍 DEBUG: Moving files from temp to correct directories...")
+	if err := a.moveFilesToCorrectDirectories(); err != nil {
+		log.Printf("⚠️  WARNING: Failed to move files to correct directories: %v", err)
+	}
 
 	// Scan wordlists
 	wordlistDir := filepath.Join(a.UploadDir, "wordlists")
@@ -838,7 +906,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			// If still not found, try temp directory
 			if localHashFile == "" {
 				log.Printf("🔍 DEBUG: No match found in LocalFiles, checking temp directory...")
-				tempDir := filepath.Join(a.UploadDir, "temp")
+				tempDir := filepath.Join(a.UploadDir, "")
 				if files, err := os.ReadDir(tempDir); err == nil {
 					log.Printf("🔍 DEBUG: Scanning temp directory: %s", tempDir)
 					log.Printf("🔍 DEBUG: Found %d files in temp directory", len(files))
@@ -1347,10 +1415,10 @@ func (a *Agent) runHashcatCommand(job *domain.Job, args []string, tempDir string
 }
 
 func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
-	// Create temp directory for downloaded files
-	tempDir := filepath.Join(a.UploadDir, "temp")
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	// Create hash-files directory for downloaded files
+	hashFileDir := filepath.Join(a.UploadDir, "hash-files")
+	if err := os.MkdirAll(hashFileDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create hash file directory: %w", err)
 	}
 
 	// Download file from server
@@ -1383,7 +1451,7 @@ func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
 	}
 
 	// Create local file
-	localPath := filepath.Join(tempDir, filename)
+	localPath := filepath.Join(hashFileDir, filename)
 	file, err := os.Create(localPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create local file: %w", err)
@@ -1408,10 +1476,10 @@ func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
 }
 
 func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
-	// Create temp directory for downloaded files
-	tempDir := filepath.Join(a.UploadDir, "temp")
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	// Create wordlists directory for downloaded files
+	wordlistDir := filepath.Join(a.UploadDir, "wordlists")
+	if err := os.MkdirAll(wordlistDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create wordlist directory: %w", err)
 	}
 
 	// Download file from server
@@ -1444,7 +1512,7 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 	}
 
 	// Create local file
-	localPath := filepath.Join(tempDir, filename)
+	localPath := filepath.Join(wordlistDir, filename)
 	file, err := os.Create(localPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create local file: %w", err)
