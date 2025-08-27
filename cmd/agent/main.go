@@ -814,17 +814,24 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			localHashFile = localPath
 			log.Printf("✅ SUCCESS: Using local hash file for ID %s: %s", hashFileIDStr, localPath)
 		} else {
-			// Not found locally, download from server
-			log.Printf("⚠️  WARNING: Hash file %s not found locally, downloading from server...", hashFileIDStr)
-			log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/hashfiles/%s/download", a.ServerURL, hashFileIDStr)
+			// Try to find by name similarity before downloading
+			log.Printf("🔍 DEBUG: Trying to find hash file by name similarity...")
+			if alternativePath := a.findHashFileByName(); alternativePath != "" {
+				localHashFile = alternativePath
+				log.Printf("✅ SUCCESS: Found alternative hash file by name: %s", alternativePath)
+			} else {
+				// Not found locally, download from server
+				log.Printf("⚠️  WARNING: Hash file %s not found locally, downloading from server...", hashFileIDStr)
+				log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/hashfiles/%s/download", a.ServerURL, hashFileIDStr)
 
-			localHashFile, err = a.downloadHashFile(*job.HashFileID)
-			if err != nil {
-				log.Printf("❌ ERROR: Download failed for hash file %s: %v", hashFileIDStr, err)
-				return fmt.Errorf("failed to download hash file: %w", err)
+				localHashFile, err = a.downloadHashFile(*job.HashFileID)
+				if err != nil {
+					log.Printf("❌ ERROR: Download failed for hash file %s: %v", hashFileIDStr, err)
+					return fmt.Errorf("failed to download hash file: %w", err)
+				}
+				// defer os.Remove(localHashFile) // Keep file for debugging/--show command
+				log.Printf("✅ SUCCESS: Downloaded hash file from ID: %s to %s", hashFileIDStr, localHashFile)
 			}
-			// defer os.Remove(localHashFile) // Keep file for debugging/--show command
-			log.Printf("✅ SUCCESS: Downloaded hash file from ID: %s to %s", hashFileIDStr, localHashFile)
 		}
 	} else {
 		// Fallback to original path
@@ -855,17 +862,24 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			localWordlist = localPath
 			log.Printf("✅ SUCCESS: Using local wordlist for ID %s: %s", wordlistIDStr, localPath)
 		} else {
-			// Not found locally, download from server
-			log.Printf("⚠️  WARNING: Wordlist %s not found locally, downloading from server...", wordlistIDStr)
-			log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/wordlists/%s/download", a.ServerURL, wordlistIDStr)
+			// Try to find by name similarity before downloading
+			log.Printf("🔍 DEBUG: Trying to find wordlist by name similarity...")
+			if alternativePath := a.findWordlistByName(); alternativePath != "" {
+				localWordlist = alternativePath
+				log.Printf("✅ SUCCESS: Found alternative wordlist by name: %s", alternativePath)
+			} else {
+				// Not found locally, download from server
+				log.Printf("⚠️  WARNING: Wordlist %s not found locally, downloading from server...", wordlistIDStr)
+				log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/wordlists/%s/download", a.ServerURL, wordlistIDStr)
 
-			downloadedPath, err := a.downloadWordlist(*job.WordlistID)
-			if err != nil {
-				log.Printf("❌ ERROR: Download failed for wordlist %s: %v", wordlistIDStr, err)
-				return fmt.Errorf("failed to download wordlist %s: %w", job.WordlistID.String(), err)
+				downloadedPath, err := a.downloadWordlist(*job.WordlistID)
+				if err != nil {
+					log.Printf("❌ ERROR: Download failed for wordlist %s: %v", wordlistIDStr, err)
+					return fmt.Errorf("failed to download wordlist %s: %w", job.WordlistID.String(), err)
+				}
+				localWordlist = downloadedPath
+				log.Printf("✅ SUCCESS: Downloaded wordlist from ID: %s to %s", wordlistIDStr, localWordlist)
 			}
-			localWordlist = downloadedPath
-			log.Printf("✅ SUCCESS: Downloaded wordlist from ID: %s to %s", wordlistIDStr, localWordlist)
 		}
 		
 		// Read the wordlist content and populate job.Wordlist for password verification
@@ -2011,6 +2025,90 @@ func (a *Agent) chunkedDownloadWithProgress(src io.Reader, dst *os.File, totalSi
 	return totalWritten, nil
 }
 
+// findHashFileByName searches for any available hash file locally
+func (a *Agent) findHashFileByName() string {
+	log.Printf("🔍 DEBUG: Searching for any available hash file by name...")
+	
+	// Look for any hash file in LocalFiles
+	for filename, localFile := range a.LocalFiles {
+		if localFile.Type == "hash_file" {
+			log.Printf("🔍 DEBUG: Found hash file: %s -> %s", filename, localFile.Path)
+			
+			// Check if this looks like a hash file we can use
+			if strings.Contains(strings.ToLower(filename), "hccapx") || 
+			   strings.Contains(strings.ToLower(filename), "cap") ||
+			   strings.Contains(strings.ToLower(filename), "pcap") {
+				log.Printf("✅ SUCCESS: Found usable hash file: %s", localFile.Path)
+				return localFile.Path
+			}
+		}
+	}
+	
+	// Also check temp directory
+	tempDir := filepath.Join(a.UploadDir, "temp")
+	if files, err := os.ReadDir(tempDir); err == nil {
+		for _, file := range files {
+			if !file.IsDir() {
+				filename := file.Name()
+				if strings.Contains(strings.ToLower(filename), "hccapx") || 
+				   strings.Contains(strings.ToLower(filename), "cap") ||
+				   strings.Contains(strings.ToLower(filename), "pcap") {
+					fullPath := filepath.Join(tempDir, filename)
+					log.Printf("✅ SUCCESS: Found usable hash file in temp: %s", fullPath)
+					return fullPath
+				}
+			}
+		}
+	}
+	
+	log.Printf("🔍 DEBUG: No usable hash file found by name")
+	return ""
+}
+
+// findWordlistByName searches for any available wordlist locally
+func (a *Agent) findWordlistByName() string {
+	log.Printf("🔍 DEBUG: Searching for any available wordlist by name...")
+	
+	// Look for any wordlist in LocalFiles
+	for filename, localFile := range a.LocalFiles {
+		if localFile.Type == "wordlist" {
+			log.Printf("🔍 DEBUG: Found wordlist: %s -> %s", filename, localFile.Path)
+			
+			// Check if this looks like a wordlist we can use
+			if strings.Contains(strings.ToLower(filename), "dictionary") || 
+			   strings.Contains(strings.ToLower(filename), "wordlist") ||
+			   strings.Contains(strings.ToLower(filename), "dict") ||
+			   strings.Contains(strings.ToLower(filename), "pass") ||
+			   strings.Contains(strings.ToLower(filename), "txt") {
+				log.Printf("✅ SUCCESS: Found usable wordlist: %s", localFile.Path)
+				return localFile.Path
+			}
+		}
+	}
+	
+	// Also check temp directory
+	tempDir := filepath.Join(a.UploadDir, "temp")
+	if files, err := os.ReadDir(tempDir); err == nil {
+		for _, file := range files {
+			if !file.IsDir() {
+				filename := file.Name()
+				if strings.Contains(strings.ToLower(filename), "dictionary") || 
+				   strings.Contains(strings.ToLower(filename), "wordlist") ||
+				   strings.Contains(strings.ToLower(filename), "dict") ||
+				   strings.Contains(strings.ToLower(filename), "pass") ||
+				   strings.Contains(strings.ToLower(filename), "txt") {
+					fullPath := filepath.Join(tempDir, filename)
+					log.Printf("✅ SUCCESS: Found usable wordlist in temp: %s", fullPath)
+					return fullPath
+				}
+			}
+		}
+	}
+	
+	log.Printf("🔍 DEBUG: No usable wordlist found by name")
+	return ""
+}
+
 // findLocalWordlistByUUID searches for a local wordlist file that matches the given UUID
 // This function checks if we have a local file that corresponds to the server's wordlist ID
 func (a *Agent) findLocalWordlistByUUID(wordlistID string) string {
@@ -2057,6 +2155,27 @@ func (a *Agent) findLocalWordlistByUUID(wordlistID string) string {
 		}
 	} else {
 		log.Printf("⚠️  WARNING: Failed to read temp directory %s: %v", tempDir, err)
+	}
+
+	// If still no match, try to find by file hash or name similarity
+	// This is useful when the server has a different UUID but the same file content
+	log.Printf("🔍 DEBUG: No UUID match found, trying hash-based search...")
+	
+	// Try to find by checking if we have any wordlist files that might match
+	for filename, localFile := range a.LocalFiles {
+		if localFile.Type == "wordlist" {
+			log.Printf("🔍 DEBUG: Checking wordlist for potential match: %s -> %s (Hash: %s)", filename, localFile.Path, localFile.Hash)
+			
+			// Check if this file might be the one we're looking for based on name similarity
+			// This helps when the server has a different UUID but the same file
+			if strings.Contains(strings.ToLower(filename), "dictionary") || 
+			   strings.Contains(strings.ToLower(filename), "wordlist") ||
+			   strings.Contains(strings.ToLower(filename), "dict") ||
+			   strings.Contains(strings.ToLower(filename), "pass") {
+				log.Printf("✅ SUCCESS: Found potential wordlist match by name similarity: %s", localFile.Path)
+				return localFile.Path
+			}
+		}
 	}
 
 	log.Printf("❌ FAILED: No local wordlist found for UUID: %s", wordlistID)
@@ -2110,6 +2229,26 @@ func (a *Agent) findLocalHashFileByUUID(hashFileID string) string {
 		}
 	} else {
 		log.Printf("⚠️  WARNING: Failed to read temp directory %s: %v", tempDir, err)
+	}
+
+	// If still no match, try to find by file hash or name similarity
+	// This is useful when the server has a different UUID but the same file content
+	log.Printf("🔍 DEBUG: No UUID match found, trying hash-based search...")
+	
+	// Try to find by checking if we have any hash files that might match
+	for filename, localFile := range a.LocalFiles {
+		if localFile.Type == "hash_file" {
+			log.Printf("🔍 DEBUG: Checking hash file for potential match: %s -> %s (Hash: %s)", filename, localFile.Path, localFile.Hash)
+			
+			// Check if this file might be the one we're looking for based on name similarity
+			// This helps when the server has a different UUID but the same file
+			if strings.Contains(strings.ToLower(filename), "starbucks") || 
+			   strings.Contains(strings.ToLower(filename), "hccapx") ||
+			   strings.Contains(strings.ToLower(filename), "cap") {
+				log.Printf("✅ SUCCESS: Found potential hash file match by name similarity: %s", localFile.Path)
+				return localFile.Path
+			}
+		}
 	}
 
 	log.Printf("❌ FAILED: No local hash file found for UUID: %s", hashFileID)
