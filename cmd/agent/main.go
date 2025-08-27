@@ -1533,6 +1533,20 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	// Parse time for ETA calculation: Time.Started.....: Fri Aug 22 00:21:56 2025 (4 mins, 29 secs)
 	timeStartedRegex := regexp.MustCompile(`Time\.Started\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
 	timeEstimatedRegex := regexp.MustCompile(`Time\.Estimated\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
+	// Parse words processed: Words.Processed....: 1234567
+	wordsProcessedRegex := regexp.MustCompile(`Words\.Processed\.+:\s*(\d+)`)
+	// Parse words skipped: Words.Skipped....: 12345
+	wordsSkippedRegex := regexp.MustCompile(`Words\.Skipped\.+:\s*(\d+)`)
+	// Parse words rejected: Words.Rejected....: 123
+	wordsRejectedRegex := regexp.MustCompile(`Words\.Rejected\.+:\s*(\d+)`)
+	// Parse recovery info: Recovered....: 1/1 (100.00%)
+	recoveryRegex := regexp.MustCompile(`Recovered\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
+	// Parse session info: Session.Name....: hashcat
+	sessionNameRegex := regexp.MustCompile(`Session\.Name\.+:\s*(.+)`)
+	// Parse hashcat version: hashcat (v6.2.5) starting in...
+	versionRegex := regexp.MustCompile(`hashcat\s*\(v([\d.]+)\)`)
+	// Parse device info: Backend Device ID #1
+	deviceInfoRegex := regexp.MustCompile(`Backend Device ID #(\d+)`)
 
 	// Multiple speed regex patterns for different hashcat output formats
 	speedRegexes := []*regexp.Regexp{
@@ -1561,6 +1575,14 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	var currentSpeed int64
 	var currentETA *string
 	var currentTotalWords int64
+	var currentProcessedWords int64
+	var currentWordsSkipped int64
+	var currentWordsRejected int64
+	var currentRecovered int64
+	var currentTotalHashes int64
+	var currentSessionName string
+	var currentHashcatVersion string
+	var currentDeviceID string
 
 	// Monitor stderr for error messages
 	go func() {
@@ -1580,6 +1602,14 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			   strings.Contains(strings.ToLower(line), "invalid") ||
 			   strings.Contains(strings.ToLower(line), "not found") {
 				log.Printf("⚠️ Hashcat error detected: %s", line)
+			}
+			
+			// Check for status messages
+			if strings.Contains(strings.ToLower(line), "status") || 
+			   strings.Contains(strings.ToLower(line), "starting") ||
+			   strings.Contains(strings.ToLower(line), "completed") ||
+			   strings.Contains(strings.ToLower(line), "exhausted") {
+				log.Printf("ℹ️ Hashcat status: %s", line)
 			}
 			
 			// Check for deprecation warnings
@@ -1608,20 +1638,67 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			}
 			
 			// Debug: Log raw output for troubleshooting
-			if strings.Contains(line, "Speed") || strings.Contains(line, "Progress") {
+			if strings.Contains(line, "Speed") || strings.Contains(line, "Progress") || 
+			   strings.Contains(line, "Words") || strings.Contains(line, "ETA") ||
+			   strings.Contains(line, "Restore") || strings.Contains(line, "Time") {
 				log.Printf("🔍 DEBUG: Raw hashcat stdout: %s", line)
 			}
 			
 			// Parse progress
 			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 3 {
 				currentProgress, _ = strconv.ParseFloat(matches[3], 64)
-				log.Printf("🔍 DEBUG: Progress parsed: %.2f%%", currentProgress)
+				log.Printf("🔍 DEBUG: Progress parsed: %.2f%% (processed: %s, total: %s)", 
+					currentProgress, matches[1], matches[2])
 			}
 			
 			// Parse restore point for total words
 			if matches := restorePointRegex.FindStringSubmatch(line); len(matches) > 2 {
 				currentTotalWords, _ = strconv.ParseInt(matches[2], 10, 64)
 				log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
+			}
+			
+			// Parse words processed
+			if matches := wordsProcessedRegex.FindStringSubmatch(line); len(matches) > 1 {
+				currentProcessedWords, _ = strconv.ParseInt(matches[1], 10, 64)
+				log.Printf("🔍 DEBUG: Words processed parsed: %d", currentProcessedWords)
+			}
+			
+			// Parse words skipped
+			if matches := wordsSkippedRegex.FindStringSubmatch(line); len(matches) > 1 {
+				currentWordsSkipped, _ = strconv.ParseInt(matches[1], 10, 64)
+				log.Printf("🔍 DEBUG: Words skipped parsed: %d", currentWordsSkipped)
+			}
+			
+			// Parse words rejected
+			if matches := wordsRejectedRegex.FindStringSubmatch(line); len(matches) > 1 {
+				currentWordsRejected, _ = strconv.ParseInt(matches[1], 10, 64)
+				log.Printf("🔍 DEBUG: Words rejected parsed: %d", currentWordsRejected)
+			}
+			
+			// Parse recovery info
+			if matches := recoveryRegex.FindStringSubmatch(line); len(matches) > 3 {
+				currentRecovered, _ = strconv.ParseInt(matches[1], 10, 64)
+				currentTotalHashes, _ = strconv.ParseInt(matches[2], 10, 64)
+				recoveryPercent, _ := strconv.ParseFloat(matches[3], 64)
+				log.Printf("🔍 DEBUG: Recovery parsed: %d/%d (%.2f%%)", currentRecovered, currentTotalHashes, recoveryPercent)
+			}
+			
+			// Parse session name
+			if matches := sessionNameRegex.FindStringSubmatch(line); len(matches) > 1 {
+				currentSessionName = matches[1]
+				log.Printf("🔍 DEBUG: Session name parsed: %s", currentSessionName)
+			}
+			
+			// Parse hashcat version
+			if matches := versionRegex.FindStringSubmatch(line); len(matches) > 1 {
+				currentHashcatVersion = matches[1]
+				log.Printf("🔍 DEBUG: Hashcat version parsed: %s", currentHashcatVersion)
+			}
+			
+			// Parse device info
+			if matches := deviceInfoRegex.FindStringSubmatch(line); len(matches) > 1 {
+				currentDeviceID = matches[1]
+				log.Printf("🔍 DEBUG: Device ID parsed: %s", currentDeviceID)
 			}
 			
 			// Parse time started duration for ETA calculation
@@ -1732,8 +1809,16 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			}
 			
 			// Send update if we have any new data
-			if currentProgress > 0 || currentSpeed > 0 || currentETA != nil || currentTotalWords > 0 {
-				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA, currentTotalWords)
+			if currentProgress > 0 || currentSpeed > 0 || currentETA != nil || 
+			   currentTotalWords > 0 || currentProcessedWords > 0 {
+				
+				// Calculate effective processed words (processed + skipped + rejected)
+				effectiveProcessedWords := currentProcessedWords + currentWordsSkipped + currentWordsRejected
+				
+				log.Printf("🔍 DEBUG: Sending job update - Progress: %.2f%%, Speed: %d H/s, ETA: %v, Total: %d, Processed: %d (effective: %d), Recovered: %d/%d, Session: %s, Version: %s, Device: %s", 
+					currentProgress, currentSpeed, currentETA, currentTotalWords, currentProcessedWords, effectiveProcessedWords, currentRecovered, currentTotalHashes, currentSessionName, currentHashcatVersion, currentDeviceID)
+				
+				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA, currentTotalWords, effectiveProcessedWords)
 			}
 		}
 	}()
@@ -1777,7 +1862,7 @@ func (a *Agent) sendInitialJobData(job *domain.Job) {
 	}
 }
 
-func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed int64, eta *string, totalWords int64) {
+func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed int64, eta *string, totalWords int64, processedWords int64) {
 	// Get current job data to include attack_mode and rules
 	var attackMode int
 	var rules string
@@ -1788,21 +1873,23 @@ func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed 
 	}
 
 	req := struct {
-		AgentID    string  `json:"agent_id"`
-		AttackMode int     `json:"attack_mode"`
-		Rules      string  `json:"rules"`
-		Speed      int64   `json:"speed"`
-		ETA        *string `json:"eta,omitempty"`
-		Progress   float64 `json:"progress"`
-		TotalWords int64   `json:"total_words"`
+		AgentID        string  `json:"agent_id"`
+		AttackMode     int     `json:"attack_mode"`
+		Rules          string  `json:"rules"`
+		Speed          int64   `json:"speed"`
+		ETA            *string `json:"eta,omitempty"`
+		Progress       float64 `json:"progress"`
+		TotalWords     int64   `json:"total_words"`
+		ProcessedWords int64   `json:"processed_words"`
 	}{
-		AgentID:    a.ID.String(),
-		AttackMode: attackMode,
-		Rules:      rules,
-		Speed:      speed,
-		ETA:        eta,
-		Progress:   progress,
-		TotalWords: totalWords,
+		AgentID:        a.ID.String(),
+		AttackMode:     attackMode,
+		Rules:          rules,
+		Speed:          speed,
+		ETA:            eta,
+		Progress:       progress,
+		TotalWords:     totalWords,
+		ProcessedWords: processedWords,
 	}
 
 	jsonData, _ := json.Marshal(req)
