@@ -1024,26 +1024,39 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		// Check if hashcat found the password (exit code 0) or exhausted (exit code 1)
 		if exitError, ok := err.(*exec.ExitError); ok {
 			switch exitCode := exitError.ExitCode(); exitCode {
+			case 0:
+				// Success - password found
+				log.Printf("✅ Hashcat completed successfully with exit code 0 (password found)")
+				// Continue to password verification below
 			case 1:
 				// Exhausted - not an error
+				log.Printf("ℹ️ Hashcat exhausted with exit code 1 (password not found)")
 				a.completeJob(job.ID, "Password not found - exhausted")
 				a.cleanupJobFiles(job.ID)
 				return nil
 			case 255:
 				// Exit code 255 usually means invalid arguments or file not found
-				// Check if this is due to password not being found vs other errors
-				// For now, treat exit 255 as password not found scenario
-				a.failJob(job.ID, "Password not found")
+				log.Printf("⚠️ Hashcat failed with exit code 255 (invalid arguments)")
+				a.failJob(job.ID, "Hashcat failed - invalid arguments or file not found")
 				a.cleanupJobFiles(job.ID)
 				return nil
 			default:
 				// Other exit codes - log for debugging
 				log.Printf("⚠️  Hashcat exited with code %d: %v", exitCode, err)
+				a.failJob(job.ID, fmt.Sprintf("Hashcat failed with exit code %d", exitCode))
+				a.cleanupJobFiles(job.ID)
+				return err
 			}
+		} else {
+			// Non-exit error
+			log.Printf("❌ Hashcat failed with non-exit error: %v", err)
+			a.failJob(job.ID, fmt.Sprintf("Hashcat execution failed: %v", err))
+			a.cleanupJobFiles(job.ID)
+			return err
 		}
-		// Cleanup on other errors too
-		a.cleanupJobFiles(job.ID)
-		return err
+	} else {
+		// Hashcat completed without error (exit code 0)
+		log.Printf("✅ Hashcat completed successfully without error (exit code 0)")
 	}
 
 	// Hashcat completed successfully, but we need to verify if password was actually found
