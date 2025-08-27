@@ -1103,23 +1103,9 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	log.Printf("  📋 Wordlist: %s", absWordlist)
 	log.Printf("  📋 Outfile: %s", absOutfile)
 	
-	args := []string{
-		"-m", strconv.Itoa(mappedHashType),
-		"-a", strconv.Itoa(job.AttackMode),
-		absHashFile,
-		absWordlist,
-		"-w", "4",
-		"--status",
-		"--status-timer=2",
-		"--potfile-disable",
-		"--outfile", absOutfile,
-		"--outfile-format", "2", // Format: hash:plain
-	}
-
-	if job.Rules != "" {
-		args = append(args, "-r", job.Rules)
-	}
-
+	// Build hashcat command with fallback mechanism
+	args := buildHashcatCommand(mappedHashType, job.AttackMode, absHashFile, absWordlist, absOutfile, job.Rules)
+	
 	log.Printf("🔨 DEBUG: Final hashcat command:")
 	log.Printf("  📋 Hash File: %s", absHashFile)
 	log.Printf("  📋 Wordlist: %s", absWordlist)
@@ -1142,6 +1128,57 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		log.Printf("✅ hashcat found at: %s", hashcatPath)
 	}
 
+	// Try to run hashcat with fallback to original hash type if needed
+	return a.runHashcatWithFallback(job, args, mappedHashType, absHashFile, absWordlist, absOutfile, tempDir)
+}
+
+func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist string, outfile string, rules string) []string {
+	return []string{
+		"-m", strconv.Itoa(hashType),
+		"-a", strconv.Itoa(attackMode),
+		hashFile,
+		wordlist,
+		"-w", "4",
+		"--status",
+		"--status-timer=2",
+		"--potfile-disable",
+		"--outfile", outfile,
+		"--outfile-format", "2", // Format: hash:plain
+	}
+}
+
+func (a *Agent) runHashcatWithFallback(job *domain.Job, args []string, hashType int, hashFile string, wordlist string, outfile string, tempDir string) error {
+	// Log working directory and environment for debugging
+	log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
+	log.Printf("🔍 DEBUG: PATH environment: %s", os.Getenv("PATH"))
+	
+	// Test if hashcat is accessible
+	if hashcatPath, err := exec.LookPath("hashcat"); err != nil {
+		log.Printf("⚠️ Warning: hashcat not found in PATH: %v", err)
+	} else {
+		log.Printf("✅ hashcat found at: %s", hashcatPath)
+	}
+
+	// First try with mapped hash type
+	log.Printf("🔨 Attempting hashcat with hash type %d", hashType)
+	if err := a.runHashcatCommand(job, args, tempDir); err == nil {
+		return nil // Success with mapped hash type
+	}
+	
+	// If mapped hash type failed and it's different from original, try original
+	if hashType != job.HashType {
+		log.Printf("🔄 Mapped hash type %d failed, trying original hash type %d", hashType, job.HashType)
+		fallbackArgs := buildHashcatCommand(job.HashType, job.AttackMode, hashFile, wordlist, outfile, job.Rules)
+		if err := a.runHashcatCommand(job, fallbackArgs, tempDir); err == nil {
+			return nil // Success with original hash type
+		}
+		log.Printf("❌ Both mapped and original hash types failed")
+	}
+	
+	return fmt.Errorf("hashcat failed with all attempted hash types")
+}
+
+func (a *Agent) runHashcatCommand(job *domain.Job, args []string, tempDir string) error {
 	cmd := exec.Command("hashcat", args...)
 	
 	// Set working directory to temp directory for better file access
@@ -1198,89 +1235,70 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				// Note: stderr pipe is already being read by monitorHashcatOutput
 				// We'll rely on the monitoring function to capture errors
 				
-				// Log detailed error information
+				// Enhanced debugging for exit code 255
 				log.Printf("🔍 DEBUG: Command that failed: hashcat %v", args)
-				log.Printf("🔍 DEBUG: Original hash type: %d, Mapped hash type: %d", job.HashType, mapHashType(job.HashType))
+				log.Printf("🔍 DEBUG: Original hash type: %d, Attempted hash type: %s", job.HashType, args[1])
 				log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
 				log.Printf("🔍 DEBUG: File permissions check:")
-				log.Printf("  �� Hash file %s: %s", absHashFile, getFilePermissions(absHashFile))
-				log.Printf("  📋 Wordlist %s: %s", absWordlist, getFilePermissions(absWordlist))
+				// Extract file paths from args for debugging
+				if len(args) >= 4 {
+					log.Printf("  📋 Hash file %s: %s", args[2], getFilePermissions(args[2]))
+					log.Printf("  📋 Wordlist %s: %s", args[3], getFilePermissions(args[3]))
+				}
 				log.Printf("  📋 Temp directory %s: %s", tempDir, getFilePermissions(tempDir))
 				
-				// Try to run hashcat with --help to see if it's available
-				helpCmd := exec.Command("hashcat", "--help")
-				if helpErr := helpCmd.Run(); helpErr != nil {
-					log.Printf("⚠️ Warning: hashcat --help also failed: %v", helpErr)
+				// Test basic hashcat functionality
+				if testHashcatBasic(); err != nil {
+					log.Printf("⚠️ Basic hashcat test failed: %v", err)
 				} else {
 					log.Printf("✅ hashcat --help succeeded, command syntax may be the issue")
 				}
 				
-				// Try to run hashcat with just the hash file to test basic functionality
-				testCmd := exec.Command("hashcat", "-m", strconv.Itoa(mapHashType(job.HashType)), absHashFile)
-				testCmd.Dir = tempDir
-				if testErr := testCmd.Run(); testErr != nil {
-					log.Printf("🔍 DEBUG: Basic hashcat test failed: %v", testErr)
-				} else {
-					log.Printf("✅ Basic hashcat test succeeded, issue may be with wordlist or arguments")
+				// Send failure notification to server
+				if err := a.notifyJobFailure(job.ID, fmt.Sprintf("Hashcat failed - invalid arguments or file not found (exit code %d)", exitCode)); err != nil {
+					log.Printf("⚠️ Warning: Failed to send job failure notification: %v", err)
 				}
 				
-				a.failJob(job.ID, "Hashcat failed - invalid arguments or file not found")
+				// Clean up output file
 				a.cleanupJobFiles(job.ID)
-				return nil
+				return fmt.Errorf("hashcat failed with exit code %d", exitCode)
 			default:
-				// Other exit codes - log for debugging
-				log.Printf("⚠️  Hashcat exited with code %d: %v", exitCode, err)
-				a.failJob(job.ID, fmt.Sprintf("Hashcat failed with exit code %d", exitCode))
+				log.Printf("❌ Hashcat failed with unexpected exit code %d: %v", exitCode, err)
+				// Send failure notification to server
+				if err := a.notifyJobFailure(job.ID, fmt.Sprintf("Hashcat failed with exit code %d", exitCode)); err != nil {
+					log.Printf("⚠️ Warning: Failed to send job failure notification: %v", err)
+				}
+				
+				// Clean up output file
 				a.cleanupJobFiles(job.ID)
-				return err
+				return fmt.Errorf("hashcat failed with exit code %d", exitCode)
 			}
 		} else {
-			// Non-exit error
-			log.Printf("❌ Hashcat failed with non-exit error: %v", err)
-			a.failJob(job.ID, fmt.Sprintf("Hashcat execution failed: %v", err))
+			log.Printf("❌ Hashcat command failed: %v", err)
+			// Send failure notification to server
+			if err := a.notifyJobFailure(job.ID, fmt.Sprintf("Hashcat command failed: %v", err)); err != nil {
+				log.Printf("⚠️ Warning: Failed to send job failure notification: %v", err)
+			}
+			
+			// Clean up output file
 			a.cleanupJobFiles(job.ID)
 			return err
 		}
-	} else {
-		// Hashcat completed without error (exit code 0)
-		log.Printf("✅ Hashcat completed successfully without error (exit code 0)")
 	}
 
-	// Hashcat completed successfully, but we need to verify if password was actually found
-	// and if it's in the wordlist assigned to this agent
-	log.Printf("🔍 DEBUG: Starting password verification for job %s", job.ID.String())
-	// log.Printf("🔍 DEBUG: Agent wordlist: %q", job.Wordlist)
+	// If we get here, hashcat completed successfully
+	log.Printf("✅ Hashcat completed successfully without error (exit code 0)")
 	
-	password, err := a.extractPassword(job.ID)
-	if err != nil {
-		log.Printf("⚠️  Failed to extract password: %v", err)
-		log.Printf("🔍 DEBUG: Password extraction failed, checking if password exists in wordlist")
-		// If we can't extract password, check if it's in our wordlist
-		if a.isPasswordInWordlist(job, "") {
-			log.Printf("🔍 DEBUG: Password found in wordlist (extraction failed)")
-			a.completeJob(job.ID, "Password found (extraction failed)")
-		} else {
-			log.Printf("🔍 DEBUG: Password NOT found in wordlist (extraction failed)")
-			a.failJob(job.ID, "Password not found")
-		}
-	} else {
-		log.Printf("🔍 DEBUG: Password extracted successfully: %q", password)
-		// Verify that the found password is actually in the wordlist assigned to this agent
-		if a.isPasswordInWordlist(job, password) {
-			log.Printf("🔍 DEBUG: Password verification successful - marking as completed")
-			a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
-		} else {
-			// Password found by hashcat but not in our wordlist - this shouldn't happen
-			// but we'll mark it as failed to be safe
-			log.Printf("⚠️  Password '%s' found by hashcat but not in agent's wordlist", password)
-			log.Printf("🔍 DEBUG: Password verification failed - marking as failed")
-			a.failJob(job.ID, "Password not found")
+	// Continue with password verification and job completion
+	// Extract outfile path from args
+	outfile := ""
+	for i, arg := range args {
+		if arg == "--outfile" && i+1 < len(args) {
+			outfile = args[i+1]
+			break
 		}
 	}
-
-	// Cleanup outfile after job completion
-	a.cleanupJobFiles(job.ID)
-	return nil
+	return a.handleHashcatSuccess(job, outfile)
 }
 
 func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
@@ -2447,6 +2465,7 @@ func getFilePermissions(filepath string) string {
 func mapHashType(hashType int) int {
 	switch hashType {
 	case 2500: // WPA/WPA2 (deprecated)
+		// Try new format first, but keep original as fallback
 		return 22000 // WPA/WPA2 (new)
 	case 2501: // WPA/WPA2 PMK (deprecated)
 		return 22001 // WPA/WPA2 PMK (new)
@@ -2457,11 +2476,11 @@ func mapHashType(hashType int) int {
 	}
 }
 
-// Validate hash file format
+// Validate hash file format with better .hccapx support
 func isValidHashFile(filepath string) bool {
 	// Check file extension
 	ext := strings.ToLower(path.Ext(filepath))
-	validExtensions := []string{".hccapx", ".cap", ".pcap", ".hash", ".txt"}
+	validExtensions := []string{".hccapx", ".hccap", ".cap", ".pcap", ".hash", ".txt"}
 	
 	hasValidExt := false
 	for _, validExt := range validExtensions {
@@ -2482,6 +2501,36 @@ func isValidHashFile(filepath string) bool {
 		}
 		// For .hccapx files, minimum size should be around 392 bytes
 		if ext == ".hccapx" && info.Size() < 392 {
+			return false
+		}
+	}
+	
+	// Additional validation for .hccapx files
+	if ext == ".hccapx" {
+		return validateHccapxFile(filepath)
+	}
+	
+	return true
+}
+
+// Validate .hccapx file format specifically
+func validateHccapxFile(filepath string) bool {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	
+	// Read first 4 bytes to check magic number
+	header := make([]byte, 4)
+	if _, err := file.Read(header); err != nil {
+		return false
+	}
+	
+	// HCCAPX magic number: 0x58504348 ("HCPX")
+	expectedMagic := []byte{0x48, 0x43, 0x50, 0x58}
+	for i, b := range header {
+		if b != expectedMagic[i] {
 			return false
 		}
 	}
@@ -2529,4 +2578,85 @@ func isValidWordlistFile(filepath string) bool {
 	}
 	
 	return true
+}
+
+// Test basic hashcat functionality
+func testHashcatBasic() error {
+	cmd := exec.Command("hashcat", "--help")
+	return cmd.Run()
+}
+
+// Handle successful hashcat execution
+func (a *Agent) handleHashcatSuccess(job *domain.Job, outfile string) error {
+	// Hashcat completed successfully, but we need to verify if password was actually found
+	// and if it's in the wordlist assigned to this agent
+	log.Printf("🔍 DEBUG: Starting password verification for job %s", job.ID.String())
+	
+	password, err := a.extractPassword(job.ID)
+	if err != nil {
+		log.Printf("⚠️  Failed to extract password: %v", err)
+		log.Printf("🔍 DEBUG: Password extraction failed, checking if password exists in wordlist")
+		// If we can't extract password, check if it's in our wordlist
+		if a.isPasswordInWordlist(job, "") {
+			log.Printf("🔍 DEBUG: Password found in wordlist (extraction failed)")
+			a.completeJob(job.ID, "Password found (extraction failed)")
+		} else {
+			log.Printf("🔍 DEBUG: Password NOT found in wordlist (extraction failed)")
+			a.failJob(job.ID, "Password not found")
+		}
+	} else {
+		log.Printf("🔍 DEBUG: Password extracted successfully: %q", password)
+		// Verify that the found password is actually in the wordlist assigned to this agent
+		if a.isPasswordInWordlist(job, password) {
+			log.Printf("🔍 DEBUG: Password verification successful - marking as completed")
+			a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
+		} else {
+			// Password found by hashcat but not in our wordlist - this shouldn't happen
+			// but we'll mark it as failed to be safe
+			log.Printf("⚠️  Password '%s' found by hashcat but not in agent's wordlist", password)
+			log.Printf("🔍 DEBUG: Password verification failed - marking as failed")
+			a.failJob(job.ID, "Password not found")
+		}
+	}
+
+	// Cleanup outfile after job completion
+	a.cleanupJobFiles(job.ID)
+	return nil
+}
+
+// Notify job failure to server
+func (a *Agent) notifyJobFailure(jobID uuid.UUID, message string) error {
+	req := struct {
+		AgentID string `json:"agent_id"`
+		Result  string `json:"result"`
+	}{
+		AgentID: a.ID.String(),
+		Result:  message,
+	}
+	
+	resp, err := http.Post(
+		fmt.Sprintf("%s/api/v1/jobs/%s/fail", a.ServerURL, jobID.String()),
+		"application/json",
+		bytes.NewBuffer(mustJSON(req)),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+	
+	log.Printf("✅ Job failure notification sent successfully to server")
+	return nil
+}
+
+// mustJSON marshals an object to JSON, panicking on error
+func mustJSON(v interface{}) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal JSON: %v", err))
+	}
+	return data
 }
