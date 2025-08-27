@@ -2471,12 +2471,12 @@ func getFilePermissions(filepath string) string {
 func mapHashType(hashType int) int {
 	switch hashType {
 	case 2500: // WPA/WPA2 (deprecated)
-		// Try new format first, but keep original as fallback
-		return 22000 // WPA/WPA2 (new)
+		// Keep using 2500 for .hccapx files as requested
+		return 2500 // WPA/WPA2 (keep original format)
 	case 2501: // WPA/WPA2 PMK (deprecated)
-		return 22001 // WPA/WPA2 PMK (new)
+		return 2501 // WPA/WPA2 PMK (keep original format)
 	case 2502: // WPA/WPA2 PMK (deprecated)
-		return 22002 // WPA/WPA2 PMK (new)
+		return 2502 // WPA/WPA2 PMK (keep original format)
 	default:
 		return hashType // Keep as is
 	}
