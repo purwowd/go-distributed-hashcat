@@ -1167,7 +1167,7 @@ func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist
 		"--potfile-disable",
 		"--outfile", outfile,
 		"--outfile-format", "2", // Format: hash:plain
-		"--stdout", // Ensure output is readable
+		"--show",
 	}
 	
 	// Add --force flag for deprecated hash types to bypass warnings
@@ -1526,49 +1526,6 @@ func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
 }
 
 func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
-	// Parse hashcat output for progress updates
-	progressRegex := regexp.MustCompile(`Progress\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
-	// Parse restore point for total words: Restore.Point....: 756856/758561 (99.78%)
-	restorePointRegex := regexp.MustCompile(`Restore\.Point\.+:\s*(\d+)/(\d+)\s*\([\d.]+%\)`)
-	// Parse time for ETA calculation: Time.Started.....: Fri Aug 22 00:21:56 2025 (4 mins, 29 secs)
-	timeStartedRegex := regexp.MustCompile(`Time\.Started\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
-	timeEstimatedRegex := regexp.MustCompile(`Time\.Estimated\.+:.*\((\d+)\s*mins?,?\s*(\d+)\s*secs?\)`)
-	// Parse words processed: Words.Processed....: 1234567
-	wordsProcessedRegex := regexp.MustCompile(`Words\.Processed\.+:\s*(\d+)`)
-	// Parse words skipped: Words.Skipped....: 12345
-	wordsSkippedRegex := regexp.MustCompile(`Words\.Skipped\.+:\s*(\d+)`)
-	// Parse words rejected: Words.Rejected....: 123
-	wordsRejectedRegex := regexp.MustCompile(`Words\.Rejected\.+:\s*(\d+)`)
-	// Parse recovery info: Recovered....: 1/1 (100.00%)
-	recoveryRegex := regexp.MustCompile(`Recovered\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
-	// Parse session info: Session.Name....: hashcat
-	sessionNameRegex := regexp.MustCompile(`Session\.Name\.+:\s*(.+)`)
-	// Parse hashcat version: hashcat (v6.2.5) starting in...
-	versionRegex := regexp.MustCompile(`hashcat\s*\(v([\d.]+)\)`)
-	// Parse device info: Backend Device ID #1
-	deviceInfoRegex := regexp.MustCompile(`Backend Device ID #(\d+)`)
-
-	// Multiple speed regex patterns for different hashcat output formats
-	speedRegexes := []*regexp.Regexp{
-		// Most specific patterns first (highest priority)
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\([^)]*\)`),      // With timing info: 480.4 kH/s (278.35ms)
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)`),                  // Decimal + unit: 480.4 kH/s
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*$`),              // End of line
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\n`),             // With newline
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\([^)]*\)\s*$`),  // With timing and end of line
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+\.?\d*)\s*([kmg]?H/s)\s*\([^)]*\)\s*\n`), // With timing and newline
-		// Legacy patterns untuk backward compatibility
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s\s*\([^)]*\)`),      // With timing info: Speed.#1........: 123456 H/s (0.01ms)
-		regexp.MustCompile(`Speed\.*#?\d*\.*:\s*(\d+)\s*H/s`),                  // Standard format: Speed.#1........: 123456 H/s
-		// Specific patterns for common units that might be missed (higher priority)
-		regexp.MustCompile(`Speed[^:]*:.*?(\d+\.?\d*).*?(MH/s)`),                  // Specifically for MH/s
-		regexp.MustCompile(`Speed[^:]*:.*?(\d+\.?\d*).*?(GH/s)`),                  // Specifically for GH/s
-		// More flexible patterns (lowest priority) - catch all remaining cases
-		regexp.MustCompile(`Speed[^:]*:.*?(\d+\.?\d*).*?([kmg]?H/s)`),             // Any Speed line with decimal + unit (flexible spacing)
-		regexp.MustCompile(`Speed[^:]*:\s*(\d+\.?\d*)\s*([kmg]?H/s)`),             // Any Speed line with decimal + unit
-		regexp.MustCompile(`Speed[^:]*:\s*(\d+)\s*H/s`),             // Any Speed line with integer H/s
-	}
-	etaRegex := regexp.MustCompile(`ETA\.+:\s*(\d+):(\d+):(\d+)`)
 
 	// Track current values to preserve them between updates
 	var currentProgress float64
@@ -1583,6 +1540,181 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	var currentSessionName string
 	var currentHashcatVersion string
 	var currentDeviceID string
+
+	// Helper function to parse time duration like "4 mins, 29 secs" or "2 days, 9 hours"
+	parseTimeDuration := func(timeStr string) (mins, secs int, ok bool) {
+		// Remove commas and extra spaces
+		timeStr = strings.ReplaceAll(timeStr, ",", "")
+		timeStr = strings.TrimSpace(timeStr)
+		
+		parts := strings.Fields(timeStr)
+		for i, part := range parts {
+			if part == "days" || part == "day" {
+				if i > 0 {
+					if d, err := strconv.Atoi(parts[i-1]); err == nil {
+						mins += d * 24 * 60 // Convert days to minutes
+					}
+				}
+			} else if part == "hours" || part == "hour" || part == "hrs" || part == "hr" {
+				if i > 0 {
+					if h, err := strconv.Atoi(parts[i-1]); err == nil {
+						mins += h * 60 // Convert hours to minutes
+					}
+				}
+			} else if part == "mins" || part == "min" {
+				if i > 0 {
+					if m, err := strconv.Atoi(parts[i-1]); err == nil {
+						mins += m
+					}
+				}
+			} else if part == "secs" || part == "sec" {
+				if i > 0 {
+					if s, err := strconv.Atoi(parts[i-1]); err == nil {
+						secs += s
+					}
+				}
+			}
+		}
+		ok = true
+		return
+	}
+	
+	// Helper function to parse speed like "480.4 kH/s (278.35ms)"
+	parseSpeed := func(speedStr string) (speed int64, ok bool) {
+		// Find the first number and unit
+		fields := strings.Fields(speedStr)
+		for _, field := range fields {
+			if strings.Contains(field, "H/s") {
+				// Extract number before H/s
+				if unitIndex := strings.Index(field, "H/s"); unitIndex > 0 {
+					numberStr := field[:unitIndex]
+					if speedValue, err := strconv.ParseFloat(numberStr, 64); err == nil {
+						// Convert to base H/s based on unit
+						if strings.Contains(field, "GH/s") {
+							speed = int64(speedValue * 1000000000)
+						} else if strings.Contains(field, "MH/s") {
+							speed = int64(speedValue * 1000000)
+						} else if strings.Contains(field, "kH/s") {
+							speed = int64(speedValue * 1000)
+						} else {
+							speed = int64(speedValue)
+						}
+						ok = true
+						return
+					}
+				}
+			}
+		}
+		
+		// Fallback: try to find any number followed by H/s in the entire string
+		if strings.Contains(speedStr, "H/s") {
+			// Look for patterns like "480.4 kH/s" or "123456 H/s"
+			words := strings.Fields(speedStr)
+			for i, word := range words {
+				if strings.Contains(word, "H/s") {
+					// Check if previous word is a number
+					if i > 0 {
+						if speedValue, err := strconv.ParseFloat(words[i-1], 64); err == nil {
+							// Determine unit from current word
+							if strings.Contains(word, "GH/s") {
+								speed = int64(speedValue * 1000000000)
+							} else if strings.Contains(word, "MH/s") {
+								speed = int64(speedValue * 1000000)
+							} else if strings.Contains(word, "kH/s") {
+								speed = int64(speedValue * 1000)
+							} else {
+								speed = int64(speedValue)
+							}
+							ok = true
+							return
+						}
+					}
+				}
+			}
+		}
+		
+		return
+	}
+	
+	// Helper function to parse ETA like "2:34:56"
+	parseETA := func(etaStr string) string {
+		// Handle different ETA formats
+		etaStr = strings.TrimSpace(etaStr)
+		
+		// Format: "2:34:56" (HH:MM:SS)
+		if strings.Contains(etaStr, ":") {
+			parts := strings.Split(etaStr, ":")
+			if len(parts) == 3 {
+				if hours, err1 := strconv.Atoi(parts[0]); err1 == nil {
+					if minutes, err2 := strconv.Atoi(parts[1]); err2 == nil {
+						if seconds, err3 := strconv.Atoi(parts[2]); err3 == nil {
+							if hours > 0 {
+								if minutes > 0 && seconds > 0 {
+									return fmt.Sprintf("%d hrs %d mins %d secs", hours, minutes, seconds)
+								} else if minutes > 0 {
+									return fmt.Sprintf("%d hrs %d mins", hours, minutes)
+								} else {
+									return fmt.Sprintf("%d hrs %d secs", hours, seconds)
+								}
+							} else if minutes > 0 {
+								if seconds > 0 {
+									return fmt.Sprintf("%d mins %d secs", minutes, seconds)
+								} else {
+									return fmt.Sprintf("%d mins", minutes)
+								}
+							} else {
+								return fmt.Sprintf("%d secs", seconds)
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		// Format: "2h 34m 56s" or similar
+		if strings.Contains(etaStr, "h") || strings.Contains(etaStr, "m") || strings.Contains(etaStr, "s") {
+			words := strings.Fields(etaStr)
+			var hours, minutes, seconds int
+			
+			for _, word := range words {
+				if strings.Contains(word, "h") {
+					if h, err := strconv.Atoi(strings.TrimSuffix(word, "h")); err == nil {
+						hours = h
+					}
+				} else if strings.Contains(word, "m") {
+					if m, err := strconv.Atoi(strings.TrimSuffix(word, "m")); err == nil {
+						minutes = m
+					}
+				} else if strings.Contains(word, "s") {
+					if s, err := strconv.Atoi(strings.TrimSuffix(word, "s")); err == nil {
+						seconds = s
+					}
+				}
+			}
+			
+			if hours > 0 || minutes > 0 || seconds > 0 {
+				if hours > 0 {
+					if minutes > 0 && seconds > 0 {
+						return fmt.Sprintf("%d hrs %d mins %d secs", hours, minutes, seconds)
+					} else if minutes > 0 {
+						return fmt.Sprintf("%d hrs %d mins", hours, minutes)
+					} else {
+						return fmt.Sprintf("%d hrs %d secs", hours, seconds)
+					}
+				} else if minutes > 0 {
+					if seconds > 0 {
+						return fmt.Sprintf("%d mins %d secs", minutes, seconds)
+					} else {
+						return fmt.Sprintf("%d mins", minutes)
+					}
+				} else {
+					return fmt.Sprintf("%d secs", seconds)
+				}
+			}
+		}
+		
+		return ""
+	}
 
 	// Monitor stderr for error messages
 	go func() {
@@ -1640,172 +1772,280 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			// Debug: Log raw output for troubleshooting
 			if strings.Contains(line, "Speed") || strings.Contains(line, "Progress") || 
 			   strings.Contains(line, "Words") || strings.Contains(line, "ETA") ||
-			   strings.Contains(line, "Restore") || strings.Contains(line, "Time") {
+			   strings.Contains(line, "Restore") || strings.Contains(line, "Time") ||
+			   strings.Contains(line, "Recovered") || strings.Contains(line, "Session") ||
+			   strings.Contains(line, "hashcat") || strings.Contains(line, "Device") {
 				log.Printf("🔍 DEBUG: Raw hashcat stdout: %s", line)
 			}
 			
-			// Parse progress
-			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 3 {
-				currentProgress, _ = strconv.ParseFloat(matches[3], 64)
-				log.Printf("🔍 DEBUG: Progress parsed: %.2f%% (processed: %s, total: %s)", 
-					currentProgress, matches[1], matches[2])
+			// Fast parsing using strings.Split instead of regex
+			parts := strings.Split(line, ":")
+			if len(parts) < 2 {
+				continue
 			}
 			
-			// Parse restore point for total words
-			if matches := restorePointRegex.FindStringSubmatch(line); len(matches) > 2 {
-				currentTotalWords, _ = strconv.ParseInt(matches[2], 10, 64)
-				log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			
+			// Parse progress using split
+			if strings.Contains(key, "Progress") {
+				if progressParts := strings.Split(value, "/"); len(progressParts) >= 2 {
+					if progressStr := strings.TrimSpace(progressParts[1]); strings.Contains(progressStr, "(") {
+						if percentStart := strings.Index(progressStr, "("); percentStart != -1 {
+							if percentEnd := strings.Index(progressStr, "%"); percentEnd != -1 {
+								if percentStr := progressStr[percentStart+1:percentEnd]; percentStr != "" {
+									if progress, err := strconv.ParseFloat(percentStr, 64); err == nil {
+										currentProgress = progress
+										processedStr := strings.TrimSpace(progressParts[0])
+										totalStr := strings.TrimSpace(strings.Split(progressStr, "(")[0])
+										log.Printf("🔍 DEBUG: Progress parsed: %.2f%% (processed: %s, total: %s)", 
+											currentProgress, processedStr, totalStr)
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 			
-			// Parse words processed
-			if matches := wordsProcessedRegex.FindStringSubmatch(line); len(matches) > 1 {
-				currentProcessedWords, _ = strconv.ParseInt(matches[1], 10, 64)
-				log.Printf("🔍 DEBUG: Words processed parsed: %d", currentProcessedWords)
+					// Parse restore point for total words using split
+		if strings.Contains(key, "Restore.Point") {
+			if restoreParts := strings.Split(value, "/"); len(restoreParts) >= 2 {
+				if totalStr := strings.TrimSpace(strings.Split(restoreParts[1], "(")[0]); totalStr != "" {
+					if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
+						currentTotalWords = total
+						log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
+					}
+				}
+			}
+		}
+		
+		// Parse restore sub info (new format in v6.1.1)
+		if strings.Contains(key, "Restore.Sub") {
+			log.Printf("🔍 DEBUG: Restore sub info: %s", value)
+		}
+		
+		// Parse candidates info (new format in v6.1.1)
+		if strings.Contains(key, "Candidates") {
+			log.Printf("🔍 DEBUG: Candidates: %s", value)
+		}
+			
+			// Parse words processed using split
+			if strings.Contains(key, "Words.Processed") {
+				if processed, err := strconv.ParseInt(value, 10, 64); err == nil {
+					currentProcessedWords = processed
+					log.Printf("🔍 DEBUG: Words processed parsed: %d", currentProcessedWords)
+				}
 			}
 			
-			// Parse words skipped
-			if matches := wordsSkippedRegex.FindStringSubmatch(line); len(matches) > 1 {
-				currentWordsSkipped, _ = strconv.ParseInt(matches[1], 10, 64)
-				log.Printf("🔍 DEBUG: Words skipped parsed: %d", currentWordsSkipped)
+			// Parse words skipped using split
+			if strings.Contains(key, "Words.Skipped") {
+				if skipped, err := strconv.ParseInt(value, 10, 64); err == nil {
+					currentWordsSkipped = skipped
+					log.Printf("🔍 DEBUG: Words skipped parsed: %d", currentWordsSkipped)
+				}
 			}
 			
-			// Parse words rejected
-			if matches := wordsRejectedRegex.FindStringSubmatch(line); len(matches) > 1 {
-				currentWordsRejected, _ = strconv.ParseInt(matches[1], 10, 64)
+					// Parse words rejected using split
+		if strings.Contains(key, "Words.Rejected") {
+			if rejected, err := strconv.ParseInt(value, 10, 64); err == nil {
+				currentWordsRejected = rejected
 				log.Printf("🔍 DEBUG: Words rejected parsed: %d", currentWordsRejected)
 			}
-			
-			// Parse recovery info
-			if matches := recoveryRegex.FindStringSubmatch(line); len(matches) > 3 {
-				currentRecovered, _ = strconv.ParseInt(matches[1], 10, 64)
-				currentTotalHashes, _ = strconv.ParseInt(matches[2], 10, 64)
-				recoveryPercent, _ := strconv.ParseFloat(matches[3], 64)
-				log.Printf("🔍 DEBUG: Recovery parsed: %d/%d (%.2f%%)", currentRecovered, currentTotalHashes, recoveryPercent)
-			}
-			
-			// Parse session name
-			if matches := sessionNameRegex.FindStringSubmatch(line); len(matches) > 1 {
-				currentSessionName = matches[1]
-				log.Printf("🔍 DEBUG: Session name parsed: %s", currentSessionName)
-			}
-			
-			// Parse hashcat version
-			if matches := versionRegex.FindStringSubmatch(line); len(matches) > 1 {
-				currentHashcatVersion = matches[1]
-				log.Printf("🔍 DEBUG: Hashcat version parsed: %s", currentHashcatVersion)
-			}
-			
-			// Parse device info
-			if matches := deviceInfoRegex.FindStringSubmatch(line); len(matches) > 1 {
-				currentDeviceID = matches[1]
-				log.Printf("🔍 DEBUG: Device ID parsed: %s", currentDeviceID)
-			}
-			
-			// Parse time started duration for ETA calculation
-			if matches := timeStartedRegex.FindStringSubmatch(line); len(matches) > 2 {
-				mins, _ := strconv.Atoi(matches[1])
-				secs, _ := strconv.Atoi(matches[2])
-				
-				// Format ETA as human-readable duration instead of datetime
-				var etaStr string
-				if mins > 0 {
-					if secs > 0 {
-						etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
-					} else {
-						etaStr = fmt.Sprintf("%d mins", mins)
+		}
+		
+		// Parse rejected info (new format in v6.1.1)
+		if strings.Contains(key, "Rejected") {
+			if rejectedParts := strings.Split(value, "/"); len(rejectedParts) >= 2 {
+				if rejectedStr := strings.TrimSpace(rejectedParts[0]); rejectedStr != "" {
+					if rejected, err := strconv.ParseInt(rejectedStr, 10, 64); err == nil {
+						currentWordsRejected = rejected
+						if totalStr := strings.TrimSpace(strings.Split(rejectedParts[1], "(")[0]); totalStr != "" {
+							if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
+								if percentStr := strings.TrimSpace(strings.Split(rejectedParts[1], "(")[1]); strings.Contains(percentStr, "%") {
+									if percentEnd := strings.Index(percentStr, "%"); percentEnd != -1 {
+										if percent, err := strconv.ParseFloat(percentStr[:percentEnd], 64); err == nil {
+											log.Printf("🔍 DEBUG: Rejected parsed: %d/%d (%.2f%%)", currentWordsRejected, total, percent)
+										}
+									}
+								}
+							}
+						}
 					}
+				}
+			}
+		}
+			
+			// Parse recovery info using split
+			if strings.Contains(key, "Recovered") {
+				if recoveryParts := strings.Split(value, "/"); len(recoveryParts) >= 2 {
+					if recoveredStr := strings.TrimSpace(recoveryParts[0]); recoveredStr != "" {
+						if recovered, err := strconv.ParseInt(recoveredStr, 10, 64); err == nil {
+							currentRecovered = recovered
+							if totalStr := strings.TrimSpace(strings.Split(recoveryParts[1], "(")[0]); totalStr != "" {
+								if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
+									currentTotalHashes = total
+									if percentStr := strings.TrimSpace(strings.Split(recoveryParts[1], "(")[1]); strings.Contains(percentStr, "%") {
+										if percentEnd := strings.Index(percentStr, "%"); percentEnd != -1 {
+											if percent, err := strconv.ParseFloat(percentStr[:percentEnd], 64); err == nil {
+												log.Printf("🔍 DEBUG: Recovery parsed: %d/%d (%.2f%%)", currentRecovered, currentTotalHashes, percent)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			
+					// Parse session name using split
+		if strings.Contains(key, "Session.Name") {
+			currentSessionName = value
+			log.Printf("🔍 DEBUG: Session name parsed: %s", currentSessionName)
+		}
+		
+		// Parse session info (new format in v6.1.1)
+		if strings.Contains(key, "Session") {
+			currentSessionName = value
+			log.Printf("🔍 DEBUG: Session parsed: %s", currentSessionName)
+		}
+		
+		// Parse hash name (new format in v6.1.1)
+		if strings.Contains(key, "Hash.Name") {
+			log.Printf("🔍 DEBUG: Hash name: %s", value)
+		}
+		
+		// Parse hash target (new format in v6.1.1)
+		if strings.Contains(key, "Hash.Target") {
+			log.Printf("🔍 DEBUG: Hash target: %s", value)
+		}
+		
+		// Parse guess base (new format in v6.1.1)
+		if strings.Contains(key, "Guess.Base") {
+			log.Printf("🔍 DEBUG: Guess base: %s", value)
+		}
+		
+		// Parse guess queue (new format in v6.1.1)
+		if strings.Contains(key, "Guess.Queue") {
+			log.Printf("🔍 DEBUG: Guess queue: %s", value)
+		}
+		
+		// Parse status (new format in v6.1.1)
+		if strings.Contains(key, "Status") {
+			log.Printf("🔍 DEBUG: Status: %s", value)
+		}
+			
+			// Parse hashcat version using split
+			if strings.Contains(line, "hashcat (v") {
+				if versionStart := strings.Index(line, "(v"); versionStart != -1 {
+					if versionEnd := strings.Index(line, ")"); versionEnd != -1 {
+						currentHashcatVersion = line[versionStart+2:versionEnd]
+						log.Printf("🔍 DEBUG: Hashcat version parsed: %s", currentHashcatVersion)
+					}
+				}
+			}
+			
+			// Parse device info using split
+			if strings.Contains(key, "Backend Device ID #") {
+				if deviceID := strings.TrimSpace(strings.Split(key, "#")[1]); deviceID != "" {
+					currentDeviceID = deviceID
+					log.Printf("🔍 DEBUG: Device ID parsed: %s", currentDeviceID)
+				}
+			}
+			
+			// Handle special cases that don't follow the standard "key: value" format
+			if strings.Contains(line, "hashcat (v") && !strings.Contains(line, ":") {
+				// This is a special line without colon separator
+				if versionStart := strings.Index(line, "(v"); versionStart != -1 {
+					if versionEnd := strings.Index(line, ")"); versionEnd != -1 {
+						currentHashcatVersion = line[versionStart+2:versionEnd]
+						log.Printf("🔍 DEBUG: Hashcat version parsed (special case): %s", currentHashcatVersion)
+					}
+				}
+			}
+			
+			if strings.Contains(line, "Backend Device ID #") && !strings.Contains(line, ":") {
+				// This is a special line without colon separator
+				if deviceStart := strings.Index(line, "#"); deviceStart != -1 {
+					if deviceEnd := strings.Index(line[deviceStart+1:], " "); deviceEnd != -1 {
+						currentDeviceID = line[deviceStart+1 : deviceStart+1+deviceEnd]
+					} else {
+						currentDeviceID = line[deviceStart+1:]
+					}
+					log.Printf("🔍 DEBUG: Device ID parsed (special case): %s", currentDeviceID)
+				}
+			}
+			
+					// Parse time started duration using split
+		if strings.Contains(key, "Time.Started") {
+			if timeStart := strings.Index(value, "("); timeStart != -1 {
+				if timeEnd := strings.Index(value, ")"); timeEnd != -1 {
+					timeStr := value[timeStart+1:timeEnd]
+					if mins, secs, ok := parseTimeDuration(timeStr); ok {
+						var etaStr string
+						if mins > 0 {
+							if secs > 0 {
+								etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
+							} else {
+								etaStr = fmt.Sprintf("%d mins", mins)
+							}
+						} else {
+							etaStr = fmt.Sprintf("%d secs", secs)
+						}
+						currentETA = &etaStr
+						log.Printf("🔍 DEBUG: ETA formatted from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
+					}
+				}
+			}
+		}
+		
+		// Parse time estimated duration using split
+		if strings.Contains(key, "Time.Estimated") {
+			if timeStart := strings.Index(value, "("); timeStart != -1 {
+				if timeEnd := strings.Index(value, ")"); timeEnd != -1 {
+					timeStr := value[timeStart+1:timeEnd]
+					if mins, secs, ok := parseTimeDuration(timeStr); ok {
+						var etaStr string
+						if mins > 0 {
+							if secs > 0 {
+								etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
+							} else {
+								etaStr = fmt.Sprintf("%d mins", mins)
+							}
+						} else {
+							etaStr = fmt.Sprintf("%d secs", secs)
+						}
+						currentETA = &etaStr
+						log.Printf("🔍 DEBUG: ETA formatted from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
+					}
+				}
+			}
+		}
+			
+			// Parse speed using split (multiple patterns for different formats)
+			if strings.Contains(key, "Speed") {
+				if speed, ok := parseSpeed(value); ok {
+					currentSpeed = speed
+					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from: %s", currentSpeed, value)
+				}
+			}
+			
+			// Parse ETA using split
+			if strings.Contains(key, "ETA") {
+				if etaStr := parseETA(value); etaStr != "" {
+					currentETA = &etaStr
+					log.Printf("🔍 DEBUG: ETA formatted: %s", etaStr)
 				} else {
-					etaStr = fmt.Sprintf("%d secs", secs)
+					// Fallback: try to parse ETA directly from the value
+					if strings.Contains(value, ":") {
+						etaStr := parseETA(value)
+						if etaStr != "" {
+							currentETA = &etaStr
+							log.Printf("🔍 DEBUG: ETA formatted (fallback): %s", etaStr)
+						}
+					}
 				}
-				
-				currentETA = &etaStr
-				log.Printf("🔍 DEBUG: ETA formatted from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
-			}
-			
-			// Parse time estimated duration for ETA calculation
-			if matches := timeEstimatedRegex.FindStringSubmatch(line); len(matches) > 2 {
-				mins, _ := strconv.Atoi(matches[1])
-				secs, _ := strconv.Atoi(matches[2])
-				
-				// Format ETA as human-readable duration instead of datetime
-				var etaStr string
-				if mins > 0 {
-					if secs > 0 {
-						etaStr = fmt.Sprintf("%d mins %d secs", mins, secs)
-					} else {
-						etaStr = fmt.Sprintf("%d mins", mins)
-					}
-				} else {
-					etaStr = fmt.Sprintf("%d secs", secs)
-				}
-				
-				currentETA = &etaStr
-				log.Printf("🔍 DEBUG: ETA formatted from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
-			}
-			
-			// Parse speed using multiple regex patterns
-			for i, speedRegex := range speedRegexes {
-				if speedMatches := speedRegex.FindStringSubmatch(line); len(speedMatches) > 2 {
-					// Parse decimal number (e.g., 480.4)
-					speedValue, err := strconv.ParseFloat(speedMatches[1], 64)
-					if err != nil {
-						log.Printf("⚠️  WARNING: Failed to parse speed value '%s': %v", speedMatches[1], err)
-						continue
-					}
-					
-					// Parse unit (e.g., H/s, kH/s, MH/s, GH/s)
-					unit := speedMatches[2]
-					
-					// Convert to base H/s
-					var speedInHps int64
-					switch strings.ToLower(unit) {
-					case "h/s":
-						speedInHps = int64(speedValue)
-					case "kh/s":
-						speedInHps = int64(speedValue * 1000)
-					case "mh/s":
-						speedInHps = int64(speedValue * 1000000)
-					case "gh/s":
-						speedInHps = int64(speedValue * 1000000000)
-					default:
-						log.Printf("⚠️  WARNING: Unknown speed unit '%s', treating as H/s", unit)
-						speedInHps = int64(speedValue)
-					}
-					
-					currentSpeed = speedInHps
-					log.Printf("🔍 DEBUG: Speed parsed: %.2f %s = %d H/s from pattern %d: '%s'", speedValue, unit, speedInHps, i+1, speedMatches[0])
-					break
-				}
-			}
-			
-			// Parse ETA
-			if etaMatches := etaRegex.FindStringSubmatch(line); len(etaMatches) > 3 {
-				hours, _ := strconv.Atoi(etaMatches[1])
-				minutes, _ := strconv.Atoi(etaMatches[2])
-				seconds, _ := strconv.Atoi(etaMatches[3])
-				
-				// Format ETA as human-readable duration instead of datetime
-				var etaStr string
-				if hours > 0 {
-					if minutes > 0 && seconds > 0 {
-						etaStr = fmt.Sprintf("%d hrs %d mins %d secs", hours, minutes, seconds)
-					} else if minutes > 0 {
-						etaStr = fmt.Sprintf("%d hrs %d mins", hours, minutes)
-					} else {
-						etaStr = fmt.Sprintf("%d hrs %d secs", hours, seconds)
-					}
-				} else if minutes > 0 {
-					if seconds > 0 {
-						etaStr = fmt.Sprintf("%d mins %d secs", minutes, seconds)
-					} else {
-						etaStr = fmt.Sprintf("%d mins", minutes)
-					}
-				} else {
-					etaStr = fmt.Sprintf("%d secs", seconds)
-				}
-				
-				currentETA = &etaStr
-				log.Printf("🔍 DEBUG: ETA formatted: %s", etaStr)
 			}
 			
 			// Send update if we have any new data
