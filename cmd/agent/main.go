@@ -1093,6 +1093,29 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	log.Printf("  📋 Hash file: %s (Size: %s, Exists: %t)", localHashFile, formatFileSize(hashFileInfo.Size()), hashFileInfo != nil)
 	log.Printf("  📋 Wordlist: %s (Size: %s, Exists: %t)", localWordlist, formatFileSize(wordlistInfo.Size()), wordlistInfo != nil)
 	
+	// Validate file permissions and accessibility
+	if hashFileInfo != nil {
+		if hashFileInfo.Mode().Perm()&0400 == 0 {
+			log.Printf("⚠️ Warning: Hash file has no read permission: %s", localHashFile)
+		}
+	}
+	if wordlistInfo != nil {
+		if wordlistInfo.Mode().Perm()&0400 == 0 {
+			log.Printf("⚠️ Warning: Wordlist has no read permission: %s", localWordlist)
+		}
+	}
+	
+	// Test file accessibility by trying to open them
+	if _, err := os.Open(localHashFile); err != nil {
+		log.Printf("❌ ERROR: Cannot open hash file: %v", err)
+		return fmt.Errorf("hash file not accessible: %v", err)
+	}
+	if _, err := os.Open(localWordlist); err != nil {
+		log.Printf("❌ ERROR: Cannot open wordlist: %v", err)
+		return fmt.Errorf("wordlist not accessible: %v", err)
+	}
+	log.Printf("✅ File accessibility test passed")
+	
 	// Use absolute paths for all files to avoid working directory issues
 	absHashFile, _ := filepath.Abs(localHashFile)
 	absWordlist, _ := filepath.Abs(localWordlist)
@@ -1133,7 +1156,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 }
 
 func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist string, outfile string, rules string) []string {
-	return []string{
+	args := []string{
 		"-m", strconv.Itoa(hashType),
 		"-a", strconv.Itoa(attackMode),
 		hashFile,
@@ -1144,7 +1167,15 @@ func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist
 		"--potfile-disable",
 		"--outfile", outfile,
 		"--outfile-format", "2", // Format: hash:plain
+		"--stdout", // Ensure output is readable
 	}
+	
+	// Add --force flag for deprecated hash types to bypass warnings
+	if hashType == 2500 || hashType == 2501 || hashType == 2502 {
+		args = append(args, "--force")
+	}
+	
+	return args
 }
 
 func (a *Agent) runHashcatWithFallback(job *domain.Job, args []string, hashType int, hashFile string, wordlist string, outfile string, tempDir string) error {
@@ -2472,6 +2503,7 @@ func mapHashType(hashType int) int {
 	switch hashType {
 	case 2500: // WPA/WPA2 (deprecated)
 		// Keep using 2500 for .hccapx files as requested
+		// This will work with --force flag to bypass deprecation warnings
 		return 2500 // WPA/WPA2 (keep original format)
 	case 2501: // WPA/WPA2 PMK (deprecated)
 		return 2501 // WPA/WPA2 PMK (keep original format)
