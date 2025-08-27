@@ -1161,18 +1161,36 @@ func (a *Agent) runHashcatWithFallback(job *domain.Job, args []string, hashType 
 
 	// First try with mapped hash type
 	log.Printf("🔨 Attempting hashcat with hash type %d", hashType)
-	if err := a.runHashcatCommand(job, args, tempDir); err == nil {
+	err := a.runHashcatCommand(job, args, tempDir)
+	if err == nil {
+		log.Printf("✅ Hashcat succeeded with mapped hash type %d", hashType)
 		return nil // Success with mapped hash type
 	}
+	
+	log.Printf("⚠️ Hashcat failed with mapped hash type %d: %v", hashType, err)
 	
 	// If mapped hash type failed and it's different from original, try original
 	if hashType != job.HashType {
 		log.Printf("🔄 Mapped hash type %d failed, trying original hash type %d", hashType, job.HashType)
 		fallbackArgs := buildHashcatCommand(job.HashType, job.AttackMode, hashFile, wordlist, outfile, job.Rules)
-		if err := a.runHashcatCommand(job, fallbackArgs, tempDir); err == nil {
+		log.Printf("🔨 Attempting hashcat with fallback hash type %d", job.HashType)
+		log.Printf("🔨 Fallback command: hashcat %v", fallbackArgs)
+		
+		err = a.runHashcatCommand(job, fallbackArgs, tempDir)
+		if err == nil {
+			log.Printf("✅ Hashcat succeeded with fallback hash type %d", job.HashType)
 			return nil // Success with original hash type
 		}
+		
 		log.Printf("❌ Both mapped and original hash types failed")
+		log.Printf("❌ Mapped hash type %d error: %v", hashType, err)
+		log.Printf("❌ Original hash type %d error: %v", job.HashType, err)
+	}
+	
+	// All hash types failed - send failure notification to server
+	log.Printf("💥 All hash type attempts failed, notifying server of job failure")
+	if notifyErr := a.notifyJobFailure(job.ID, "Hashcat failed with all attempted hash types"); notifyErr != nil {
+		log.Printf("⚠️ Warning: Failed to send job failure notification: %v", notifyErr)
 	}
 	
 	return fmt.Errorf("hashcat failed with all attempted hash types")
@@ -1254,32 +1272,20 @@ func (a *Agent) runHashcatCommand(job *domain.Job, args []string, tempDir string
 					log.Printf("✅ hashcat --help succeeded, command syntax may be the issue")
 				}
 				
-				// Send failure notification to server
-				if err := a.notifyJobFailure(job.ID, fmt.Sprintf("Hashcat failed - invalid arguments or file not found (exit code %d)", exitCode)); err != nil {
-					log.Printf("⚠️ Warning: Failed to send job failure notification: %v", err)
-				}
-				
+				// Don't send failure notification here - let the fallback mechanism handle it
 				// Clean up output file
 				a.cleanupJobFiles(job.ID)
 				return fmt.Errorf("hashcat failed with exit code %d", exitCode)
 			default:
 				log.Printf("❌ Hashcat failed with unexpected exit code %d: %v", exitCode, err)
-				// Send failure notification to server
-				if err := a.notifyJobFailure(job.ID, fmt.Sprintf("Hashcat failed with exit code %d", exitCode)); err != nil {
-					log.Printf("⚠️ Warning: Failed to send job failure notification: %v", err)
-				}
-				
+				// Don't send failure notification here - let the fallback mechanism handle it
 				// Clean up output file
 				a.cleanupJobFiles(job.ID)
 				return fmt.Errorf("hashcat failed with exit code %d", exitCode)
 			}
 		} else {
 			log.Printf("❌ Hashcat command failed: %v", err)
-			// Send failure notification to server
-			if err := a.notifyJobFailure(job.ID, fmt.Sprintf("Hashcat command failed: %v", err)); err != nil {
-				log.Printf("⚠️ Warning: Failed to send job failure notification: %v", err)
-			}
-			
+			// Don't send failure notification here - let the fallback mechanism handle it
 			// Clean up output file
 			a.cleanupJobFiles(job.ID)
 			return err
