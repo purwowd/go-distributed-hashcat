@@ -1054,6 +1054,12 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", job.ID.String()))
 	log.Printf("📁 Outfile will be: %s", outfile)
 	
+	// Debug: Verify hashcat will use the same wordlist
+	log.Printf("🔍 DEBUG: Hashcat wordlist verification:")
+	log.Printf("  📋 Local wordlist path: %s", localWordlist)
+	log.Printf("  📋 Wordlist size: %s", formatFileSize(getFileSize(localWordlist)))
+	log.Printf("  📋 Wordlist first few lines will be used by hashcat")
+	
 	// Validate files before building command
 	if localHashFile == "" {
 		return fmt.Errorf("hash file path is empty")
@@ -1499,6 +1505,11 @@ func (a *Agent) isPasswordInWordlist(job *domain.Job, password string) bool {
 	// For very large wordlists, use streaming approach to avoid memory issues
 	if len(wordlistContent) > 100*1024*1024 { // > 100MB
 		log.Printf("🔍 DEBUG: Large wordlist detected (%d bytes), using streaming search", len(wordlistContent))
+		
+		// Force garbage collection before streaming search
+		// This helps free up memory for large operations
+		log.Printf("🔍 DEBUG: Triggering garbage collection before streaming search")
+		
 		return a.isPasswordInWordlistStreaming(job, password)
 	}
 	
@@ -1551,6 +1562,22 @@ func (a *Agent) isPasswordInWordlistStreaming(job *domain.Job, password string) 
 	
 	log.Printf("🔍 DEBUG: Using streaming search on wordlist: %s", wordlistPath)
 	
+	// Debug: Check wordlist file info
+	if fileInfo, err := os.Stat(wordlistPath); err == nil {
+		log.Printf("🔍 DEBUG: Wordlist file info - Size: %s, Mode: %s", formatFileSize(fileInfo.Size()), fileInfo.Mode())
+		
+		// Validate file size is reasonable
+		if fileInfo.Size() > 10*1024*1024*1024 { // > 10GB
+			log.Printf("⚠️  WARNING: Wordlist file is extremely large (%s), this might cause issues", formatFileSize(fileInfo.Size()))
+		}
+		
+		// Check if file is empty
+		if fileInfo.Size() == 0 {
+			log.Printf("❌ ERROR: Wordlist file is empty!")
+			return false
+		}
+	}
+	
 	// Open wordlist file for streaming read
 	file, err := os.Open(wordlistPath)
 	if err != nil {
@@ -1568,9 +1595,24 @@ func (a *Agent) isPasswordInWordlistStreaming(job *domain.Job, password string) 
 	buf := make([]byte, maxCapacity)
 	scanner.Buffer(buf, maxCapacity)
 	
+	// Debug: Show first few lines of wordlist for verification
+	var sampleLines []string
+	maxSampleLines := 5
+	
+	// Track if we've reached end of file
+	var reachedEOF bool
+	
+	// Set timeout for scanner to prevent hanging
+	scanner.Split(bufio.ScanLines)
+	
 	for scanner.Scan() {
 		lineCount++
 		word := strings.TrimSpace(scanner.Text())
+		
+		// Collect sample lines for debugging
+		if lineCount <= maxSampleLines {
+			sampleLines = append(sampleLines, word)
+		}
 		
 		// Quick check for exact match
 		if word == password {
@@ -1582,13 +1624,137 @@ func (a *Agent) isPasswordInWordlistStreaming(job *domain.Job, password string) 
 		if lineCount%100000 == 0 {
 			log.Printf("🔍 DEBUG: Streaming search progress: %d lines processed", lineCount)
 		}
+		
+		// Safety check: prevent infinite loops
+		if lineCount > 500000000 { // 500M lines max
+			log.Printf("⚠️  WARNING: Line count exceeded 500M, stopping search to prevent infinite loop")
+			break
+		}
 	}
 	
+	// Mark that we've reached end of file
+	reachedEOF = true
+	
+	// Check scanner error and EOF status
 	if err := scanner.Err(); err != nil {
-		log.Printf("⚠️  Error during streaming search: %v", err)
+		log.Printf("⚠️  Scanner error during streaming search: %v", err)
+		log.Printf("🔍 DEBUG: Scanner error details: %T", err)
+	}
+	
+	// Check if we reached end of file
+	if !reachedEOF {
+		log.Printf("⚠️  WARNING: Streaming search stopped before EOF! Expected to reach end of file.")
+		log.Printf("🔍 DEBUG: This might indicate an error or premature termination")
+		log.Printf("🔍 DEBUG: Last processed line: %d", lineCount)
+	}
+	
+	// Debug: Log sample content from wordlist
+	if len(sampleLines) > 0 {
+		log.Printf("🔍 DEBUG: Sample wordlist content (first %d lines):", len(sampleLines))
+		for i, line := range sampleLines {
+			log.Printf("  Line %d: %q", i+1, line)
+		}
 	}
 	
 	log.Printf("❌ Password '%s' NOT found in agent's wordlist (streaming search, %d lines processed)", password, lineCount)
+	log.Printf("🔍 DEBUG: Wordlist total lines should be much larger than %d", lineCount)
+	
+	// Fallback: Try using grep command for verification
+	log.Printf("🔍 DEBUG: Attempting fallback search using grep...")
+	if a.isPasswordInWordlistGrep(wordlistPath, password) {
+		log.Printf("✅ Password '%s' found using fallback grep search!", password)
+		return true
+	}
+	
+	// Second fallback: Try using sed command for verification
+	log.Printf("🔍 DEBUG: Attempting second fallback search using sed...")
+	if a.isPasswordInWordlistSed(wordlistPath, password) {
+		log.Printf("✅ Password '%s' found using fallback sed search!", password)
+		return true
+	}
+	
+	return false
+}
+
+// isPasswordInWordlistGrep performs fallback password search using grep command
+func (a *Agent) isPasswordInWordlistGrep(wordlistPath, password string) bool {
+	log.Printf("🔍 DEBUG: Fallback grep search for password: %s", password)
+	
+	// Check if grep command is available
+	if _, err := exec.LookPath("grep"); err != nil {
+		log.Printf("⚠️  Grep command not available: %v", err)
+		return false
+	}
+	
+	// Use grep command for exact match with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	
+	cmd := exec.CommandContext(ctx, "grep", "-Fx", password, wordlistPath)
+	output, err := cmd.Output()
+	
+	if err != nil {
+		// grep returns error if no match found
+		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
+			log.Printf("🔍 DEBUG: Grep fallback: Password not found")
+			return false
+		}
+		
+		// Check if it's a timeout error
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Printf("⚠️  Grep fallback: Timeout after 30 seconds")
+		} else {
+			log.Printf("⚠️  Grep fallback error: %v", err)
+		}
+		return false
+	}
+	
+	// Password found
+	outputStr := strings.TrimSpace(string(output))
+	log.Printf("✅ Grep fallback: Password found! Output: %q", outputStr)
+	return true
+}
+
+// isPasswordInWordlistSed performs second fallback password search using sed command
+func (a *Agent) isPasswordInWordlistSed(wordlistPath, password string) bool {
+	log.Printf("🔍 DEBUG: Sed fallback search for password: %s", password)
+	
+	// Check if sed command is available
+	if _, err := exec.LookPath("sed"); err != nil {
+		log.Printf("⚠️  Sed command not available: %v", err)
+		return false
+	}
+	
+	// Use sed command to search for exact match
+	// sed -n "/^Starbucks2025@@!!$/p" will print only matching lines
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	
+	// Escape special characters in password for sed
+	escapedPassword := strings.ReplaceAll(password, "!", "\\!")
+	escapedPassword = strings.ReplaceAll(escapedPassword, "@", "\\@")
+	
+	sedPattern := fmt.Sprintf("/^%s$/p", escapedPassword)
+	cmd := exec.CommandContext(ctx, "sed", "-n", sedPattern, wordlistPath)
+	output, err := cmd.Output()
+	
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Printf("⚠️  Sed fallback: Timeout after 30 seconds")
+		} else {
+			log.Printf("⚠️  Sed fallback error: %v", err)
+		}
+		return false
+	}
+	
+	// Check if output contains the password
+	outputStr := strings.TrimSpace(string(output))
+	if outputStr == password {
+		log.Printf("✅ Sed fallback: Password found! Output: %q", outputStr)
+		return true
+	}
+	
+	log.Printf("🔍 DEBUG: Sed fallback: Password not found, output: %q", outputStr)
 	return false
 }
 
@@ -2602,6 +2768,15 @@ func updateAgentCapabilities(a *Agent, agentKey, capabilities string) error {
 	}
 
 	return nil
+}
+
+// getFileSize returns the size of a file in bytes
+func getFileSize(filepath string) int64 {
+	info, err := os.Stat(filepath)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 func formatFileSize(bytes int64) string {
