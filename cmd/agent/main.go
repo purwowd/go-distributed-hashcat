@@ -1496,6 +1496,15 @@ func (a *Agent) isPasswordInWordlist(job *domain.Job, password string) bool {
 		return false
 	}
 	
+	// For very large wordlists, use streaming approach to avoid memory issues
+	if len(wordlistContent) > 100*1024*1024 { // > 100MB
+		log.Printf("🔍 DEBUG: Large wordlist detected (%d bytes), using streaming search", len(wordlistContent))
+		return a.isPasswordInWordlistStreaming(job, password)
+	}
+	
+	// For smaller wordlists, use in-memory search
+	log.Printf("🔍 DEBUG: Small wordlist detected (%d bytes), using in-memory search", len(wordlistContent))
+	
 	// Split wordlist into individual words
 	words := strings.Split(wordlistContent, "\n")
 	
@@ -1503,12 +1512,83 @@ func (a *Agent) isPasswordInWordlist(job *domain.Job, password string) bool {
 	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == password {
-			log.Printf("✅ Password '%s' found in agent's wordlist", password)
+			log.Printf("✅ Password '%s' found in agent's wordlist (in-memory search)", password)
 			return true
 		}
 	}
 	
-	log.Printf("❌ Password '%s' NOT found in agent's wordlist", password)
+	log.Printf("❌ Password '%s' NOT found in agent's wordlist (in-memory search)", password)
+	return false
+}
+
+// isPasswordInWordlistStreaming performs memory-efficient password search for large wordlists
+func (a *Agent) isPasswordInWordlistStreaming(job *domain.Job, password string) bool {
+	// Find the actual wordlist file path
+	var wordlistPath string
+	
+	// Try to find wordlist by UUID first
+	if job.WordlistID != nil {
+		wordlistPath = a.findLocalWordlistByUUID(job.WordlistID.String())
+	}
+	
+	// If not found by UUID, try to find by scanning temp directory
+	if wordlistPath == "" {
+		tempDir := filepath.Join(a.UploadDir, "temp")
+		if files, err := os.ReadDir(tempDir); err == nil {
+			for _, file := range files {
+				if !file.IsDir() && strings.Contains(strings.ToLower(file.Name()), "dictionary") {
+					wordlistPath = filepath.Join(tempDir, file.Name())
+					break
+				}
+			}
+		}
+	}
+	
+	if wordlistPath == "" {
+		log.Printf("⚠️  Could not determine wordlist path for streaming search")
+		return false
+	}
+	
+	log.Printf("🔍 DEBUG: Using streaming search on wordlist: %s", wordlistPath)
+	
+	// Open wordlist file for streaming read
+	file, err := os.Open(wordlistPath)
+	if err != nil {
+		log.Printf("⚠️  Failed to open wordlist for streaming search: %v", err)
+		return false
+	}
+	defer file.Close()
+	
+	// Use scanner for memory-efficient line-by-line reading
+	scanner := bufio.NewScanner(file)
+	lineCount := 0
+	
+	// Set buffer size for very long lines (if any)
+	const maxCapacity = 1024 * 1024 // 1MB max line length
+	buf := make([]byte, maxCapacity)
+	scanner.Buffer(buf, maxCapacity)
+	
+	for scanner.Scan() {
+		lineCount++
+		word := strings.TrimSpace(scanner.Text())
+		
+		// Quick check for exact match
+		if word == password {
+			log.Printf("✅ Password '%s' found in agent's wordlist (streaming search, line %d)", password, lineCount)
+			return true
+		}
+		
+		// Log progress every 100,000 lines
+		if lineCount%100000 == 0 {
+			log.Printf("🔍 DEBUG: Streaming search progress: %d lines processed", lineCount)
+		}
+	}
+	
+	if err := scanner.Err(); err != nil {
+		log.Printf("⚠️  Error during streaming search: %v", err)
+	}
+	
+	log.Printf("❌ Password '%s' NOT found in agent's wordlist (streaming search, %d lines processed)", password, lineCount)
 	return false
 }
 
