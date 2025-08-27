@@ -1080,6 +1080,12 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		return fmt.Errorf("wordlist file appears to be invalid or corrupted: %s", localWordlist)
 	}
 	
+	// Map deprecated hash types to their new equivalents
+	mappedHashType := mapHashType(job.HashType)
+	if mappedHashType != job.HashType {
+		log.Printf("🔄 Hash type mapped from %d to %d (deprecated -> new)", job.HashType, mappedHashType)
+	}
+	
 	// Get file sizes for debugging
 	hashFileInfo, _ := os.Stat(localHashFile)
 	wordlistInfo, _ := os.Stat(localWordlist)
@@ -1088,7 +1094,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	log.Printf("  📋 Wordlist: %s (Size: %s, Exists: %t)", localWordlist, formatFileSize(wordlistInfo.Size()), wordlistInfo != nil)
 	
 	args := []string{
-		"-m", strconv.Itoa(job.HashType),
+		"-m", strconv.Itoa(mappedHashType),
 		"-a", strconv.Itoa(job.AttackMode),
 		localHashFile,
 		localWordlist,
@@ -1108,7 +1114,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	log.Printf("  📋 Hash File: %s", localHashFile)
 	log.Printf("  📋 Wordlist: %s", localWordlist)
 	log.Printf("  📋 Outfile: %s", outfile)
-	log.Printf("  📋 Hash Type: %d", job.HashType)
+	log.Printf("  📋 Hash Type: %d (mapped from %d)", mappedHashType, job.HashType)
 	log.Printf("  📋 Attack Mode: %d", job.AttackMode)
 	if job.Rules != "" {
 		log.Printf("  📋 Rules: %s", job.Rules)
@@ -1188,6 +1194,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				
 				// Log detailed error information
 				log.Printf("🔍 DEBUG: Command that failed: hashcat %v", args)
+				log.Printf("🔍 DEBUG: Original hash type: %d, Mapped hash type: %d", job.HashType, mapHashType(job.HashType))
 				log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
 				log.Printf("🔍 DEBUG: File permissions check:")
 				log.Printf("  📋 Hash file %s: %s", localHashFile, getFilePermissions(localHashFile))
@@ -1203,7 +1210,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				}
 				
 				// Try to run hashcat with just the hash file to test basic functionality
-				testCmd := exec.Command("hashcat", "-m", strconv.Itoa(job.HashType), localHashFile)
+				testCmd := exec.Command("hashcat", "-m", strconv.Itoa(mapHashType(job.HashType)), localHashFile)
 				testCmd.Dir = tempDir
 				if testErr := testCmd.Run(); testErr != nil {
 					log.Printf("🔍 DEBUG: Basic hashcat test failed: %v", testErr)
@@ -1512,6 +1519,18 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			   strings.Contains(strings.ToLower(line), "invalid") ||
 			   strings.Contains(strings.ToLower(line), "not found") {
 				log.Printf("⚠️ Hashcat error detected: %s", line)
+			}
+			
+			// Check for deprecation warnings
+			if strings.Contains(strings.ToLower(line), "deprecated") && strings.Contains(strings.ToLower(line), "replaced") {
+				log.Printf("⚠️ Hashcat deprecation warning detected: %s", line)
+				log.Printf("💡 This warning indicates a hash type has been deprecated and replaced")
+			}
+			
+			// Check for plugin-specific warnings
+			if strings.Contains(line, "plugin") && strings.Contains(line, "deprecated") {
+				log.Printf("⚠️ Hashcat plugin deprecation warning: %s", line)
+				log.Printf("💡 The system will automatically map deprecated hash types to their new equivalents")
 			}
 		}
 	}()
@@ -2416,6 +2435,20 @@ func getFilePermissions(filepath string) string {
 		return fmt.Sprintf("Mode: %s, Perm: %s, Size: %s", mode.String(), perm.String(), formatFileSize(info.Size()))
 	}
 	return "file not accessible"
+}
+
+// Map deprecated hash types to their new equivalents
+func mapHashType(hashType int) int {
+	switch hashType {
+	case 2500: // WPA/WPA2 (deprecated)
+		return 22000 // WPA/WPA2 (new)
+	case 2501: // WPA/WPA2 PMK (deprecated)
+		return 22001 // WPA/WPA2 PMK (new)
+	case 2502: // WPA/WPA2 PMK (deprecated)
+		return 22002 // WPA/WPA2 PMK (new)
+	default:
+		return hashType // Keep as is
+	}
 }
 
 // Validate hash file format
