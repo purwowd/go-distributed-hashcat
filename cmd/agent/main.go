@@ -18,6 +18,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"bufio"
+	"path"
 
 	"go-distributed-hashcat/internal/domain"
 
@@ -37,6 +39,7 @@ type Agent struct {
 	AgentKey     string               // Add agent key field
 	OriginalPort int                  // Store original port from database
 	ServerIP     string               // Store server IP for validation
+	Port         int                  // Current agent port
 }
 
 type LocalFile struct {
@@ -46,6 +49,7 @@ type LocalFile struct {
 	Type    string    `json:"type"` // wordlist, hash_file
 	Hash    string    `json:"hash"` // MD5 hash for integrity
 	ModTime time.Time `json:"mod_time"`
+	UUID    string    `json:"uuid"` // UUID for hash files
 }
 
 type AgentInfo struct {
@@ -159,6 +163,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 		AgentKey:     agentKey,
 		OriginalPort: originalPort, // Store original port from database
 		ServerIP:     ip,           // Store server IP for validation
+		Port:         port,         // Current agent port
 	}
 
 	// Inisialisasi direktori
@@ -652,21 +657,16 @@ func (a *Agent) sendHeartbeat() error {
 }
 
 func (a *Agent) updateStatus(status string) {
-	if a.ID == uuid.Nil {
-		log.Printf("⚠️ Agent ID belum tersedia, tidak bisa update status")
-		return
-	}
-
+	// Update agent status on server
 	req := struct {
 		Status string `json:"status"`
-	}{
-		Status: status,
-	}
+		Port   int    `json:"port"`
+	}{Status: status, Port: a.Port}
 
 	jsonData, _ := json.Marshal(req)
-	url := fmt.Sprintf("%s/api/v1/agents/%s", a.ServerURL, a.ID.String())
+	url := fmt.Sprintf("%s/api/v1/agents/%s/status", a.ServerURL, a.ID.String())
 
-	httpReq, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Printf("⚠️ Gagal membuat request update status: %v", err)
 		return
@@ -676,13 +676,17 @@ func (a *Agent) updateStatus(status string) {
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		log.Printf("⚠️ Gagal update status agent: %v", err)
+		log.Printf("🔍 DEBUG: Request details - URL: %s, Status: %s, Port: %d", url, status, a.Port)
+		log.Printf("🔍 DEBUG: Network error type: %T", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("⚠️ Gagal update status agent: %s", string(body))
+		log.Printf("⚠️ Gagal update status agent: HTTP %d - %s", resp.StatusCode, string(body))
+		log.Printf("🔍 DEBUG: Request details - URL: %s, Status: %s, Port: %d", url, status, a.Port)
+		log.Printf("🔍 DEBUG: Response headers: %v", resp.Header)
 		return
 	}
 
@@ -804,7 +808,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		log.Printf("🔍 DEBUG: Available local hash files:")
 		for filename, localFile := range a.LocalFiles {
 			if localFile.Type == "hash_file" {
-				log.Printf("  📄 %s -> %s (Size: %s)", filename, localFile.Path, formatFileSize(localFile.Size))
+				log.Printf("  �� %s -> %s (Size: %s, UUID: %s)", filename, localFile.Path, formatFileSize(localFile.Size), localFile.UUID)
 			}
 		}
 
@@ -815,12 +819,54 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			log.Printf("✅ SUCCESS: Using local hash file for ID %s: %s", hashFileIDStr, localPath)
 		} else {
 			// Try to find by name similarity before downloading
-			log.Printf("🔍 DEBUG: Trying to find hash file by name similarity...")
-			if alternativePath := a.findHashFileByName(); alternativePath != "" {
-				localHashFile = alternativePath
-				log.Printf("✅ SUCCESS: Found alternative hash file by name: %s", alternativePath)
-			} else {
-				// Not found locally, download from server
+			log.Printf("🔍 DEBUG: Starting search for hash file UUID: %s", hashFileIDStr)
+			log.Printf("🔍 DEBUG: Searching in LocalFiles map (%d files)...", len(a.LocalFiles))
+			
+			// Search through LocalFiles map for UUID match
+			for filename, localFile := range a.LocalFiles {
+				if localFile.Type == "hash_file" {
+					log.Printf("🔍 DEBUG: Checking hash file: %s -> %s (UUID: %s)", filename, localFile.Path, localFile.UUID)
+					// Check if the UUID matches (this should be the primary lookup method)
+					if localFile.UUID == hashFileIDStr {
+						localHashFile = localFile.Path
+						log.Printf("✅ SUCCESS: Found hash file by UUID match: %s", localHashFile)
+						break
+					}
+				}
+			}
+			
+			// If still not found, try temp directory
+			if localHashFile == "" {
+				log.Printf("🔍 DEBUG: No match found in LocalFiles, checking temp directory...")
+				tempDir := filepath.Join(a.UploadDir, "temp")
+				if files, err := os.ReadDir(tempDir); err == nil {
+					log.Printf("🔍 DEBUG: Scanning temp directory: %s", tempDir)
+					log.Printf("🔍 DEBUG: Found %d files in temp directory", len(files))
+					
+					for _, file := range files {
+						if !file.IsDir() {
+							log.Printf("🔍 DEBUG: Checking temp file: %s", file.Name())
+							// Check if this file might be the hash file we're looking for
+							if strings.Contains(strings.ToLower(file.Name()), ".hccapx") || 
+							   strings.Contains(strings.ToLower(file.Name()), ".cap") ||
+							   strings.Contains(strings.ToLower(file.Name()), ".pcap") {
+								// This looks like a hash file, check if it matches our needs
+								log.Printf("🔍 DEBUG: Potential hash file found: %s", file.Name())
+							}
+						}
+					}
+				}
+				
+				// Try hash-based search as last resort
+				log.Printf("🔍 DEBUG: No UUID match found, trying hash-based search...")
+				if alternativePath := a.findHashFileByName(); alternativePath != "" {
+					localHashFile = alternativePath
+					log.Printf("✅ SUCCESS: Found potential hash file match by name similarity: %s", alternativePath)
+				}
+			}
+			
+			// If still not found, download from server
+			if localHashFile == "" {
 				log.Printf("⚠️  WARNING: Hash file %s not found locally, downloading from server...", hashFileIDStr)
 				log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/hashfiles/%s/download", a.ServerURL, hashFileIDStr)
 
@@ -829,7 +875,6 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 					log.Printf("❌ ERROR: Download failed for hash file %s: %v", hashFileIDStr, err)
 					return fmt.Errorf("failed to download hash file: %w", err)
 				}
-				// defer os.Remove(localHashFile) // Keep file for debugging/--show command
 				log.Printf("✅ SUCCESS: Downloaded hash file from ID: %s to %s", hashFileIDStr, localHashFile)
 			}
 		}
@@ -852,7 +897,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		log.Printf("🔍 DEBUG: Available local wordlist files:")
 		for filename, localFile := range a.LocalFiles {
 			if localFile.Type == "wordlist" {
-				log.Printf("  📄 %s -> %s (Size: %s)", filename, localFile.Path, formatFileSize(localFile.Size))
+				log.Printf("  �� %s -> %s (Size: %s, UUID: %s)", filename, localFile.Path, formatFileSize(localFile.Size), localFile.UUID)
 			}
 		}
 
@@ -863,12 +908,54 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			log.Printf("✅ SUCCESS: Using local wordlist for ID %s: %s", wordlistIDStr, localPath)
 		} else {
 			// Try to find by name similarity before downloading
-			log.Printf("🔍 DEBUG: Trying to find wordlist by name similarity...")
-			if alternativePath := a.findWordlistByName(); alternativePath != "" {
-				localWordlist = alternativePath
-				log.Printf("✅ SUCCESS: Found alternative wordlist by name: %s", alternativePath)
-			} else {
-				// Not found locally, download from server
+			log.Printf("🔍 DEBUG: Starting search for wordlist UUID: %s", wordlistIDStr)
+			log.Printf("🔍 DEBUG: Searching in LocalFiles map (%d files)...", len(a.LocalFiles))
+			
+			// Search through LocalFiles map for UUID match
+			for filename, localFile := range a.LocalFiles {
+				if localFile.Type == "wordlist" {
+					log.Printf("🔍 DEBUG: Checking wordlist file: %s -> %s (UUID: %s)", filename, localFile.Path, localFile.UUID)
+					// Check if the UUID matches (this should be the primary lookup method)
+					if localFile.UUID == wordlistIDStr {
+						localWordlist = localFile.Path
+						log.Printf("✅ SUCCESS: Found wordlist by UUID match: %s", localWordlist)
+						break
+					}
+				}
+			}
+			
+			// If still not found, try temp directory
+			if localWordlist == "" {
+				log.Printf("🔍 DEBUG: No match found in LocalFiles, checking temp directory...")
+				tempDir := filepath.Join(a.UploadDir, "temp")
+				if files, err := os.ReadDir(tempDir); err == nil {
+					log.Printf("🔍 DEBUG: Scanning temp directory: %s", tempDir)
+					log.Printf("🔍 DEBUG: Found %d files in temp directory", len(files))
+					
+					for _, file := range files {
+						if !file.IsDir() {
+							log.Printf("🔍 DEBUG: Checking temp file: %s", file.Name())
+							// Check if this file might be the wordlist we're looking for
+							if strings.Contains(strings.ToLower(file.Name()), ".txt") || 
+							   strings.Contains(strings.ToLower(file.Name()), ".wordlist") ||
+							   strings.Contains(strings.ToLower(file.Name()), ".dict") {
+								// This looks like a wordlist, check if it matches our needs
+								log.Printf("🔍 DEBUG: Potential wordlist found: %s", file.Name())
+							}
+						}
+					}
+				}
+				
+				// Try hash-based search as last resort
+				log.Printf("🔍 DEBUG: No UUID match found, trying hash-based search...")
+				if alternativePath := a.findWordlistByName(); alternativePath != "" {
+					localWordlist = alternativePath
+					log.Printf("✅ SUCCESS: Found potential wordlist match by name similarity: %s", alternativePath)
+				}
+			}
+			
+			// If still not found, download from server
+			if localWordlist == "" {
 				log.Printf("⚠️  WARNING: Wordlist %s not found locally, downloading from server...", wordlistIDStr)
 				log.Printf("🔍 DEBUG: Will attempt download from: %s/api/v1/wordlists/%s/download", a.ServerURL, wordlistIDStr)
 
@@ -966,6 +1053,40 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	tempDir := filepath.Join(a.UploadDir, "temp")
 	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", job.ID.String()))
 	log.Printf("📁 Outfile will be: %s", outfile)
+	
+	// Validate files before building command
+	if localHashFile == "" {
+		return fmt.Errorf("hash file path is empty")
+	}
+	if localWordlist == "" {
+		return fmt.Errorf("wordlist path is empty")
+	}
+	
+	// Check if files actually exist
+	if _, err := os.Stat(localHashFile); os.IsNotExist(err) {
+		return fmt.Errorf("hash file does not exist: %s", localHashFile)
+	}
+	if _, err := os.Stat(localWordlist); os.IsNotExist(err) {
+		return fmt.Errorf("wordlist file does not exist: %s", localWordlist)
+	}
+	
+	// Validate hash file format
+	if !isValidHashFile(localHashFile) {
+		return fmt.Errorf("hash file appears to be invalid or corrupted: %s", localHashFile)
+	}
+	
+	// Validate wordlist file format
+	if !isValidWordlistFile(localWordlist) {
+		return fmt.Errorf("wordlist file appears to be invalid or corrupted: %s", localWordlist)
+	}
+	
+	// Get file sizes for debugging
+	hashFileInfo, _ := os.Stat(localHashFile)
+	wordlistInfo, _ := os.Stat(localWordlist)
+	log.Printf("🔍 DEBUG: File validation:")
+	log.Printf("  📋 Hash file: %s (Size: %s, Exists: %t)", localHashFile, formatFileSize(hashFileInfo.Size()), hashFileInfo != nil)
+	log.Printf("  📋 Wordlist: %s (Size: %s, Exists: %t)", localWordlist, formatFileSize(wordlistInfo.Size()), wordlistInfo != nil)
+	
 	args := []string{
 		"-m", strconv.Itoa(job.HashType),
 		"-a", strconv.Itoa(job.AttackMode),
@@ -994,7 +1115,28 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	}
 	log.Printf("🔨 Running hashcat with args: %v", args)
 
+	// Test hashcat command with --help to validate syntax
+	testCmd := exec.Command("hashcat", "--help")
+	if err := testCmd.Run(); err != nil {
+		log.Printf("⚠️ Warning: hashcat --help failed, hashcat may not be properly installed")
+	}
+
+	// Log working directory and environment for debugging
+	log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
+	log.Printf("🔍 DEBUG: PATH environment: %s", os.Getenv("PATH"))
+	
+	// Test if hashcat is accessible
+	if hashcatPath, err := exec.LookPath("hashcat"); err != nil {
+		log.Printf("⚠️ Warning: hashcat not found in PATH: %v", err)
+	} else {
+		log.Printf("✅ hashcat found at: %s", hashcatPath)
+	}
+
 	cmd := exec.Command("hashcat", args...)
+	
+	// Set working directory to temp directory for better file access
+	cmd.Dir = tempDir
+	log.Printf("🔍 DEBUG: Hashcat working directory set to: %s", tempDir)
 
 	// Set up pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -1008,6 +1150,9 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
+		log.Printf("❌ Failed to start hashcat command: %v", err)
+		log.Printf("🔍 DEBUG: Command: hashcat %v", args)
+		log.Printf("🔍 DEBUG: Working directory: %s", cmd.Dir)
 		return err
 	}
 
@@ -1037,6 +1182,35 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			case 255:
 				// Exit code 255 usually means invalid arguments or file not found
 				log.Printf("⚠️ Hashcat failed with exit code 255 (invalid arguments)")
+				
+				// Note: stderr pipe is already being read by monitorHashcatOutput
+				// We'll rely on the monitoring function to capture errors
+				
+				// Log detailed error information
+				log.Printf("🔍 DEBUG: Command that failed: hashcat %v", args)
+				log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
+				log.Printf("🔍 DEBUG: File permissions check:")
+				log.Printf("  📋 Hash file %s: %s", localHashFile, getFilePermissions(localHashFile))
+				log.Printf("  📋 Wordlist %s: %s", localWordlist, getFilePermissions(localWordlist))
+				log.Printf("  📋 Temp directory %s: %s", tempDir, getFilePermissions(tempDir))
+				
+				// Try to run hashcat with --help to see if it's available
+				helpCmd := exec.Command("hashcat", "--help")
+				if helpErr := helpCmd.Run(); helpErr != nil {
+					log.Printf("⚠️ Warning: hashcat --help also failed: %v", helpErr)
+				} else {
+					log.Printf("✅ hashcat --help succeeded, command syntax may be the issue")
+				}
+				
+				// Try to run hashcat with just the hash file to test basic functionality
+				testCmd := exec.Command("hashcat", "-m", strconv.Itoa(job.HashType), localHashFile)
+				testCmd.Dir = tempDir
+				if testErr := testCmd.Run(); testErr != nil {
+					log.Printf("🔍 DEBUG: Basic hashcat test failed: %v", testErr)
+				} else {
+					log.Printf("✅ Basic hashcat test succeeded, issue may be with wordlist or arguments")
+				}
+				
 				a.failJob(job.ID, "Hashcat failed - invalid arguments or file not found")
 				a.cleanupJobFiles(job.ID)
 				return nil
@@ -1320,53 +1494,61 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 	var currentETA *string
 	var currentTotalWords int64
 
-	scanner := func(reader io.Reader) {
-		buf := make([]byte, 1024)
-		for {
-			n, err := reader.Read(buf)
-			if err != nil {
-				return
+	// Monitor stderr for error messages
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			line = strings.TrimSpace(line)
+			
+			// Log all stderr output for debugging
+			if line != "" {
+				log.Printf("🔍 DEBUG: Hashcat stderr: %s", line)
 			}
+			
+			// Check for specific error patterns
+			if strings.Contains(strings.ToLower(line), "error") || 
+			   strings.Contains(strings.ToLower(line), "failed") ||
+			   strings.Contains(strings.ToLower(line), "invalid") ||
+			   strings.Contains(strings.ToLower(line), "not found") {
+				log.Printf("⚠️ Hashcat error detected: %s", line)
+			}
+		}
+	}()
 
-			output := string(buf[:n])
-
+	// Monitor stdout for progress updates
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			line = strings.TrimSpace(line)
+			
+			if line == "" {
+				continue
+			}
+			
 			// Debug: Log raw output for troubleshooting
-			if strings.Contains(output, "Speed") || strings.Contains(output, "Progress") {
-				log.Printf("🔍 DEBUG: Raw hashcat output: %s", strings.TrimSpace(output))
+			if strings.Contains(line, "Speed") || strings.Contains(line, "Progress") {
+				log.Printf("🔍 DEBUG: Raw hashcat stdout: %s", line)
 			}
-
-			// Also log any line containing "Speed" for debugging
-			if strings.Contains(output, "Speed") {
-				lines := strings.Split(output, "\n")
-				for _, line := range lines {
-					if strings.Contains(line, "Speed") {
-						log.Printf("🔍 DEBUG: Speed line found: '%s'", strings.TrimSpace(line))
-					}
-				}
-			}
-
-			// Parse progress and speed independently
-			var hasUpdate bool
-
+			
 			// Parse progress
-			if matches := progressRegex.FindStringSubmatch(output); len(matches) > 3 {
+			if matches := progressRegex.FindStringSubmatch(line); len(matches) > 3 {
 				currentProgress, _ = strconv.ParseFloat(matches[3], 64)
-				hasUpdate = true
 				log.Printf("🔍 DEBUG: Progress parsed: %.2f%%", currentProgress)
 			}
-
+			
 			// Parse restore point for total words
-			if matches := restorePointRegex.FindStringSubmatch(output); len(matches) > 2 {
+			if matches := restorePointRegex.FindStringSubmatch(line); len(matches) > 2 {
 				currentTotalWords, _ = strconv.ParseInt(matches[2], 10, 64)
-				hasUpdate = true
 				log.Printf("🔍 DEBUG: Total words parsed from Restore.Point: %d", currentTotalWords)
 			}
-
+			
 			// Parse time started duration for ETA calculation
-			if matches := timeStartedRegex.FindStringSubmatch(output); len(matches) > 2 {
+			if matches := timeStartedRegex.FindStringSubmatch(line); len(matches) > 2 {
 				mins, _ := strconv.Atoi(matches[1])
 				secs, _ := strconv.Atoi(matches[2])
-
+				
 				// Format ETA as human-readable duration instead of datetime
 				var etaStr string
 				if mins > 0 {
@@ -1378,17 +1560,16 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				} else {
 					etaStr = fmt.Sprintf("%d secs", secs)
 				}
-
+				
 				currentETA = &etaStr
-				hasUpdate = true
 				log.Printf("🔍 DEBUG: ETA formatted from Time.Started (%d mins, %d secs): %s", mins, secs, etaStr)
 			}
-
+			
 			// Parse time estimated duration for ETA calculation
-			if matches := timeEstimatedRegex.FindStringSubmatch(output); len(matches) > 2 {
+			if matches := timeEstimatedRegex.FindStringSubmatch(line); len(matches) > 2 {
 				mins, _ := strconv.Atoi(matches[1])
 				secs, _ := strconv.Atoi(matches[2])
-
+				
 				// Format ETA as human-readable duration instead of datetime
 				var etaStr string
 				if mins > 0 {
@@ -1400,16 +1581,14 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				} else {
 					etaStr = fmt.Sprintf("%d secs", secs)
 				}
-
+				
 				currentETA = &etaStr
-				hasUpdate = true
 				log.Printf("🔍 DEBUG: ETA formatted from Time.Estimated (%d mins, %d secs): %s", mins, secs, etaStr)
 			}
-
-			// Parse speed using multiple regex patterns (independent of progress)
-			speedFound := false
+			
+			// Parse speed using multiple regex patterns
 			for i, speedRegex := range speedRegexes {
-				if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 2 {
+				if speedMatches := speedRegex.FindStringSubmatch(line); len(speedMatches) > 2 {
 					// Parse decimal number (e.g., 480.4)
 					speedValue, err := strconv.ParseFloat(speedMatches[1], 64)
 					if err != nil {
@@ -1438,59 +1617,16 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 					
 					currentSpeed = speedInHps
 					log.Printf("🔍 DEBUG: Speed parsed: %.2f %s = %d H/s from pattern %d: '%s'", speedValue, unit, speedInHps, i+1, speedMatches[0])
-					speedFound = true
-					hasUpdate = true
-					break
-				} else if len(speedMatches) > 1 {
-					// Legacy pattern without unit (just H/s)
-					speedValue, err := strconv.ParseInt(speedMatches[1], 10, 64)
-					if err != nil {
-						log.Printf("⚠️  WARNING: Failed to parse speed value '%s': %v", speedMatches[1], err)
-						continue
-					}
-					currentSpeed = speedValue
-					log.Printf("🔍 DEBUG: Speed parsed: %d H/s from pattern %d: '%s'", speedValue, i+1, speedMatches[0])
-					speedFound = true
-					hasUpdate = true
 					break
 				}
 			}
-			if !speedFound {
-				// Fallback: Try to extract any number followed by H/s
-				fallbackRegex := regexp.MustCompile(`(\d+\.?\d*)\s*([kmg]?H/s)`)
-				if fallbackMatches := fallbackRegex.FindStringSubmatch(output); len(fallbackMatches) > 2 {
-					speedValue, err := strconv.ParseFloat(fallbackMatches[1], 64)
-					if err != nil {
-						log.Printf("⚠️  WARNING: Failed to parse speed value '%s': %v", fallbackMatches[1], err)
-					} else {
-						unit := fallbackMatches[2]
-						var speedInHps int64
-						switch strings.ToLower(unit) {
-						case "h/s":
-							speedInHps = int64(speedValue)
-						case "kh/s":
-							speedInHps = int64(speedValue * 1000)
-						case "mh/s":
-							speedInHps = int64(speedValue * 1000000)
-						case "gh/s":
-							speedInHps = int64(speedValue * 1000000000)
-						default:
-							speedInHps = int64(speedValue)
-						}
-						currentSpeed = speedInHps
-						log.Printf("🔍 DEBUG: Speed parsed with fallback: %.2f %s = %d H/s", speedValue, unit, speedInHps)
-						speedFound = true
-						hasUpdate = true
-					}
-				}
-			}
-
+			
 			// Parse ETA
-			if etaMatches := etaRegex.FindStringSubmatch(output); len(etaMatches) > 3 {
+			if etaMatches := etaRegex.FindStringSubmatch(line); len(etaMatches) > 3 {
 				hours, _ := strconv.Atoi(etaMatches[1])
 				minutes, _ := strconv.Atoi(etaMatches[2])
 				seconds, _ := strconv.Atoi(etaMatches[3])
-
+				
 				// Format ETA as human-readable duration instead of datetime
 				var etaStr string
 				if hours > 0 {
@@ -1510,21 +1646,17 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 				} else {
 					etaStr = fmt.Sprintf("%d secs", seconds)
 				}
-
+				
 				currentETA = &etaStr
-				hasUpdate = true
 				log.Printf("🔍 DEBUG: ETA formatted: %s", etaStr)
 			}
-
-			// Send update if we have any new data (progress, speed, ETA, or total words)
-			if hasUpdate {
+			
+			// Send update if we have any new data
+			if currentProgress > 0 || currentSpeed > 0 || currentETA != nil || currentTotalWords > 0 {
 				a.updateJobDataFromAgent(job.ID, currentProgress, currentSpeed, currentETA, currentTotalWords)
 			}
 		}
-	}
-
-	go scanner(stdout)
-	go scanner(stderr)
+	}()
 }
 
 func (a *Agent) sendInitialJobData(job *domain.Job) {
@@ -2267,4 +2399,95 @@ func (a *Agent) findLocalHashFileByUUID(hashFileID string) string {
 	log.Printf("❌ FAILED: No local hash file found for UUID: %s", hashFileID)
 	log.Printf("🔍 DEBUG: Search completed for hash file UUID: %s", hashFileID)
 	return ""
+}
+
+// Helper functions for debugging
+func getCurrentWorkingDir() string {
+	if dir, err := os.Getwd(); err == nil {
+		return dir
+	}
+	return "unknown"
+}
+
+func getFilePermissions(filepath string) string {
+	if info, err := os.Stat(filepath); err == nil {
+		mode := info.Mode()
+		perm := mode.Perm()
+		return fmt.Sprintf("Mode: %s, Perm: %s, Size: %s", mode.String(), perm.String(), formatFileSize(info.Size()))
+	}
+	return "file not accessible"
+}
+
+// Validate hash file format
+func isValidHashFile(filepath string) bool {
+	// Check file extension
+	ext := strings.ToLower(path.Ext(filepath))
+	validExtensions := []string{".hccapx", ".cap", ".pcap", ".hash", ".txt"}
+	
+	hasValidExt := false
+	for _, validExt := range validExtensions {
+		if ext == validExt {
+			hasValidExt = true
+			break
+		}
+	}
+	
+	if !hasValidExt {
+		return false
+	}
+	
+	// Check file size (should not be empty)
+	if info, err := os.Stat(filepath); err == nil {
+		if info.Size() == 0 {
+			return false
+		}
+		// For .hccapx files, minimum size should be around 392 bytes
+		if ext == ".hccapx" && info.Size() < 392 {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// Validate wordlist file format
+func isValidWordlistFile(filepath string) bool {
+	// Check file extension
+	ext := strings.ToLower(path.Ext(filepath))
+	validExtensions := []string{".txt", ".wordlist", ".dict", ".lst"}
+	
+	hasValidExt := false
+	for _, validExt := range validExtensions {
+		if ext == validExt {
+			hasValidExt = true
+			break
+		}
+	}
+	
+	if !hasValidExt {
+		return false
+	}
+	
+	// Check file size (should not be empty)
+	if info, err := os.Stat(filepath); err == nil {
+		if info.Size() == 0 {
+			return false
+		}
+	}
+	
+	// Try to read first few lines to validate format
+	if file, err := os.Open(filepath); err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		lineCount := 0
+		for scanner.Scan() && lineCount < 5 {
+			line := strings.TrimSpace(scanner.Text())
+			if line != "" {
+				lineCount++
+			}
+		}
+		return lineCount > 0
+	}
+	
+	return true
 }
