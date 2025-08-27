@@ -1093,16 +1093,26 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	log.Printf("  📋 Hash file: %s (Size: %s, Exists: %t)", localHashFile, formatFileSize(hashFileInfo.Size()), hashFileInfo != nil)
 	log.Printf("  📋 Wordlist: %s (Size: %s, Exists: %t)", localWordlist, formatFileSize(wordlistInfo.Size()), wordlistInfo != nil)
 	
+	// Use absolute paths for all files to avoid working directory issues
+	absHashFile, _ := filepath.Abs(localHashFile)
+	absWordlist, _ := filepath.Abs(localWordlist)
+	absOutfile, _ := filepath.Abs(outfile)
+	
+	log.Printf("🔍 DEBUG: Absolute file paths:")
+	log.Printf("  📋 Hash file: %s", absHashFile)
+	log.Printf("  📋 Wordlist: %s", absWordlist)
+	log.Printf("  📋 Outfile: %s", absOutfile)
+	
 	args := []string{
 		"-m", strconv.Itoa(mappedHashType),
 		"-a", strconv.Itoa(job.AttackMode),
-		localHashFile,
-		localWordlist,
+		absHashFile,
+		absWordlist,
 		"-w", "4",
 		"--status",
 		"--status-timer=2",
 		"--potfile-disable",
-		"--outfile", outfile,
+		"--outfile", absOutfile,
 		"--outfile-format", "2", // Format: hash:plain
 	}
 
@@ -1111,21 +1121,15 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	}
 
 	log.Printf("🔨 DEBUG: Final hashcat command:")
-	log.Printf("  📋 Hash File: %s", localHashFile)
-	log.Printf("  📋 Wordlist: %s", localWordlist)
-	log.Printf("  📋 Outfile: %s", outfile)
+	log.Printf("  📋 Hash File: %s", absHashFile)
+	log.Printf("  📋 Wordlist: %s", absWordlist)
+	log.Printf("  📋 Outfile: %s", absOutfile)
 	log.Printf("  📋 Hash Type: %d (mapped from %d)", mappedHashType, job.HashType)
 	log.Printf("  📋 Attack Mode: %d", job.AttackMode)
 	if job.Rules != "" {
 		log.Printf("  📋 Rules: %s", job.Rules)
 	}
 	log.Printf("🔨 Running hashcat with args: %v", args)
-
-	// Test hashcat command with --help to validate syntax
-	testCmd := exec.Command("hashcat", "--help")
-	if err := testCmd.Run(); err != nil {
-		log.Printf("⚠️ Warning: hashcat --help failed, hashcat may not be properly installed")
-	}
 
 	// Log working directory and environment for debugging
 	log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
@@ -1143,6 +1147,8 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	// Set working directory to temp directory for better file access
 	cmd.Dir = tempDir
 	log.Printf("🔍 DEBUG: Hashcat working directory set to: %s", tempDir)
+	log.Printf("🔍 DEBUG: Agent working directory: %s", getCurrentWorkingDir())
+	log.Printf("🔍 DEBUG: All file paths are absolute, working directory should not affect file access")
 
 	// Set up pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -1197,8 +1203,8 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				log.Printf("🔍 DEBUG: Original hash type: %d, Mapped hash type: %d", job.HashType, mapHashType(job.HashType))
 				log.Printf("🔍 DEBUG: Working directory: %s", getCurrentWorkingDir())
 				log.Printf("🔍 DEBUG: File permissions check:")
-				log.Printf("  📋 Hash file %s: %s", localHashFile, getFilePermissions(localHashFile))
-				log.Printf("  📋 Wordlist %s: %s", localWordlist, getFilePermissions(localWordlist))
+				log.Printf("  �� Hash file %s: %s", absHashFile, getFilePermissions(absHashFile))
+				log.Printf("  📋 Wordlist %s: %s", absWordlist, getFilePermissions(absWordlist))
 				log.Printf("  📋 Temp directory %s: %s", tempDir, getFilePermissions(tempDir))
 				
 				// Try to run hashcat with --help to see if it's available
@@ -1210,7 +1216,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				}
 				
 				// Try to run hashcat with just the hash file to test basic functionality
-				testCmd := exec.Command("hashcat", "-m", strconv.Itoa(mapHashType(job.HashType)), localHashFile)
+				testCmd := exec.Command("hashcat", "-m", strconv.Itoa(mapHashType(job.HashType)), absHashFile)
 				testCmd.Dir = tempDir
 				if testErr := testCmd.Run(); testErr != nil {
 					log.Printf("🔍 DEBUG: Basic hashcat test failed: %v", testErr)
