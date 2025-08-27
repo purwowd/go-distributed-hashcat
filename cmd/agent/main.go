@@ -1164,7 +1164,6 @@ func buildHashcatCommand(hashType int, attackMode int, hashFile string, wordlist
 		"-w", "4",
 		"--status",
 		"--status-timer=2",
-		"--potfile-disable",
 		"--outfile", outfile,
 		"--outfile-format", "2", // Format: hash:plain
 		"--show",
