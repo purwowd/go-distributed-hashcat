@@ -635,6 +635,35 @@ func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 	})
 }
 
+// GetAgentByKey gets an agent by agent key
+func (h *AgentHandler) GetAgentByKey(c *gin.Context) {
+	agentKey := c.Query("agent_key")
+	if agentKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "agent_key query parameter is required",
+			"code":    "AGENT_KEY_REQUIRED",
+			"message": "Agent key query parameter is required.",
+		})
+		return
+	}
+
+	agent, err := h.agentUsecase.GetByAgentKey(c.Request.Context(), agentKey)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "agent not found",
+				"code":    "AGENT_NOT_FOUND",
+				"message": "Agent with the specified agent key not found.",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": agent})
+}
+
 type LocalFile struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`

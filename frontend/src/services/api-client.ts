@@ -28,83 +28,83 @@ export class ApiClient {
 
     // Agent methods
     async getAgents(): Promise<Agent[]> {
-        return this.request<Agent[]>('/agents')
+        return this.request<Agent[]>('/api/v1/agents/list')
     }
 
     async getAgent(id: string): Promise<Agent> {
-        return this.request<Agent>(`/agents/${id}`)
+        return this.request<Agent>(`/api/v1/agents/${id}`)
     }
 
     async createAgent(agent: Partial<Agent>): Promise<Agent> {
-        return this.request<Agent>('/agents', {
+        return this.request<Agent>('/api/v1/agents/register', {
             method: 'POST',
             body: JSON.stringify(agent)
         })
     }
 
     async updateAgentStatus(id: string, status: string): Promise<void> {
-        return this.request<void>(`/agents/${id}/status`, {
+        return this.request<void>(`/api/v1/agents/${id}/status`, {
             method: 'PUT',
             body: JSON.stringify({ status })
         })
     }
 
     async deleteAgent(id: string): Promise<void> {
-        return this.request<void>(`/agents/${id}`, {
+        return this.request<void>(`/api/v1/agents/${id}`, {
             method: 'DELETE'
         })
     }
 
     // Job methods
     async getJobs(): Promise<Job[]> {
-        return this.request<Job[]>('/jobs')
+        return this.request<Job[]>('/api/v1/jobs/list')
     }
 
     async getJob(id: string): Promise<Job> {
-        return this.request<Job>(`/jobs/${id}`)
+        return this.request<Job>(`/api/v1/jobs/${id}`)
     }
 
     async createJob(job: Partial<Job>): Promise<Job> {
-        return this.request<Job>('/jobs', {
+        return this.request<Job>('/api/v1/jobs/create', {
             method: 'POST',
             body: JSON.stringify(job)
         })
     }
 
     async startJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}/start`, {
+        return this.request<void>(`/api/v1/jobs/${id}/start`, {
             method: 'POST'
         })
     }
 
     async pauseJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}/pause`, {
+        return this.request<void>(`/api/v1/jobs/${id}/pause`, {
             method: 'POST'
         })
     }
 
     async resumeJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}/resume`, {
+        return this.request<void>(`/api/v1/jobs/${id}/resume`, {
             method: 'POST'
         })
     }
 
     async deleteJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}`, {
+        return this.request<void>(`/api/v1/jobs/${id}`, {
             method: 'DELETE'
         })
     }
 
     // Hash file methods
     async getHashFiles(): Promise<HashFile[]> {
-        return this.request<HashFile[]>('/hashfiles')
+        return this.request<HashFile[]>('/api/v1/hashfiles/')
     }
 
     async uploadHashFile(file: File): Promise<HashFile> {
         const formData = new FormData()
         formData.append('file', file)
 
-        const response = await fetch(`${this.baseUrl}/hashfiles/upload`, {
+        const response = await fetch(`${this.baseUrl}/api/v1/hashfiles/upload`, {
             method: 'POST',
             body: formData
         })
@@ -118,7 +118,7 @@ export class ApiClient {
     }
 
     async deleteHashFile(id: string): Promise<void> {
-        return this.request<void>(`/hashfiles/${id}`, {
+        return this.request<void>(`/api/v1/hashfiles/${id}`, {
             method: 'DELETE'
         })
     }

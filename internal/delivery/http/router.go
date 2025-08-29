@@ -88,12 +88,13 @@ func NewRouter(
 		// Agent routes
 		agents := v1.Group("/agents")
 		{
-			agents.POST("/generate-key", agentHandler.GenerateAgentKey) // New route for generating agent keys
-			agents.POST("/startup", agentHandler.AgentStartup)          // New route for agent startup
-			agents.POST("/heartbeat", agentHandler.AgentHeartbeat)      // New route for agent heartbeat
-			agents.POST("/update-data", agentHandler.UpdateAgentData)   // New route for updating agent data (no status change)
-			agents.POST("/", agentHandler.RegisterAgent)
-			agents.GET("/", agentHandler.GetAllAgents)
+			agents.POST("/generate-key", agentHandler.GenerateAgentKey)
+			agents.POST("/startup", agentHandler.AgentStartup)
+			agents.POST("/heartbeat", agentHandler.AgentHeartbeat)
+			agents.POST("/update-data", agentHandler.UpdateAgentData)
+			agents.POST("/register", agentHandler.RegisterAgent)
+			agents.GET("/list", agentHandler.GetAllAgents)
+			agents.GET("/by-key", agentHandler.GetAgentByKey)
 			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
 			agents.PUT("/:id/heartbeat", agentHandler.UpdateAgentHeartbeat)
@@ -106,8 +107,8 @@ func NewRouter(
 		// Job routes
 		jobs := v1.Group("/jobs")
 		{
-			jobs.POST("/", jobHandler.CreateJob)
-			jobs.GET("/", jobHandler.GetAllJobs)
+			jobs.POST("/create", jobHandler.CreateJob)
+			jobs.GET("/list", jobHandler.GetAllJobs)
 			jobs.GET("/parallel/summary", jobHandler.GetParallelJobsSummary)
 			jobs.POST("/assign", jobHandler.AssignJobs)
 			jobs.POST("/auto", jobHandler.CreateParallelJobs)

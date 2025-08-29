@@ -382,7 +382,7 @@ func TestJobHandler_CreateJob(t *testing.T) {
 
 			handler := handler.NewJobHandler(mockUsecase, nil, nil, nil)
 			router := setupTestRouter()
-			router.POST("/jobs", handler.CreateJob)
+			router.POST("/jobs/create", handler.CreateJob)
 
 			var body []byte
 			var err error
@@ -393,7 +393,7 @@ func TestJobHandler_CreateJob(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			req, err := http.NewRequest("POST", "/jobs", bytes.NewReader(body))
+			req, err := http.NewRequest("POST", "/jobs/create", bytes.NewReader(body))
 			assert.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 

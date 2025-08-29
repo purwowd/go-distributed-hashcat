@@ -254,7 +254,7 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 
 			handler := handler.NewAgentHandler(mockUsecase)
 			router := setupTestRouter()
-			router.POST("/agents", handler.RegisterAgent)
+			router.POST("/agents/register", handler.RegisterAgent)
 
 			var body []byte
 			var err error
@@ -265,7 +265,7 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			req, err := http.NewRequest("POST", "/agents", bytes.NewReader(body))
+			req, err := http.NewRequest("POST", "/agents/register", bytes.NewReader(body))
 			assert.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 

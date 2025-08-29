@@ -41,7 +41,7 @@ func BenchmarkAgentCreation(b *testing.B) {
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/agents/", agentHandler.RegisterAgent)
+	router.POST("/api/v1/agents/register", agentHandler.RegisterAgent)
 
 	// Pre-allocate request template
 	agentReq := domain.CreateAgentRequest{
@@ -60,7 +60,7 @@ func BenchmarkAgentCreation(b *testing.B) {
 		agentReq.IPAddress = fmt.Sprintf("192.168.1.%d", 100+(i%50))
 
 		reqBody, _ := json.Marshal(agentReq)
-		req := httptest.NewRequest("POST", "/api/v1/agents/", bytes.NewBuffer(reqBody))
+		req := httptest.NewRequest("POST", "/api/v1/agents/register", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 
 		recorder := httptest.NewRecorder()
@@ -103,7 +103,7 @@ func BenchmarkJobCreation(b *testing.B) {
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/jobs/", jobHandler.CreateJob)
+	router.POST("/api/v1/jobs/create", jobHandler.CreateJob)
 
 	// Pre-allocate request template with valid hash file ID
 	jobReq := domain.CreateJobRequest{
@@ -121,7 +121,7 @@ func BenchmarkJobCreation(b *testing.B) {
 		jobReq.Name = fmt.Sprintf("Benchmark Job %d", i)
 
 		reqBody, _ := json.Marshal(jobReq)
-		req := httptest.NewRequest("POST", "/api/v1/jobs/", bytes.NewBuffer(reqBody))
+		req := httptest.NewRequest("POST", "/api/v1/jobs/create", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 
 		recorder := httptest.NewRecorder()
@@ -145,9 +145,9 @@ func BenchmarkAgentListing(b *testing.B) {
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.GET("/api/v1/agents/", agentHandler.GetAllAgents)
+	router.GET("/api/v1/agents/list", agentHandler.GetAllAgents)
 
-	// Pre-populate with fewer agents for faster setup
+	// Create test agents for listing
 	const numTestAgents = 20 // Reduced from 100
 	for i := 0; i < numTestAgents; i++ {
 		agentReq := domain.CreateAgentRequest{
@@ -166,7 +166,7 @@ func BenchmarkAgentListing(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/api/v1/agents/", nil)
+		req := httptest.NewRequest("GET", "/api/v1/agents/list", nil)
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, req)
 
@@ -216,7 +216,7 @@ func BenchmarkLimitedConcurrentAgentCreation(b *testing.B) {
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/agents/", agentHandler.RegisterAgent)
+	router.POST("/api/v1/agents/register", agentHandler.RegisterAgent)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -233,7 +233,7 @@ func BenchmarkLimitedConcurrentAgentCreation(b *testing.B) {
 			}
 
 			reqBody, _ := json.Marshal(agentReq)
-			req := httptest.NewRequest("POST", "/api/v1/agents/", bytes.NewBuffer(reqBody))
+			req := httptest.NewRequest("POST", "/api/v1/agents/register", bytes.NewBuffer(reqBody))
 			req.Header.Set("Content-Type", "application/json")
 
 			recorder := httptest.NewRecorder()

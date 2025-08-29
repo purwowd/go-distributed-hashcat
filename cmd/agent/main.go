@@ -261,7 +261,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	var info AgentInfo
-	url := fmt.Sprintf("%s/api/v1/agents?agent_key=%s", a.ServerURL, key)
+	url := fmt.Sprintf("%s/api/v1/agents/by-key?agent_key=%s", a.ServerURL, key)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return info, err
@@ -274,17 +274,18 @@ func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	}
 
 	var res struct {
-		Data []AgentInfo `json:"data"`
+		Data AgentInfo `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 		return info, err
 	}
 
-	if len(res.Data) == 0 {
+	// Check if agent was found
+	if res.Data.ID == uuid.Nil {
 		return info, fmt.Errorf("agent key tidak ditemukan")
 	}
 
-	return res.Data[0], nil
+	return res.Data, nil
 }
 
 func (a *Agent) updateAgentInfo(agentID uuid.UUID, ip string, port int, capabilities string, status string) error {

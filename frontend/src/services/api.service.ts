@@ -181,7 +181,7 @@ class ApiService {
         if (params?.page_size) query.push(`page_size=${params.page_size}`)
         if (params?.search) query.push(`search=${encodeURIComponent(params.search)}`)
         const qs = query.length ? `?${query.join('&')}` : ''
-        const response = await this.get<{ data: Agent[]; total: number; page: number; page_size: number }>(`/api/v1/agents/${qs}`)
+        const response = await this.get<{ data: Agent[]; total: number; page: number; page_size: number }>(`/api/v1/agents/list${qs}`)
         if (response.success && response.data) {
             return {
                 data: (response.data as any).data || [],
@@ -199,7 +199,7 @@ class ApiService {
     }
 
     public async createAgent(agentData: Partial<Agent>): Promise<{agent: Agent | null, error: string | null}> {
-        const response = await this.post<{data: Agent}>('/api/v1/agents/', agentData)
+        const response = await this.post<{data: Agent}>('/api/v1/agents/register', agentData)
         return {
             agent: response.success ? response.data!.data : null,
             error: response.error || null
@@ -269,7 +269,7 @@ class ApiService {
         if (params?.page_size) query.push(`page_size=${params.page_size}`)
         if (params?.search) query.push(`search=${encodeURIComponent(params.search)}`)
         const qs = query.length ? `?${query.join('&')}` : ''
-        const response = await this.get<{ data: Job[]; total: number; page: number; page_size: number }>(`/api/v1/jobs/${qs}`)
+        const response = await this.get<{ data: Job[]; total: number; page: number; page_size: number }>(`/api/v1/jobs/list${qs}`)
         if (response.success && response.data) {
             return {
                 data: (response.data as any).data || [],
@@ -287,7 +287,7 @@ class ApiService {
     }
 
     public async createJob(jobData: Partial<Job>): Promise<Job | null> {
-        const response = await this.post<Job>('/api/v1/jobs/', jobData)
+        const response = await this.post<Job>('/api/v1/jobs/create', jobData)
         return response.success ? response.data! : null
     }
 

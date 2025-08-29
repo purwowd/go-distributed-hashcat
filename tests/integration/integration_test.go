@@ -102,8 +102,8 @@ func (suite *APITestSuite) setupRoutes() {
 		// Agent routes
 		agents := api.Group("/agents")
 		{
-			agents.POST("/", suite.agentHandler.RegisterAgent)
-			agents.GET("/", suite.agentHandler.GetAllAgents)
+			agents.POST("/register", suite.agentHandler.RegisterAgent)
+			agents.GET("/list", suite.agentHandler.GetAllAgents)
 			agents.GET("/:id", suite.agentHandler.GetAgent)
 			agents.PUT("/:id/status", suite.agentHandler.UpdateAgentStatus)
 			agents.DELETE("/:id", suite.agentHandler.DeleteAgent)
@@ -113,8 +113,8 @@ func (suite *APITestSuite) setupRoutes() {
 		// Job routes
 		jobs := api.Group("/jobs")
 		{
-			jobs.POST("/", suite.jobHandler.CreateJob)
-			jobs.GET("/", suite.jobHandler.GetAllJobs)
+			jobs.POST("/create", suite.jobHandler.CreateJob)
+			jobs.GET("/list", suite.jobHandler.GetAllJobs)
 			jobs.GET("/:id", suite.jobHandler.GetJob)
 			jobs.DELETE("/:id", suite.jobHandler.DeleteJob)
 		}
@@ -166,7 +166,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	t := suite.T()
 
 	// 1. Initially no agents
-	recorder := suite.makeRequest("GET", "/api/v1/agents/", nil)
+	recorder := suite.makeRequest("GET", "/api/v1/agents/list", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	var listResponse map[string]interface{}
@@ -187,7 +187,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 		AgentKey:     agentKey1,
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/agents/", agentReq1)
+	recorder = suite.makeRequest("POST", "/api/v1/agents/register", agentReq1)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	var createResponse map[string]interface{}
@@ -209,7 +209,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 		AgentKey:     agentKey2,
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/agents/", agentReq2)
+	recorder = suite.makeRequest("POST", "/api/v1/agents/register", agentReq2)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	json.Unmarshal(recorder.Body.Bytes(), &createResponse)
@@ -217,7 +217,7 @@ func (suite *APITestSuite) TestAgentWorkflow() {
 	suite.agent2ID = agent2Data["id"].(string)
 
 	// 5. List all agents (should have 2)
-	recorder = suite.makeRequest("GET", "/api/v1/agents/", nil)
+	recorder = suite.makeRequest("GET", "/api/v1/agents/list", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	json.Unmarshal(recorder.Body.Bytes(), &listResponse)
@@ -303,7 +303,7 @@ func (suite *APITestSuite) TestJobWorkflow() {
 	hashFile2 := suite.createTestHashFile()
 
 	// 1. Initially no jobs
-	recorder := suite.makeRequest("GET", "/api/v1/jobs/", nil)
+	recorder := suite.makeRequest("GET", "/api/v1/jobs/list", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	var listResponse map[string]interface{}
@@ -321,7 +321,7 @@ func (suite *APITestSuite) TestJobWorkflow() {
 		// WordlistID is optional, so we'll omit it
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/jobs/", jobReq1)
+	recorder = suite.makeRequest("POST", "/api/v1/jobs/create", jobReq1)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	var createResponse map[string]interface{}
@@ -345,7 +345,7 @@ func (suite *APITestSuite) TestJobWorkflow() {
 		AgentID: suite.agent2ID, // Manual assignment to agent2 (not agent1)
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/jobs/", jobReq2)
+	recorder = suite.makeRequest("POST", "/api/v1/jobs/create", jobReq2)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	json.Unmarshal(recorder.Body.Bytes(), &createResponse)
@@ -358,7 +358,7 @@ func (suite *APITestSuite) TestJobWorkflow() {
 	}
 
 	// 4. List all jobs (should have 2)
-	recorder = suite.makeRequest("GET", "/api/v1/jobs/", nil)
+	recorder = suite.makeRequest("GET", "/api/v1/jobs/list", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	json.Unmarshal(recorder.Body.Bytes(), &listResponse)
@@ -401,7 +401,7 @@ func (suite *APITestSuite) TestAgentSelectionFeature() {
 		// No AgentID specified - should auto-assign
 	}
 
-	recorder := suite.makeRequest("POST", "/api/v1/jobs/", autoJobReq)
+	recorder := suite.makeRequest("POST", "/api/v1/jobs/create", autoJobReq)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	var response map[string]interface{}
@@ -422,7 +422,7 @@ func (suite *APITestSuite) TestAgentSelectionFeature() {
 		AgentID:    suite.agent2ID, // Specifically assign to agent2
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/jobs/", manualJobReq)
+	recorder = suite.makeRequest("POST", "/api/v1/jobs/create", manualJobReq)
 	assert.Equal(t, http.StatusCreated, recorder.Code)
 
 	json.Unmarshal(recorder.Body.Bytes(), &response)
@@ -445,7 +445,7 @@ func (suite *APITestSuite) TestAgentSelectionFeature() {
 		AgentID:    "invalid-uuid-format",
 	}
 
-	recorder = suite.makeRequest("POST", "/api/v1/jobs/", invalidAgentJobReq)
+	recorder = suite.makeRequest("POST", "/api/v1/jobs/create", invalidAgentJobReq)
 	// Should return error or handle gracefully
 	assert.True(t, recorder.Code >= 400)
 }
@@ -455,7 +455,7 @@ func (suite *APITestSuite) TestErrorHandling() {
 	t := suite.T()
 
 	// Test invalid JSON
-	req := httptest.NewRequest("POST", "/api/v1/agents/", bytes.NewBufferString("{invalid json"))
+	req := httptest.NewRequest("POST", "/api/v1/agents/register", bytes.NewBufferString("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	suite.router.ServeHTTP(recorder, req)
@@ -465,7 +465,7 @@ func (suite *APITestSuite) TestErrorHandling() {
 	incompleteReq := map[string]interface{}{
 		"name": "", // Empty name should fail validation
 	}
-	recorder = suite.makeRequest("POST", "/api/v1/agents/", incompleteReq)
+	recorder = suite.makeRequest("POST", "/api/v1/agents/register", incompleteReq)
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 
 	// Test non-existent resource
@@ -496,7 +496,7 @@ func (suite *APITestSuite) TestConcurrentRequests() {
 				AgentKey:     agentKeys[index],
 			}
 
-			recorder := suite.makeRequest("POST", "/api/v1/agents/", agentReq)
+			recorder := suite.makeRequest("POST", "/api/v1/agents/register", agentReq)
 			assert.Equal(t, http.StatusCreated, recorder.Code)
 			done <- true
 		}(i)
@@ -508,7 +508,7 @@ func (suite *APITestSuite) TestConcurrentRequests() {
 	}
 
 	// Verify all agents were created
-	recorder := suite.makeRequest("GET", "/api/v1/agents/", nil)
+	recorder := suite.makeRequest("GET", "/api/v1/agents/list", nil)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	var response map[string]interface{}

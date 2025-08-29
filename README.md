@@ -139,6 +139,76 @@ curl -X POST -H "Content-Type: application/json" \
   http://localhost:1337/api/v1/jobs/
 ```
 
+## API Endpoints
+
+### Agent Management
+
+#### Agent Registration and Management
+- `POST /api/v1/agents/register` - Register a new agent
+- `GET /api/v1/agents/list` - Get all agents
+- `GET /api/v1/agents/by-key` - Get agent by agent key (query parameter: agent_key)
+- `GET /api/v1/agents/:id` - Get specific agent by ID
+- `PUT /api/v1/agents/:id/status` - Update agent status
+- `DELETE /api/v1/agents/:id` - Delete agent
+
+#### Agent Operations
+- `POST /api/v1/agents/generate-key` - Generate agent key
+- `POST /api/v1/agents/startup` - Agent startup
+- `POST /api/v1/agents/heartbeat` - Agent heartbeat
+- `POST /api/v1/agents/update-data` - Update agent data
+- `PUT /api/v1/agents/:id/heartbeat` - Update agent heartbeat
+- `POST /api/v1/agents/:id/files` - Register agent files
+
+#### Agent Job Management
+- `GET /api/v1/agents/:id/jobs` - Get jobs by agent ID
+- `GET /api/v1/agents/:id/jobs/next` - Get available job for agent
+
+### Job Management
+
+#### Job Operations
+- `POST /api/v1/jobs/` - Create new job
+- `GET /api/v1/jobs/` - Get all jobs
+- `GET /api/v1/jobs/:id` - Get specific job by ID
+- `DELETE /api/v1/jobs/:id` - Delete job
+
+#### Job Control
+- `POST /api/v1/jobs/assign` - Assign jobs to agents
+- `POST /api/v1/jobs/auto` - Create parallel jobs automatically
+- `POST /api/v1/jobs/:id/start` - Start a job
+- `PUT /api/v1/jobs/:id/progress` - Update job progress
+- `PUT /api/v1/jobs/:id/data` - Update job data from agent
+- `POST /api/v1/jobs/:id/complete` - Complete a job
+- `POST /api/v1/jobs/:id/fail` - Mark job as failed
+- `POST /api/v1/jobs/:id/pause` - Pause a job
+- `POST /api/v1/jobs/:id/resume` - Resume a job
+- `POST /api/v1/jobs/:id/stop` - Stop a job
+
+#### Job Queries
+- `GET /api/v1/jobs/parallel/summary` - Get parallel jobs summary
+- `GET /api/v1/jobs/agent/:id` - Get available job for specific agent
+
+### File Management
+
+#### Hash Files
+- `POST /api/v1/hashfiles/upload` - Upload hash file
+- `GET /api/v1/hashfiles/` - Get all hash files
+- `GET /api/v1/hashfiles/:id` - Get specific hash file
+- `GET /api/v1/hashfiles/:id/download` - Download hash file
+- `DELETE /api/v1/hashfiles/:id` - Delete hash file
+
+#### Wordlists
+- `POST /api/v1/wordlists/upload` - Upload wordlist
+- `POST /api/v1/wordlists/upload/init` - Initialize chunked upload
+- `POST /api/v1/wordlists/upload/chunk` - Upload chunk
+- `POST /api/v1/wordlists/upload/finalize` - Finalize chunked upload
+- `GET /api/v1/wordlists/` - Get all wordlists
+- `GET /api/v1/wordlists/:id` - Get specific wordlist
+- `GET /api/v1/wordlists/:id/download` - Download wordlist
+- `DELETE /api/v1/wordlists/:id` - Delete wordlist
+
+### Health Check
+- `GET /health` - Health check endpoint
+
 ## 📚 Documentation
 
 | Document | Purpose | Time |
