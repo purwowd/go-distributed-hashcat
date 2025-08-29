@@ -98,6 +98,7 @@ class ApiService {
 
             if (!response.ok) {
                 let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+                let errorCode: string | undefined
                 try {
                     const errorData = await response.json()
                     if (errorData.error) {
@@ -113,14 +114,24 @@ class ApiService {
                         } else if (errorData.error.includes('is already registered with IP address')) {
                             // For already registered agent errors, use only the backend error message
                             errorMessage = errorData.error
+                        } else if (errorData.error.includes('agent key already in use with another IP address')) {
+                            // For agent key IP conflict errors, use only the backend error message
+                            errorMessage = errorData.error
                         } else {
                             errorMessage = `${errorMessage} - ${errorData.error}`
                         }
                     }
+                    // Capture error code if available
+                    if (errorData.code) {
+                        errorCode = errorData.code
+                    }
                 } catch (e) {
                     // If response isn't JSON, use default message
                 }
-                throw new Error(errorMessage)
+                
+                const error = new Error(errorMessage) as any
+                error.code = errorCode
+                throw error
             }
 
             const data = await response.json()
@@ -198,11 +209,20 @@ class ApiService {
         return response.success ? response.data!.data : null
     }
 
-    public async createAgent(agentData: Partial<Agent>): Promise<{agent: Agent | null, error: string | null}> {
-        const response = await this.post<{data: Agent}>('/api/v1/agents/register', agentData)
-        return {
-            agent: response.success ? response.data!.data : null,
-            error: response.error || null
+    public async createAgent(agentData: Partial<Agent>): Promise<{agent: Agent | null, error: string | null, code?: string}> {
+        try {
+            const response = await this.post<{data: Agent}>('/api/v1/agents/register', agentData)
+            return {
+                agent: response.success ? response.data!.data : null,
+                error: response.error || null,
+                code: undefined
+            }
+        } catch (error: any) {
+            return {
+                agent: null,
+                error: error.message || 'Failed to create agent',
+                code: error.code
+            }
         }
     }
 

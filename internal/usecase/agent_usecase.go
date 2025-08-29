@@ -87,6 +87,15 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 		// Agent sudah ada, cek apakah ini update atau duplicate
 		if existingAgentByName.AgentKey == req.AgentKey {
 			// Update existing agent dengan data baru
+			
+			// ✅ Validasi: Cek apakah agent key sudah digunakan dengan IP address lain
+			log.Printf("DEBUG: existingAgentByName.IPAddress='%s', req.IPAddress='%s'", existingAgentByName.IPAddress, req.IPAddress)
+			if existingAgentByName.IPAddress != "" && existingAgentByName.IPAddress != req.IPAddress {
+				log.Printf("DEBUG: Agent key conflict detected!")
+				return nil, fmt.Errorf("agent key '%s' is already in use with another IP address", req.AgentKey)
+			}
+			log.Printf("DEBUG: No agent key conflict detected")
+			
 			// ✅ Validasi IP address sebelum update
 			if err := u.ValidateUniqueIPForAgentKey(ctx, req.AgentKey, req.IPAddress, req.Name); err != nil {
 				return nil, err
@@ -125,9 +134,12 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 	}
 
 	// ✅ Validasi 4: Cek IP address unik untuk agent baru
+	log.Printf("🔍 Debug: Calling ValidateUniqueIPForAgentKey for new agent")
 	if err := u.ValidateUniqueIPForAgentKey(ctx, req.AgentKey, req.IPAddress, req.Name); err != nil {
+		log.Printf("❌ Debug: IP validation failed for new agent: %v", err)
 		return nil, err
 	}
+	log.Printf("✅ Debug: IP validation passed for new agent")
 
 	// Set default port 8080 if port is empty or 0
 	port := req.Port
@@ -266,6 +278,19 @@ func (u *agentUsecase) GetByAgentKey(ctx context.Context, agentKey string) (*dom
 func (u *agentUsecase) ValidateUniqueIPForAgentKey(ctx context.Context, agentKey, ipAddress, agentName string) error {
 	if ipAddress == "" {
 		return nil // IP address kosong tidak perlu divalidasi
+	}
+
+
+
+	// Cek apakah agent key sudah digunakan dengan IP address lain
+	existingAgentByKey, err := u.agentRepo.GetByAgentKey(ctx, agentKey)
+	if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
+		return fmt.Errorf("failed to validate agent key: %w", err)
+	}
+	
+	if existingAgentByKey != nil && existingAgentByKey.IPAddress != "" && existingAgentByKey.IPAddress != ipAddress {
+		// Agent key sudah digunakan dengan IP address yang berbeda
+		return fmt.Errorf("agent key '%s' is already in use with another IP address", agentKey)
 	}
 
 	// Cek apakah IP address sudah digunakan oleh agent lain

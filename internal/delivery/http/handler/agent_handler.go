@@ -70,6 +70,16 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		return
 	}
 
+	// Check if agent key is already in use with another IP address
+	if existingAgentByKey.IPAddress != "" && existingAgentByKey.IPAddress != dto.IPAddress {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "agent key already in use with another IP address",
+			"code":    "AGENT_KEY_IP_CONFLICT",
+			"message": fmt.Sprintf("Agent key '%s' is already in use with another IP address", dto.AgentKey),
+		})
+		return
+	}
+
 	// Use agent name from database, or use provided name if it matches
 	agentName := existingAgentByKey.Name
 	if dto.Name != "" && dto.Name != agentName {

@@ -102,7 +102,7 @@ class AgentStore {
             this.setState({ loading: true, error: null })
             
             try {
-                const { agent, error } = await apiService.createAgent(agentData)
+                const { agent, error, code } = await apiService.createAgent(agentData)
                 if (agent) {
                     this.setState({
                         agents: [...this.state.agents, agent],
@@ -110,9 +110,20 @@ class AgentStore {
                     })
                     return agent
                 } else {
+                    // Handle specific error types
+                    let errorMessage = error || 'Failed to create agent'
+                    
+                    if (code === 'AGENT_KEY_NOT_FOUND') {
+                        errorMessage = error || 'Agent key not found. Please generate a valid agent key first.'
+                    } else if (code === 'IP_ADDRESS_CONFLICT') {
+                        errorMessage = error || 'IP address is already in use by another agent.'
+                    } else if (code === 'AGENT_KEY_IP_CONFLICT') {
+                        errorMessage = error || 'Agent key is already in use with another IP address.'
+                    }
+                    
                     this.setState({
                         loading: false,
-                        error: error || 'Failed to create agent'
+                        error: errorMessage
                     })
                     return null
                 }
@@ -194,6 +205,8 @@ class AgentStore {
                         errorMessage = result.error || 'Agent key not found. Please generate a valid agent key first.'
                     } else if (result.code === 'IP_ADDRESS_CONFLICT') {
                         errorMessage = result.error || 'IP address is already in use by another agent.'
+                    } else if (result.code === 'AGENT_KEY_IP_CONFLICT') {
+                        errorMessage = result.error || 'Agent key is already in use with another IP address.'
                     } else if (result.error) {
                         errorMessage = result.error
                     }
