@@ -75,6 +75,8 @@ func main() {
 	rootCmd.Flags().String("capabilities", "auto", "Agent capabilities (auto, CPU, GPU, or custom)")
 	rootCmd.Flags().String("agent-key", "", "Agent key")
 	rootCmd.Flags().String("upload-dir", "/root/uploads", "Local uploads directory")
+	rootCmd.Flags().Bool("skip-hash", false, "Skip hash calculation for faster startup (files > 100MB)")
+	rootCmd.Flags().Bool("skip-scan", false, "Skip file scanning entirely for maximum startup speed")
 
 	viper.BindPFlags(rootCmd.Flags())
 
@@ -201,14 +203,30 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Fatalf("❌ Failed to initialize directories: %v", err)
 	}
 
-	// Pindahkan file yang sudah ada di temp ke directory yang sesuai
-	log.Printf("🔍 DEBUG: Moving existing files from temp to correct directories...")
-	if err := agent.moveFilesToCorrectDirectories(); err != nil {
-		log.Printf("⚠️ Warning: Failed to move existing files: %v", err)
-	}
+	// Check if we should skip file scanning
+	skipScan := viper.GetBool("skip-scan")
+	
+	if skipScan {
+		log.Printf("🚀 ULTRA FAST MODE: Skipping file scanning entirely")
+		log.Printf("📁 Directory structure initialized: %s", agent.UploadDir)
+		log.Printf("🔍 Found 0 local files (scanning skipped)")
+	} else {
+		// Pindahkan file yang sudah ada di temp ke directory yang sesuai
+		log.Printf("🔍 DEBUG: Moving existing files from temp to correct directories...")
+		if err := agent.moveFilesToCorrectDirectories(); err != nil {
+			log.Printf("⚠️ Warning: Failed to move existing files: %v", err)
+		}
 
-	if err := agent.scanLocalFiles(); err != nil {
-		log.Printf("⚠️ Warning: Failed to scan local files: %v", err)
+		if err := agent.scanLocalFiles(); err != nil {
+			log.Printf("⚠️ Warning: Failed to scan local files: %v", err)
+		}
+
+		log.Printf("Local upload directory: %s", agent.UploadDir)
+		log.Printf("Found %d local files", len(agent.LocalFiles))
+
+		if err := agent.registerLocalFiles(); err != nil {
+			log.Printf("⚠️ Warning: Failed to register local files: %v", err)
+		}
 	}
 
 	// ✅ Update status to online and port to 8081 when agent starts running
@@ -217,13 +235,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Printf("⚠️ Warning: Failed to update agent status to online: %v", err)
 	} else {
 		log.Printf("✅ Agent status updated to online with port 8081")
-	}
-
-	log.Printf("Local upload directory: %s", agent.UploadDir)
-	log.Printf("Found %d local files", len(agent.LocalFiles))
-
-	if err := agent.registerLocalFiles(); err != nil {
-		log.Printf("⚠️ Warning: Failed to register local files: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -424,6 +435,13 @@ func (a *Agent) scanLocalFiles() error {
 		log.Printf("⚠️  WARNING: Failed to move files to correct directories: %v", err)
 	}
 
+	// Get performance flags
+	skipHash := viper.GetBool("skip-hash")
+	
+	if skipHash {
+		log.Printf("🚀 FAST MODE: Skipping all hash calculations for maximum speed")
+	}
+
 	// Scan wordlists
 	wordlistDir := filepath.Join(a.UploadDir, "wordlists")
 	log.Printf("🔍 DEBUG: Scanning wordlists directory: %s", wordlistDir)
@@ -459,6 +477,9 @@ func (a *Agent) scanDirectory(dir, fileType string) error {
 		return nil // Directory doesn't exist, skip
 	}
 
+	// Get skip-hash flag from viper
+	skipHash := viper.GetBool("skip-hash")
+
 	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -479,17 +500,35 @@ func (a *Agent) scanDirectory(dir, fileType string) error {
 			detectedType = a.detectFileType(info.Name())
 		}
 
-		// Calculate file hash for integrity
-		hash, err := a.calculateFileHash(path)
-		if err != nil {
-			log.Printf("Warning: Failed to calculate hash for %s: %v", path, err)
-			hash = ""
+		// Calculate file hash for integrity (skip for very large files to speed up scanning)
+		var hash string
+		fileSize := info.Size()
+		const maxHashSize = 100 * 1024 * 1024 // 100MB limit for hash calculation
+		
+		if skipHash {
+			// Skip hash calculation entirely for maximum speed
+			hash = fmt.Sprintf("SKIPPED_FAST_MODE")
+			log.Printf("⏭️ Fast mode: Skipping hash calculation for %s (%s)", 
+				info.Name(), formatFileSize(fileSize))
+		} else if fileSize <= maxHashSize {
+			log.Printf("🔍 Calculating hash for %s (%s)...", info.Name(), formatFileSize(fileSize))
+			hash, err = a.calculateFileHash(path)
+			if err != nil {
+				log.Printf("⚠️ Warning: Failed to calculate hash for %s: %v", path, err)
+				hash = ""
+			} else {
+				log.Printf("✅ Hash calculated for %s: %s", info.Name(), hash[:8]+"...")
+			}
+		} else {
+			log.Printf("⏭️ Skipping hash calculation for large file %s (%s) to speed up scanning", 
+				info.Name(), formatFileSize(fileSize))
+			hash = fmt.Sprintf("SKIPPED_%s", formatFileSize(fileSize))
 		}
 
 		localFile := LocalFile{
 			Name:    info.Name(),
 			Path:    path,
-			Size:    info.Size(),
+			Size:    fileSize,
 			Type:    detectedType,
 			Hash:    hash,
 			ModTime: info.ModTime(),

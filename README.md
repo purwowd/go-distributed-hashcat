@@ -188,6 +188,39 @@ The agent system now includes comprehensive data validation and automatic update
 - **Port Management**: Dynamic port switching (8081 when running, 8080 when stopped)
 - **Status Management**: Automatic status updates (online/offline)
 
+#### **Performance Optimization Options:**
+The agent now supports multiple performance modes for faster startup:
+
+##### **Normal Mode (Default):**
+```bash
+./agent --server http://server:1337 --agent-key "your-key"
+```
+- Full file scanning with hash calculation
+- Best for production with integrity checking
+
+##### **Fast Mode (Skip Hash):**
+```bash
+./agent --server http://server:1337 --agent-key "your-key" --skip-hash
+```
+- Skips hash calculation for files > 100MB
+- Faster startup for large files
+- Good balance between speed and integrity
+
+##### **Ultra Fast Mode (Skip Scan):**
+```bash
+./agent --server http://server:1337 --agent-key "your-key" --skip-scan
+```
+- Skips file scanning entirely
+- Maximum startup speed
+- Best for testing or when files aren't needed immediately
+
+#### **Performance Comparison:**
+| Mode | File Scanning | Hash Calculation | Startup Time | Use Case |
+|------|---------------|------------------|--------------|----------|
+| **Normal** | ✅ Full | ✅ All files | ~40s (4 files, 2.7GB) | Production |
+| **Fast** | ✅ Full | ⚠️ Files < 100MB only | ~10s (4 files, 2.7GB) | Development |
+| **Ultra Fast** | ❌ Skipped | ❌ Skipped | ~2s | Testing/Debug |
+
 ### Job Management
 
 #### Job Operations
