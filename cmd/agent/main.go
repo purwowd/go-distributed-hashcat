@@ -250,7 +250,10 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	var info AgentInfo
-	url := fmt.Sprintf("%s/api/v1/agents?agent_key=%s", a.ServerURL, key)
+	url := fmt.Sprintf("%s/api/v1/agents/by-key?agent_key=%s", a.ServerURL, key)
+	
+	log.Printf("🔍 Checking agent key at URL: %s", url)
+	
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return info, err
@@ -262,18 +265,19 @@ func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 		return info, fmt.Errorf("gagal ambil agent: %s", string(body))
 	}
 
+	// Read response body for debugging
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("🔍 Response body: %s", string(body))
+
 	var res struct {
-		Data []AgentInfo `json:"data"`
+		Data AgentInfo `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return info, err
-	}
-
-	if len(res.Data) == 0 {
-		return info, fmt.Errorf("agent key tidak ditemukan")
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&res); err != nil {
+		return info, fmt.Errorf("failed to decode response: %v, body: %s", err, string(body))
 	}
 
-	return res.Data[0], nil
+	log.Printf("🔍 Decoded agent: %+v", res.Data)
+	return res.Data, nil
 }
 
 func (a *Agent) updateAgentInfo(agentID uuid.UUID, ip string, port int, capabilities string, status string) error {
@@ -567,26 +571,29 @@ func (a *Agent) registerWithServer(name, ip string, port int, capabilities, agen
 		return err
 	}
 
-	resp, err := a.Client.Post(
-		fmt.Sprintf("%s/api/v1/agents", a.ServerURL),
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+	url := fmt.Sprintf("%s/api/v1/agents/register", a.ServerURL)
+	log.Printf("🔍 Registering agent at URL: %s", url)
+	log.Printf("🔍 Request body: %s", string(jsonData))
+
+	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("🔍 Response status: %d", resp.StatusCode)
+	log.Printf("🔍 Response body: %s", string(body))
+
 	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to register agent: %s", string(body))
 	}
 
 	var response struct {
 		Data domain.Agent `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return err
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&response); err != nil {
+		return fmt.Errorf("failed to decode response: %v, body: %s", err, string(body))
 	}
 
 	a.ID = response.Data.ID
@@ -658,7 +665,7 @@ func (a *Agent) updateStatus(status string) {
 	}
 
 	jsonData, _ := json.Marshal(req)
-	url := fmt.Sprintf("%s/api/v1/agents/%s", a.ServerURL, a.ID.String())
+	url := fmt.Sprintf("%s/api/v1/agents/%s/status", a.ServerURL, a.ID.String())
 
 	httpReq, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
 	if err != nil {
