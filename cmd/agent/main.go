@@ -265,29 +265,52 @@ func runAgent(cmd *cobra.Command, args []string) {
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	var info AgentInfo
 	url := fmt.Sprintf("%s/api/v1/agents/by-key?agent_key=%s", a.ServerURL, key)
+	
+	log.Printf("🔍 DEBUG: Attempting to fetch agent with key: %s", key)
+	log.Printf("🔍 DEBUG: Requesting URL: %s", url)
+	
 	resp, err := a.Client.Get(url)
 	if err != nil {
-		return info, err
+		log.Printf("❌ DEBUG: HTTP request failed: %v", err)
+		return info, fmt.Errorf("gagal ambil agent: %v", err)
 	}
 	defer resp.Body.Close()
 
+	log.Printf("🔍 DEBUG: HTTP response status: %d", resp.StatusCode)
+	
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return info, fmt.Errorf("gagal ambil agent: %s", string(body))
+		log.Printf("❌ DEBUG: HTTP error response body: %s", string(body))
+		return info, fmt.Errorf("gagal ambil agent: HTTP %d - %s", resp.StatusCode, string(body))
 	}
+
+	// Read response body for debugging
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("❌ DEBUG: Failed to read response body: %v", err)
+		return info, fmt.Errorf("gagal baca response body: %v", err)
+	}
+	
+	log.Printf("🔍 DEBUG: Response body: %s", string(body))
 
 	var res struct {
 		Data AgentInfo `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return info, err
+	if err := json.Unmarshal(body, &res); err != nil {
+		log.Printf("❌ DEBUG: JSON unmarshal failed: %v", err)
+		log.Printf("❌ DEBUG: Raw response: %s", string(body))
+		return info, fmt.Errorf("gagal parse JSON response: %v", err)
 	}
+
+	log.Printf("🔍 DEBUG: Parsed response - ID: %s, Name: %s", res.Data.ID.String(), res.Data.Name)
 
 	// Check if agent was found
 	if res.Data.ID == uuid.Nil {
+		log.Printf("❌ DEBUG: Agent ID is nil, agent not found")
 		return info, fmt.Errorf("agent key tidak ditemukan")
 	}
 
+	log.Printf("✅ DEBUG: Successfully found agent: %s (%s)", res.Data.Name, res.Data.ID.String())
 	return res.Data, nil
 }
 
