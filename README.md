@@ -155,13 +155,38 @@ curl -X POST -H "Content-Type: application/json" \
 - `POST /api/v1/agents/generate-key` - Generate agent key
 - `POST /api/v1/agents/startup` - Agent startup
 - `POST /api/v1/agents/heartbeat` - Agent heartbeat
-- `POST /api/v1/agents/update-data` - Update agent data
+- `POST /api/v1/agents/update-data` - Update agent data (IP, port, capabilities)
 - `PUT /api/v1/agents/:id/heartbeat` - Update agent heartbeat
 - `POST /api/v1/agents/:id/files` - Register agent files
 
 #### Agent Job Management
 - `GET /api/v1/agents/:id/jobs` - Get jobs by agent ID
 - `GET /api/v1/agents/:id/jobs/next` - Get available job for agent
+
+### Agent Lifecycle Management
+The agent system now includes comprehensive data validation and automatic updates:
+
+#### **Startup Process:**
+1. **Agent Key Validation**: Verifies agent key exists in database
+2. **Name Validation**: Checks if agent name matches database record
+3. **IP Address Validation**: 
+   - Updates missing IP address with current IP
+   - Updates mismatched IP address
+4. **Capabilities Validation**: 
+   - Auto-detects capabilities using hashcat -I
+   - Updates capabilities if different from database
+5. **Status Update**: Sets status to "online" and port to 8081
+
+#### **Shutdown Process:**
+1. **Status Update**: Sets status to "offline"
+2. **Port Restoration**: Restores port to 8080 (original database port)
+3. **Capabilities Preservation**: Maintains detected capabilities
+
+#### **Automatic Updates:**
+- **IP Address**: Automatically updated if missing or different
+- **Capabilities**: Auto-detected and updated using hashcat
+- **Port Management**: Dynamic port switching (8081 when running, 8080 when stopped)
+- **Status Management**: Automatic status updates (online/offline)
 
 ### Job Management
 

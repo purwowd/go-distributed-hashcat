@@ -128,7 +128,43 @@ func runAgent(cmd *cobra.Command, args []string) {
 		log.Printf("ℹ️ Using manually specified capabilities: %s", capabilities)
 	}
 
-	// ✅ Update capabilities di database jika berbeda dengan yang terdeteksi
+	// Jika name kosong, pakai hostname
+	if name == "" {
+		hostname, _ := os.Hostname()
+		name = fmt.Sprintf("agent-%s", hostname)
+	}
+
+	// ✅ COMPREHENSIVE AGENT DATA VALIDATION AND UPDATE
+	log.Printf("🔍 Starting comprehensive agent data validation...")
+	
+	// Check if agent name matches
+	if info.Name != name {
+		log.Printf("⚠️ Warning: Agent name mismatch. Database: '%s', Current: '%s'", info.Name, name)
+		log.Printf("ℹ️ Using name from database: %s", info.Name)
+		name = info.Name // Use name from database
+	}
+
+	// Check and update IP address if missing
+	if info.IPAddress == "" {
+		log.Printf("🔄 IP address is missing in database, updating with current IP: %s", ip)
+		if err := updateAgentIPAddress(tempAgent, agentKey, ip); err != nil {
+			log.Printf("⚠️ Warning: Failed to update IP address: %v", err)
+		} else {
+			log.Printf("✅ IP address updated successfully")
+		}
+	} else if info.IPAddress != ip {
+		log.Printf("🔄 IP address mismatch. Database: '%s', Current: '%s'", info.IPAddress, ip)
+		log.Printf("🔄 Updating IP address to current IP...")
+		if err := updateAgentIPAddress(tempAgent, agentKey, ip); err != nil {
+			log.Printf("⚠️ Warning: Failed to update IP address: %v", err)
+		} else {
+			log.Printf("✅ IP address updated successfully")
+		}
+	} else {
+		log.Printf("✅ IP address is correct: %s", ip)
+	}
+
+	// Check and update capabilities if different
 	if info.Capabilities == "" || info.Capabilities != capabilities {
 		log.Printf("🔄 Updating capabilities from '%s' to '%s'", info.Capabilities, capabilities)
 		if err := updateAgentCapabilities(tempAgent, agentKey, capabilities); err != nil {
@@ -137,13 +173,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 			log.Printf("✅ Capabilities updated successfully")
 		}
 	} else {
-		log.Printf("ℹ️ Capabilities already up-to-date: %s", capabilities)
-	}
-
-	// Jika name kosong, pakai hostname
-	if name == "" {
-		hostname, _ := os.Hostname()
-		name = fmt.Sprintf("agent-%s", hostname)
+		log.Printf("✅ Capabilities already up-to-date: %s", capabilities)
 	}
 
 	// Simpan port asli dari database untuk restoration
@@ -179,40 +209,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	if err := agent.scanLocalFiles(); err != nil {
 		log.Printf("⚠️ Warning: Failed to scan local files: %v", err)
-	}
-
-	// Registrasi ke server
-	err := agent.registerWithServer(name, ip, port, capabilities, agentKey)
-	if err != nil && strings.Contains(err.Error(), "already registered") {
-		if info.Name != name {
-			log.Fatalf("❌ Agent key '%s' already used by another agent: %s", agentKey, info.Name)
-		}
-
-		// Jika IP, Port, atau Capabilities kosong → update data
-		if info.IPAddress == "" || info.Port == 0 || info.Capabilities == "" {
-			log.Printf("⚠️ Agent data '%s' is incomplete, being updated...", name)
-			if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
-				log.Fatalf("❌ Failed to update agent info: %v", err)
-			}
-			// Tetap gunakan log "registered successfully"
-			log.Printf("✅ Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
-			agent.updateStatus("online")
-		} else {
-			// Data lengkap → log already exists beserta datanya
-			log.Printf("ℹ️ Agent key already exists with complete data:")
-			log.Printf("    Name: %s", info.Name)
-			log.Printf("    ID: %s", info.ID.String())
-			log.Printf("    IP: %s", info.IPAddress)
-			log.Printf("    Port: %d", info.Port)
-			log.Printf("    Capabilities: %s", info.Capabilities)
-			log.Printf("✅ Agent %s (%s) is running", agent.Name, agent.ID.String())
-			agent.updateStatus("online")
-		}
-	} else if err != nil {
-		log.Fatalf("❌ Failed to register and lookup agent: %v", err)
-	} else {
-		// Registrasi baru sukses
-		log.Printf("✅ Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 	}
 
 	// ✅ Update status to online and port to 8081 when agent starts running
@@ -251,10 +247,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 	} else {
 		log.Printf("✅ Agent status updated to offline with port 8080 and capabilities preserved")
 	}
-
-	// ✅ Note: restoreOriginalPort() is no longer needed since we already updated everything above
-	// The single updateAgentInfo call above handles both status and port updates
-	log.Printf("ℹ️ Skipping restoreOriginalPort() to avoid capabilities override")
 
 	log.Println("Agent exited")
 }
@@ -2715,7 +2707,7 @@ func hasGPU() bool {
 }
 
 // updateAgentCapabilities updates agent capabilities in the database
-func updateAgentCapabilities(a *Agent, agentKey, capabilities string) error {
+func updateAgentCapabilities(a *Agent, agentKey string, capabilities string) error {
 	req := struct {
 		AgentKey     string `json:"agent_key"`
 		Capabilities string `json:"capabilities"`
@@ -2732,13 +2724,13 @@ func updateAgentCapabilities(a *Agent, agentKey, capabilities string) error {
 
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update agent capabilities: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update capabilities: %s", string(body))
+		return fmt.Errorf("failed to update agent capabilities: %s", string(body))
 	}
 
 	return nil
@@ -3250,4 +3242,34 @@ func mustJSON(v interface{}) []byte {
 		panic(fmt.Sprintf("failed to marshal JSON: %v", err))
 	}
 	return data
+}
+
+// updateAgentIPAddress updates the IP address of an agent
+func updateAgentIPAddress(a *Agent, agentKey string, ipAddress string) error {
+	req := struct {
+		AgentKey  string `json:"agent_key"`
+		IPAddress string `json:"ip_address"`
+	}{
+		AgentKey:  agentKey,
+		IPAddress: ipAddress,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/agents/update-data", a.ServerURL)
+
+	httpReq, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to update agent IP address: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update agent IP address: %s", string(body))
+	}
+
+	return nil
 }
