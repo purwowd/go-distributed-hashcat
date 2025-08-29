@@ -71,6 +71,7 @@ func main() {
 	rootCmd.Flags().String("capabilities", "auto", "Agent capabilities (auto, CPU, GPU, or custom)")
 	rootCmd.Flags().String("agent-key", "", "Agent key")
 	rootCmd.Flags().String("upload-dir", "/root/uploads", "Local uploads directory")
+	rootCmd.Flags().Duration("download-timeout", 10*time.Minute, "Timeout for downloading large files (e.g., 10m, 30m)")
 
 	viper.BindPFlags(rootCmd.Flags())
 
@@ -87,15 +88,18 @@ func runAgent(cmd *cobra.Command, args []string) {
 	capabilities := viper.GetString("capabilities")
 	agentKey := viper.GetString("agent-key")
 	uploadDir := viper.GetString("upload-dir")
+	downloadTimeout := viper.GetDuration("download-timeout")
 
 	if agentKey == "" {
 		log.Fatalf("❌ Agent key is required. Please provide --agent-key parameter.")
 	}
 
+	log.Printf("⚙️  Download timeout configured: %v", downloadTimeout)
+
 	// Buat temporary agent client untuk cek agent key
 	tempAgent := &Agent{
 		ServerURL: serverURL,
-		Client:    &http.Client{Timeout: 30 * time.Second},
+		Client:    &http.Client{Timeout: downloadTimeout}, // Configurable timeout for large file downloads
 	}
 
 	// ✅ Cek apakah agent key ada di database
@@ -153,7 +157,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 		ID:           info.ID,
 		Name:         name,
 		ServerURL:    serverURL,
-		Client:       &http.Client{Timeout: 30 * time.Second},
+		Client:       &http.Client{Timeout: downloadTimeout}, // Configurable timeout for large file downloads
 		UploadDir:    uploadDir,
 		LocalFiles:   make(map[string]LocalFile),
 		AgentKey:     agentKey,
@@ -996,6 +1000,8 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 
 	// Download file from server
 	url := fmt.Sprintf("%s/api/v1/wordlists/%s/download", a.ServerURL, wordlistID.String())
+	log.Printf("📥 Starting wordlist download from: %s", url)
+	
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
@@ -1004,6 +1010,12 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to download file: status %d", resp.StatusCode)
+	}
+
+	// Get content length for progress tracking
+	contentLength := resp.ContentLength
+	if contentLength > 0 {
+		log.Printf("📊 Wordlist size: %s", formatBytes(contentLength))
 	}
 
 	// Get filename from Content-Disposition header or use UUID
@@ -1023,15 +1035,86 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 	}
 	defer file.Close()
 
-	// Copy downloaded content to local file
-	_, err = io.Copy(file, resp.Body)
+	// Copy downloaded content to local file with progress tracking
+	var downloaded int64
+	if contentLength > 0 {
+		// Use progress tracking for large files
+		downloaded, err = a.copyWithProgress(file, resp.Body, contentLength)
+	} else {
+		// Regular copy for files without content length
+		downloaded, err = io.Copy(file, resp.Body)
+	}
+	
 	if err != nil {
 		os.Remove(localPath) // Clean up on error
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	log.Printf("Downloaded wordlist to: %s", localPath)
+	log.Printf("✅ Wordlist downloaded successfully: %s (%s)", localPath, formatBytes(downloaded))
 	return localPath, nil
+}
+
+// copyWithProgress copies data with progress tracking
+func (a *Agent) copyWithProgress(dst io.Writer, src io.Reader, totalSize int64) (int64, error) {
+	var written int64
+	buffer := make([]byte, 32*1024) // 32KB buffer
+	
+	// Progress tracking variables
+	lastProgress := int64(0)
+	progressInterval := int64(10 * 1024 * 1024) // Log every 10MB
+	
+	for {
+		n, err := src.Read(buffer)
+		if n > 0 {
+			wn, werr := dst.Write(buffer[:n])
+			if werr != nil {
+				return written, werr
+			}
+			written += int64(wn)
+			
+			// Progress tracking
+			if written-lastProgress >= progressInterval {
+				progress := float64(written) / float64(totalSize) * 100
+				log.Printf("📥 Download progress: %s / %s (%.1f%%)", 
+					formatBytes(written), 
+					formatBytes(totalSize), 
+					progress)
+				lastProgress = written
+			}
+		}
+		
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return written, err
+		}
+	}
+	
+	// Final progress update
+	if totalSize > 0 {
+		progress := float64(written) / float64(totalSize) * 100
+		log.Printf("📥 Download completed: %s / %s (%.1f%%)", 
+			formatBytes(written), 
+			formatBytes(totalSize), 
+			progress)
+	}
+	
+	return written, nil
+}
+
+// formatBytes converts bytes to human readable format
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func (a *Agent) extractPassword(jobID uuid.UUID) (string, error) {
