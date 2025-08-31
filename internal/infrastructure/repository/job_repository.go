@@ -43,7 +43,7 @@ func (r *jobRepository) prepareStatements() {
 
 	r.getByIDStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
-		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
+		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at, skip, word_limit
 		FROM jobs WHERE id = ? LIMIT 1
 	`)
 	if err != nil {
@@ -52,7 +52,7 @@ func (r *jobRepository) prepareStatements() {
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
-		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
+		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at, skip, word_limit
 		FROM jobs ORDER BY created_at DESC LIMIT 100
 	`)
 	if err != nil {
@@ -61,7 +61,7 @@ func (r *jobRepository) prepareStatements() {
 
 	r.getByStatusStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
-		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
+		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at, skip, word_limit
 		FROM jobs WHERE status = ? ORDER BY created_at DESC LIMIT 50
 	`)
 	if err != nil {
@@ -70,7 +70,7 @@ func (r *jobRepository) prepareStatements() {
 
 	r.getByAgentIDStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules,
-		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at
+		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at, skip, word_limit
 		FROM jobs WHERE agent_id = ? ORDER BY created_at DESC LIMIT 20
 	`)
 	if err != nil {
@@ -80,7 +80,7 @@ func (r *jobRepository) prepareStatements() {
 	r.updateStmt, err = r.db.DB().Prepare(`
 		UPDATE jobs SET 
 		name = ?, status = ?, hash_type = ?, attack_mode = ?, hash_file = ?, hash_file_id = ?, wordlist = ?, wordlist_id = ?, rules = ?,
-		agent_id = ?, progress = ?, speed = ?, eta = ?, result = ?, updated_at = ?, started_at = ?, completed_at = ?
+		agent_id = ?, progress = ?, speed = ?, eta = ?, result = ?, updated_at = ?, started_at = ?, completed_at = ?, skip = ?, word_limit = ?
 		WHERE id = ?
 	`)
 	if err != nil {
@@ -106,8 +106,8 @@ func (r *jobRepository) prepareStatements() {
 func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error {
 	query := `
 		INSERT INTO jobs (id, name, status, hash_type, attack_mode, hash_file, hash_file_id, wordlist, wordlist_id, rules, 
-		                  agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		                  agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at, skip, word_limit)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	now := time.Now()
@@ -167,6 +167,8 @@ func (r *jobRepository) Create(ctx context.Context, job *domain.Job) error {
 		job.UpdatedAt,
 		startedAt,
 		completedAt,
+		job.Skip,
+		job.WordLimit,
 	)
 
 	if err == nil {
@@ -269,7 +271,7 @@ func (r *jobRepository) GetAvailableJobForAgent(ctx context.Context, agentID uui
 	query := `
 		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, 
 		       wordlist, wordlist_id, rules, agent_id, progress, speed, eta, result, 
-		       created_at, updated_at, started_at, completed_at
+		       created_at, updated_at, started_at, completed_at, skip, word_limit
 		FROM jobs 
 		WHERE agent_id = ? AND status = 'pending'
 		ORDER BY created_at ASC
@@ -327,6 +329,8 @@ func (r *jobRepository) Update(ctx context.Context, job *domain.Job) error {
 		job.UpdatedAt,
 		job.StartedAt,
 		job.CompletedAt,
+		job.Skip,
+		job.WordLimit,
 		job.ID.String(),
 	)
 
@@ -414,6 +418,9 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 	var startedAt sql.NullTime
 	var completedAt sql.NullTime
 
+	var skip sql.NullInt64
+	var wordLimit sql.NullInt64
+
 	err := row.Scan(
 		&idStr,
 		&job.Name,
@@ -434,6 +441,8 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 		&job.UpdatedAt,
 		&startedAt,
 		&completedAt,
+		&skip,
+		&wordLimit,
 	)
 
 	if err != nil {
@@ -472,6 +481,14 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 		job.CompletedAt = &completedAt.Time
 	}
 
+	if skip.Valid {
+		job.Skip = &skip.Int64
+	}
+
+	if wordLimit.Valid {
+		job.WordLimit = &wordLimit.Int64
+	}
+
 	return job, nil
 }
 
@@ -487,6 +504,8 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 		var eta sql.NullTime
 		var startedAt sql.NullTime
 		var completedAt sql.NullTime
+		var skip sql.NullInt64
+		var wordLimit sql.NullInt64
 
 		err := rows.Scan(
 			&idStr,
@@ -508,6 +527,8 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 			&job.UpdatedAt,
 			&startedAt,
 			&completedAt,
+			&skip,
+			&wordLimit,
 		)
 		if err != nil {
 			return nil, err
@@ -540,6 +561,14 @@ func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {
 
 		if completedAt.Valid {
 			job.CompletedAt = &completedAt.Time
+		}
+
+		if skip.Valid {
+			job.Skip = &skip.Int64
+		}
+
+		if wordLimit.Valid {
+			job.WordLimit = &wordLimit.Int64
 		}
 
 		jobs = append(jobs, job)

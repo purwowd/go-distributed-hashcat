@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"go-distributed-hashcat/internal/infrastructure"
 )
 
 type Migration struct {
@@ -95,7 +96,7 @@ func (mr *MigrationRunner) GenerateMigration(name string) error {
 		return fmt.Errorf("failed to write migration file: %w", err)
 	}
 
-	log.Printf("✅ Created migration: %s", filename)
+	infrastructure.ServerLogger.Info("Database migration system initialized")
 	return nil
 }
 
@@ -114,7 +115,7 @@ func (mr *MigrationRunner) LoadMigrations() ([]Migration, error) {
 
 		migration, err := mr.parseMigrationFile(path)
 		if err != nil {
-			log.Printf("⚠️ Skipping invalid migration file %s: %v", path, err)
+			infrastructure.ServerLogger.Warning("Skipping invalid migration file %s: %v", path, err)
 			return nil // Continue with other files
 		}
 
@@ -258,7 +259,7 @@ func (mr *MigrationRunner) MigrateUp() error {
 			continue // Skip already applied
 		}
 
-		log.Printf("🔄 Running migration %d: %s", migration.Version, migration.Name)
+		infrastructure.ServerLogger.Info("Running migration %d: %s", migration.Version, migration.Name)
 
 		// Execute migration in transaction
 		tx, err := mr.db.Begin()
@@ -288,14 +289,14 @@ func (mr *MigrationRunner) MigrateUp() error {
 			return fmt.Errorf("failed to commit migration %d: %w", migration.Version, err)
 		}
 
-		log.Printf("✅ Applied migration %d: %s", migration.Version, migration.Name)
+		infrastructure.ServerLogger.Success("Applied migration %d: %s", migration.Version, migration.Name)
 		runCount++
 	}
 
 	if runCount == 0 {
-		log.Println("📋 No pending migrations to run")
+		infrastructure.ServerLogger.Success("All migrations completed successfully")
 	} else {
-		log.Printf("🎉 Successfully applied %d migrations", runCount)
+		infrastructure.ServerLogger.Success("Successfully applied %d migrations", runCount)
 	}
 
 	return nil
@@ -310,7 +311,7 @@ func (mr *MigrationRunner) MigrateDown() error {
 	}
 
 	if len(appliedVersions) == 0 {
-		log.Println("📋 No migrations to rollback")
+		infrastructure.ServerLogger.Info("No migrations to rollback")
 		return nil
 	}
 
@@ -335,7 +336,7 @@ func (mr *MigrationRunner) MigrateDown() error {
 		return fmt.Errorf("migration file not found for version %d", lastVersion)
 	}
 
-	log.Printf("🔄 Rolling back migration %d: %s", targetMigration.Version, targetMigration.Name)
+	infrastructure.ServerLogger.Info("Rolling back migration %d: %s", targetMigration.Version, targetMigration.Name)
 
 	// Execute rollback in transaction
 	tx, err := mr.db.Begin()
@@ -361,7 +362,7 @@ func (mr *MigrationRunner) MigrateDown() error {
 		return fmt.Errorf("failed to commit rollback %d: %w", targetMigration.Version, err)
 	}
 
-	log.Printf("✅ Rolled back migration %d: %s", targetMigration.Version, targetMigration.Name)
+	infrastructure.ServerLogger.Success("Rolled back migration %d: %s", targetMigration.Version, targetMigration.Name)
 	return nil
 }
 
@@ -385,24 +386,24 @@ func (mr *MigrationRunner) Status() error {
 		applied[version] = true
 	}
 
-	log.Println("📊 Migration Status:")
-	log.Println("==================")
+	infrastructure.ServerLogger.Info("Migration table created")
+	infrastructure.ServerLogger.Info("=================")
 
 	if len(migrations) == 0 {
-		log.Println("No migration files found")
+		infrastructure.ServerLogger.Info("No migration files found")
 		return nil
 	}
 
 	for _, migration := range migrations {
-		status := "❌ Pending"
+		status := "Pending"
 		if applied[migration.Version] {
-			status = "✅ Applied"
+			status = "Applied"
 		}
-		log.Printf("Version %d: %s [%s]", migration.Version, migration.Name, status)
+		infrastructure.ServerLogger.Info("Migration %d: %s - %s", migration.Version, migration.Name, status)
 	}
 
 	pendingCount := len(migrations) - len(appliedVersions)
-	log.Printf("\n📈 Summary: %d total, %d applied, %d pending",
+	infrastructure.ServerLogger.Info("Summary: %d total, %d applied, %d pending",
 		len(migrations), len(appliedVersions), pendingCount)
 
 	return nil

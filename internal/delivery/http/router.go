@@ -1,12 +1,12 @@
 package http
 
 import (
-	"net/http"
 	"os"
 	"time"
 
 	"go-distributed-hashcat/internal/delivery/http/handler"
 	"go-distributed-hashcat/internal/delivery/http/middleware"
+	"go-distributed-hashcat/internal/domain"
 	"go-distributed-hashcat/internal/usecase"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +18,7 @@ func NewRouter(
 	hashFileUsecase usecase.HashFileUsecase,
 	wordlistUsecase usecase.WordlistUsecase,
 	jobEnrichmentService usecase.JobEnrichmentService,
+	distributedJobUsecase domain.DistributedJobUsecase,
 ) *gin.Engine {
 	// Set Gin to release mode for production performance
 	gin.SetMode(gin.ReleaseMode)
@@ -51,8 +52,8 @@ func NewRouter(
 	cacheHandler := handler.NewCacheHandler(jobEnrichmentService)
 	wsHandler := handler.NewWebSocketHandler()
 
-	// Initialize distributed job handler (placeholder for now)
-	// distributedJobHandler := handler.NewDistributedJobHandler(distributedJobUsecase)
+	// Initialize distributed job handler
+	distributedJobHandler := handler.NewDistributedJobHandler(distributedJobUsecase)
 
 	// Serve modern frontend (production build)
 	router.Static("/assets", "./frontend/dist/assets")
@@ -124,36 +125,11 @@ func NewRouter(
 		// Distributed Job routes
 		distributedJobs := v1.Group("/distributed-jobs")
 		{
-			distributedJobs.POST("/", func(c *gin.Context) {
-				c.JSON(http.StatusNotImplemented, gin.H{
-					"success": false,
-					"error":   "Distributed jobs feature not yet implemented",
-				})
-			})
-			distributedJobs.GET("/:id/status", func(c *gin.Context) {
-				c.JSON(http.StatusNotImplemented, gin.H{
-					"success": false,
-					"error":   "Distributed jobs feature not yet implemented",
-				})
-			})
-			distributedJobs.POST("/:id/start-all", func(c *gin.Context) {
-				c.JSON(http.StatusNotImplemented, gin.H{
-					"success": false,
-					"error":   "Distributed jobs feature not yet implemented",
-				})
-			})
-			distributedJobs.GET("/performance", func(c *gin.Context) {
-				c.JSON(http.StatusNotImplemented, gin.H{
-					"success": false,
-					"error":   "Distributed jobs feature not yet implemented",
-				})
-			})
-			distributedJobs.GET("/preview", func(c *gin.Context) {
-				c.JSON(http.StatusNotImplemented, gin.H{
-					"success": false,
-					"error":   "Distributed jobs feature not yet implemented",
-				})
-			})
+			distributedJobs.POST("/", distributedJobHandler.CreateDistributedJobs)
+			distributedJobs.GET("/:id/status", distributedJobHandler.GetDistributedJobStatus)
+			distributedJobs.POST("/:id/start-all", distributedJobHandler.StartAllSubJobs)
+			distributedJobs.GET("/performance", distributedJobHandler.GetAgentPerformance)
+			distributedJobs.GET("/preview", distributedJobHandler.GetDistributionPreview)
 		}
 
 		// Hash file routes

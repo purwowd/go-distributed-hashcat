@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -246,10 +250,42 @@ func (c *AgentClient) calculateBackoffDelay(attempt int) time.Duration {
 }
 
 func (c *AgentClient) isRetryableError(err error) bool {
-	// Implement logic to determine if error is retryable
-	// Typically network errors, timeouts, 5xx status codes are retryable
-	// 4xx client errors are usually not retryable
-	return true // Simplified for now
+	if err == nil {
+		return false
+	}
+
+	// Network errors are retryable
+	if netErr, ok := err.(net.Error); ok {
+		return netErr.Timeout() || netErr.Temporary()
+	}
+
+	// Context errors
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+
+	// HTTP status code errors
+	if httpErr, ok := err.(*url.Error); ok {
+		return c.isRetryableError(httpErr.Err)
+	}
+
+	// Connection errors
+	errStr := err.Error()
+	retryableErrors := []string{
+		"connection refused",
+		"connection reset",
+		"no such host",
+		"network is unreachable",
+		"temporary failure",
+	}
+
+	for _, retryableErr := range retryableErrors {
+		if strings.Contains(strings.ToLower(errStr), retryableErr) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (c *AgentClient) sendHeartbeat(ctx context.Context) error {

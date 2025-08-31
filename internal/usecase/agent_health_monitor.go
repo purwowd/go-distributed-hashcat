@@ -2,11 +2,11 @@ package usecase
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
+	"go-distributed-hashcat/internal/infrastructure"
 
 	"github.com/google/uuid"
 )
@@ -78,7 +78,7 @@ func NewAgentHealthMonitor(
 }
 
 func (h *agentHealthMonitor) Start(ctx context.Context) {
-	log.Printf("🏥 Starting Agent Health Monitor (check interval: %v, timeout: %v)",
+	infrastructure.ServerLogger.Info("Starting Agent Health Monitor (check interval: %v, timeout: %v)",
 		h.config.CheckInterval, h.config.AgentTimeout)
 
 	h.ticker = time.NewTicker(h.config.CheckInterval)
@@ -93,18 +93,23 @@ func (h *agentHealthMonitor) Stop() {
 	if h.ticker != nil {
 		h.ticker.Stop()
 	}
-	close(h.done)
-	log.Println("🛑 Agent Health Monitor stopped")
+	select {
+	case <-h.done:
+		// Channel already closed
+	default:
+		close(h.done)
+	}
+	infrastructure.ServerLogger.Info("Agent Health Monitor stopped")
 }
 
 func (h *agentHealthMonitor) RegisterAgent(agentID uuid.UUID) {
 	h.registeredAgents.Store(agentID, time.Now())
-	log.Printf("📝 Registered agent for health monitoring: %s", agentID.String()[:8])
+	infrastructure.ServerLogger.Info("Registered agent for health monitoring: %s", agentID.String()[:8])
 }
 
 func (h *agentHealthMonitor) UnregisterAgent(agentID uuid.UUID) {
 	h.registeredAgents.Delete(agentID)
-	log.Printf("❌ Unregistered agent from health monitoring: %s", agentID.String()[:8])
+	infrastructure.ServerLogger.Info("Unregistered agent from health monitoring: %s", agentID.String()[:8])
 }
 
 func (h *agentHealthMonitor) GetHealthStatus() HealthStatus {
@@ -128,11 +133,11 @@ func (h *agentHealthMonitor) healthCheckLoop(ctx context.Context) {
 
 func (h *agentHealthMonitor) performHealthCheck(ctx context.Context) {
 	start := time.Now()
-	log.Printf("🔍 Starting health check...")
+	infrastructure.ServerLogger.Debug("Starting health check...")
 
 	agents, err := h.agentUsecase.GetAllAgents(ctx)
 	if err != nil {
-		log.Printf("❌ Failed to get agents for health check: %v", err)
+		infrastructure.ServerLogger.Error("Failed to get agents for health check: %v", err)
 		h.updateHealthStatus(0, 0, 0, 1)
 		return
 	}
@@ -161,7 +166,7 @@ func (h *agentHealthMonitor) performHealthCheck(ctx context.Context) {
 	h.updateHealthStatus(onlineCount, offlineCount, recentlyOfflineCount, 0)
 
 	duration := time.Since(start)
-	log.Printf("✅ Health check completed in %v - Online: %d, Offline: %d, Recently Offline: %d",
+	infrastructure.ServerLogger.Debug("Health check completed in %v - Online: %d, Offline: %d, Recently Offline: %d",
 		duration, onlineCount, offlineCount, recentlyOfflineCount)
 }
 
@@ -169,15 +174,15 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 	now := time.Now()
 	timeSinceLastSeen := now.Sub(agent.LastSeen)
 
-	// ✅ Kondisi baru: agent tanpa IPAddress selalu offline
+	// Kondisi baru: agent tanpa IPAddress selalu offline
 	if agent.IPAddress == "" {
-		log.Printf("⚠️  Agent %s (%s) has no IP address, forcing offline status",
+		infrastructure.ServerLogger.Warning("Agent %s (%s) has no IP address, forcing offline status",
 			agent.Name, agent.ID.String()[:8])
 		*offlineCount++
 		// Update status ke offline jika belum
 		if agent.Status != "offline" {
 			if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "offline"); err != nil {
-				log.Printf("❌ Failed to update agent %s status to offline: %v", agent.Name, err)
+				infrastructure.ServerLogger.Error("Failed to update agent %s status to offline: %v", agent.Name, err)
 			} else if h.wsHub != nil {
 				h.wsHub.BroadcastAgentStatus(agent.ID.String(), "offline", agent.LastSeen.Format(time.RFC3339))
 			}
@@ -205,18 +210,18 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 
 	// Status change needed?
 	if shouldBeOffline && currentlyOnline {
-		log.Printf("⚠️  Agent %s (%s) timeout detected - last seen %v ago",
+		infrastructure.ServerLogger.Warning("Agent %s (%s) timeout detected - last seen %v ago",
 			agent.Name, agent.ID.String()[:8], timeSinceLastSeen)
 
 		// Update status to offline
 		if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "offline"); err != nil {
-			log.Printf("❌ Failed to update agent %s status to offline: %v", agent.Name, err)
+			infrastructure.ServerLogger.Error("Failed to update agent %s status to offline: %v", agent.Name, err)
 			return
 		}
 
 		// Broadcast status change via WebSocket
 		if h.wsHub != nil {
-			log.Printf("📡 Broadcasting agent %s status change to offline via WebSocket", agent.Name)
+			infrastructure.ServerLogger.Debug("Broadcasting agent %s status change to offline via WebSocket", agent.Name)
 			h.wsHub.BroadcastAgentStatus(
 				agent.ID.String(),
 				"offline",
@@ -224,21 +229,21 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 			)
 		}
 
-		log.Printf("🔄 Agent %s status updated to offline", agent.Name)
+		infrastructure.ServerLogger.Info("Agent %s status updated to offline", agent.Name)
 	} else if !shouldBeOffline && !currentlyOnline {
-		// ✅ NEW: Handle online status change (agent came back online)
-		log.Printf("🟢 Agent %s (%s) came back online - last seen %v ago",
+		// Handle online status change (agent came back online)
+		infrastructure.ServerLogger.Info("Agent %s (%s) came back online - last seen %v ago",
 			agent.Name, agent.ID.String()[:8], timeSinceLastSeen)
 
 		// Update status to online
 		if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "online"); err != nil {
-			log.Printf("❌ Failed to update agent %s status to online: %v", agent.Name, err)
+			infrastructure.ServerLogger.Error("Failed to update agent %s status to online: %v", agent.Name, err)
 			return
 		}
 
 		// Broadcast status change via WebSocket
 		if h.wsHub != nil {
-			log.Printf("📡 Broadcasting agent %s status change to online via WebSocket", agent.Name)
+			infrastructure.ServerLogger.Debug("Broadcasting agent %s status change to online via WebSocket", agent.Name)
 			h.wsHub.BroadcastAgentStatus(
 				agent.ID.String(),
 				"online",
@@ -246,12 +251,12 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 			)
 		}
 
-		log.Printf("🔄 Agent %s status updated to online", agent.Name)
+		infrastructure.ServerLogger.Info("Agent %s status updated to online", agent.Name)
 	}
 
 	// Optional: Auto-cleanup very old offline agents
 	if timeSinceLastSeen > 24*time.Hour && agent.Status == "offline" {
-		log.Printf("🗑️  Agent %s is offline for >24h, consider cleanup", agent.Name)
+		infrastructure.ServerLogger.Warning("Agent %s is offline for >24h, consider cleanup", agent.Name)
 		// Could trigger cleanup logic here
 	}
 }

@@ -168,12 +168,16 @@
                                     <div class="space-y-1">
                                         <div class="text-xs text-gray-600 flex items-center">
                                             <i class="fas fa-list text-green-500 mr-1 w-3"></i>
-                                            <span x-text="job.wordlist_name || 'No wordlist'">Wordlist</span>
+                                            <span class="truncate max-w-24" x-text="job.wordlist_name || 'No wordlist'" :title="job.wordlist_name">Wordlist</span>
                                         </div>
                                         <div class="text-xs text-gray-600 flex items-center">
                                             <i class="fas fa-server mr-1 w-3" :class="job.agent_name && job.agent_name !== 'Unassigned' ? 'text-blue-500' : 'text-orange-500'"></i>
-                                            <span :class="job.agent_name && job.agent_name !== 'Unassigned' ? 'text-gray-600' : 'text-orange-600 font-medium'" x-text="job.agent_name || 'Unassigned'">Agent</span>
+                                            <span class="truncate max-w-20" :class="job.agent_name && job.agent_name !== 'Unassigned' ? 'text-gray-600' : 'text-orange-600 font-medium'" x-text="job.agent_name || 'Unassigned'" :title="job.agent_name">Agent</span>
                                             <i x-show="!job.agent_name || job.agent_name === 'Unassigned'" class="fas fa-exclamation-triangle text-orange-500 ml-1 text-xs"></i>
+                                        </div>
+                                        <div x-show="job.skip !== undefined && job.word_limit !== undefined" class="text-xs text-purple-600 flex items-center">
+                                            <i class="fas fa-cut text-purple-500 mr-1 w-3"></i>
+                                            <span x-text="`Skip: ${formatNumber(job.skip || 0)}`">Skip: 0</span>
                                         </div>
                                     </div>
                                 </td>
@@ -187,7 +191,7 @@
                                              x-text="extractPassword(job.result)"></div>
                                     </div>
                                     <div x-show="job.result && !hasFoundPassword(job.result)" class="text-xs text-gray-600">
-                                        <span x-text="job.result || 'No result yet'">Result</span>
+                                        <div class="truncate max-w-32" x-text="job.result || 'No result yet'" :title="job.result">Result</div>
                                     </div>
                                     <div x-show="!job.result" class="text-xs text-gray-400">
                                         <i class="fas fa-clock mr-1"></i>

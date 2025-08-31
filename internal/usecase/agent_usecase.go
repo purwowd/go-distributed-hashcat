@@ -57,12 +57,12 @@ func (u *agentUsecase) SetWebSocketHub(wsHub WebSocketHub) {
 }
 
 func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error) {
-	// ✅ Validasi 1: Cek apakah agent key ada di database
+	// ✅ Validation 1: Check if agent key exists in database
 	if req.AgentKey == "" {
 		return nil, fmt.Errorf("agent key is required")
 	}
 
-	// Cek apakah agent key ada di database
+	// Check if agent key exists in database
 	existingAgentByKey, err := u.agentRepo.GetByAgentKey(ctx, req.AgentKey)
 	if err != nil {
 		if errors.Is(err, domain.ErrAgentNotFound) {
@@ -71,23 +71,23 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 		return nil, fmt.Errorf("failed to validate agent key: %w", err)
 	}
 
-	// ✅ Validasi 2: Cek apakah agent name sudah sesuai dengan agent key
+	// ✅ Validation 2: Check if agent name matches the agent key
 	if existingAgentByKey.Name != req.Name {
 		return nil, fmt.Errorf("agent name '%s' does not match the name associated with agent key '%s' (expected: '%s')",
 			req.Name, req.AgentKey, existingAgentByKey.Name)
 	}
 
-	// ✅ Validasi 3: Cek apakah agent sudah ada dengan nama yang sama
+	// ✅ Validation 3: Check if agent already exists with the same name
 	existingAgentByName, err := u.agentRepo.GetByName(ctx, req.Name)
 	if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
 		return nil, err
 	}
 
 	if existingAgentByName != nil {
-		// Agent sudah ada, cek apakah ini update atau duplicate
+		// Agent already exists, check if this is an update or duplicate
 		if existingAgentByName.AgentKey == req.AgentKey {
-			// Update existing agent dengan data baru
-			// ✅ Validasi IP address sebelum update
+			// Update existing agent with new data
+			// ✅ Validate IP address before update
 			if err := u.ValidateUniqueIPForAgentKey(ctx, req.AgentKey, req.IPAddress, req.Name); err != nil {
 				return nil, err
 			}
@@ -101,7 +101,7 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 			existingAgentByName.IPAddress = req.IPAddress
 			existingAgentByName.Port = port // Use processed port
 			existingAgentByName.Capabilities = req.Capabilities
-			existingAgentByName.Status = "offline"    // tetap offline saat update
+			existingAgentByName.Status = "offline"    // stay offline during update
 			existingAgentByName.LastSeen = time.Now() // Update LastSeen to current time
 			existingAgentByName.UpdatedAt = time.Now()
 
@@ -119,12 +119,12 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 			// Status should remain as set (offline) until agent actually connects
 			return existingAgentByName, nil
 		} else {
-			// Nama sama tapi agent key berbeda
+			// Same name but different agent key
 			return nil, fmt.Errorf("agent name '%s' already exists with a different agent key", req.Name)
 		}
 	}
 
-	// ✅ Validasi 4: Cek IP address unik untuk agent baru
+	// ✅ Validation 4: Check unique IP address for new agent
 	if err := u.ValidateUniqueIPForAgentKey(ctx, req.AgentKey, req.IPAddress, req.Name); err != nil {
 		return nil, err
 	}
@@ -135,16 +135,16 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 		port = 8080
 	}
 
-	// Buat agent baru
+	// Create new agent
 	agent := &domain.Agent{
-		ID:           existingAgentByKey.ID, // Gunakan ID dari agent key yang sudah ada
+		ID:           existingAgentByKey.ID, // Use ID from existing agent key
 		Name:         req.Name,
 		IPAddress:    req.IPAddress,
 		Port:         port,      // Use processed port
 		Status:       "offline", // default offline
 		Capabilities: req.Capabilities,
 		AgentKey:     req.AgentKey,
-		CreatedAt:    existingAgentByKey.CreatedAt, // Gunakan created_at dari agent key
+		CreatedAt:    existingAgentByKey.CreatedAt, // Use created_at from agent key
 		UpdatedAt:    time.Now(),
 		LastSeen:     time.Now(),
 	}
@@ -182,9 +182,9 @@ func (u *agentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, stat
 	// Broadcast real-time status update via WebSocket
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
-		log.Printf("✅ Real-time agent status broadcast: %s -> %s", agent.Name, status)
+		log.Printf("Real-time agent status broadcast: %s -> %s", agent.Name, status)
 	} else {
-		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
 	}
 
 	return nil
@@ -213,13 +213,13 @@ func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) e
 		return err
 	}
 
-	// Kalau status masih offline, jangan ubah jadi online otomatis
+	// If status is still offline, don't change to online automatically
 	if agent.Status != "offline" {
 		if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil {
 			return err
 		}
 	} else {
-		// Update last seen saja, biarkan status tetap offline
+		// Update last seen only, keep status offline
 		if err := u.agentRepo.UpdateLastSeen(ctx, id); err != nil {
 			return err
 		}
@@ -227,10 +227,10 @@ func (u *agentUsecase) UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) e
 
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
-		log.Printf("✅ Real-time agent heartbeat broadcast: %s -> %s (LastSeen: %s)",
+		log.Printf("Real-time agent heartbeat broadcast: %s -> %s (LastSeen: %s)",
 			agent.Name, agent.Status, agent.LastSeen.Format(time.RFC3339))
 	} else {
-		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
 	}
 	return nil
 }
@@ -251,9 +251,9 @@ func (u *agentUsecase) UpdateAgentLastSeen(ctx context.Context, id uuid.UUID) er
 	// Broadcast real-time last seen update via WebSocket
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
-		log.Printf("✅ Real-time agent last seen broadcast: %s -> %s", agent.Name, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("Real-time agent last seen broadcast: %s -> %s", agent.Name, agent.LastSeen.Format(time.RFC3339))
 	} else {
-		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
 	}
 
 	return nil
@@ -265,29 +265,29 @@ func (u *agentUsecase) GetByAgentKey(ctx context.Context, agentKey string) (*dom
 
 func (u *agentUsecase) ValidateUniqueIPForAgentKey(ctx context.Context, agentKey, ipAddress, agentName string) error {
 	if ipAddress == "" {
-		return nil // IP address kosong tidak perlu divalidasi
+		return nil // Empty IP address doesn't need validation
 	}
 
-	// Cek apakah IP address sudah digunakan oleh agent lain
+	// Check if IP address is already used by another agent
 	if agentWithIP, err := u.agentRepo.GetByIPAddress(ctx, ipAddress); err == nil && agentWithIP != nil {
-		// IP address sudah digunakan
+		// IP address already in use
 		if agentWithIP.AgentKey != agentKey {
-			// IP address digunakan oleh agent dengan agent key yang berbeda
+			// IP address used by agent with different agent key
 			return fmt.Errorf("IP address %s is already used by agent '%s' with agent key '%s'",
 				ipAddress, agentWithIP.Name, agentWithIP.AgentKey)
 		}
 		if agentWithIP.Name != agentName {
-			// IP address digunakan oleh agent dengan nama yang berbeda
+			// IP address used by agent with different name
 			return fmt.Errorf("IP address %s is already used by agent '%s'", ipAddress, agentWithIP.Name)
 		}
-		// Jika agent key dan nama sama, berarti ini update agent yang sama
+		// If agent key and name are the same, this is an update of the same agent
 		return nil
 	} else if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
-		// Error lain selain "not found"
+		// Other error besides "not found"
 		return fmt.Errorf("failed to validate IP address uniqueness: %w", err)
 	}
 
-	// IP address tersedia
+	// IP address is available
 	return nil
 }
 
@@ -310,7 +310,7 @@ func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipA
 		return fmt.Errorf("failed to get agent by key %s: %w", agentKey, err)
 	}
 
-	log.Printf("🔍 Debug: Found agent: %+v", agent)
+	log.Printf("Debug: Found agent: %+v", agent)
 
 	// Validate IP address uniqueness if provided
 	if ipAddress != "" {
@@ -331,24 +331,24 @@ func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipA
 	agent.UpdatedAt = time.Now()
 	// Note: Status remains unchanged (stays offline until agent binary runs)
 
-	log.Printf("🔍 Debug: Updated agent data: IP=%s, Port=%d, Capabilities=%s, UpdatedAt=%v",
+	log.Printf("Debug: Updated agent data: IP=%s, Port=%d, Capabilities=%s, UpdatedAt=%v",
 		agent.IPAddress, agent.Port, agent.Capabilities, agent.UpdatedAt)
 
 	// Update in database
 	if err := u.agentRepo.Update(ctx, agent); err != nil {
-		log.Printf("❌ Debug: Failed to update agent in database: %v", err)
+		log.Printf("Debug: Failed to update agent in database: %v", err)
 		return fmt.Errorf("failed to update agent data: %w", err)
 	}
 
-	log.Printf("✅ Debug: Agent updated successfully in database")
+	log.Printf("Debug: Agent updated successfully in database")
 
 	// Broadcast real-time agent data update via WebSocket
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
-		log.Printf("✅ Real-time agent data broadcast: %s (IP=%s, Port=%d, Capabilities=%s)",
+		log.Printf("Real-time agent data broadcast: %s (IP=%s, Port=%d, Capabilities=%s)",
 			agent.Name, agent.IPAddress, agent.Port, agent.Capabilities)
 	} else {
-		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
 	}
 
 	// Don't broadcast status update - status should remain offline
@@ -393,26 +393,26 @@ func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name string) (*doma
 	}
 
 	// Debug logging
-	log.Printf("🔍 Debug: Creating agent with LastSeen: %v", agent.LastSeen)
-	log.Printf("🔍 Debug: LastSeen.IsZero(): %v", agent.LastSeen.IsZero())
-	log.Printf("🔍 Debug: LastSeen.Format(time.RFC3339): %v", agent.LastSeen.Format(time.RFC3339))
-	log.Printf("🔍 Debug: Agent struct: %+v", agent)
+	log.Printf("Debug: Creating agent with LastSeen: %v", agent.LastSeen)
+	log.Printf("Debug: LastSeen.IsZero(): %v", agent.LastSeen.IsZero())
+	log.Printf("Debug: LastSeen.Format(time.RFC3339): %v", agent.LastSeen.Format(time.RFC3339))
+	log.Printf("Debug: Agent struct: %+v", agent)
 
 	// Save to database
 	if err := u.agentRepo.Create(ctx, agent); err != nil {
-		log.Printf("❌ Debug: Failed to save agent: %v", err)
+		log.Printf("Debug: Failed to save agent: %v", err)
 		return nil, fmt.Errorf("failed to save agent key: %w", err)
 	}
 
-	log.Printf("✅ Debug: Agent saved successfully with ID: %s", agent.ID.String())
+	log.Printf("Debug: Agent saved successfully with ID: %s", agent.ID.String())
 
 	// Verify the saved agent
 	savedAgent, err := u.agentRepo.GetByID(ctx, agent.ID)
 	if err != nil {
-		log.Printf("⚠️ Debug: Could not retrieve saved agent: %v", err)
+		log.Printf("Debug: Could not retrieve saved agent: %v", err)
 	} else {
-		log.Printf("🔍 Debug: Retrieved saved agent LastSeen: %v", savedAgent.LastSeen)
-		log.Printf("🔍 Debug: Retrieved saved agent LastSeen.IsZero(): %v", savedAgent.LastSeen.IsZero())
+		log.Printf("Debug: Retrieved saved agent LastSeen: %v", savedAgent.LastSeen)
+		log.Printf("Debug: Retrieved saved agent LastSeen.IsZero(): %v", savedAgent.LastSeen.IsZero())
 	}
 
 	return agent, nil

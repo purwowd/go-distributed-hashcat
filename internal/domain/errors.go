@@ -2,7 +2,7 @@ package domain
 
 import "fmt"
 
-// NotFoundError adalah error khusus untuk entitas yang tidak ditemukan
+// NotFoundError is a custom error for entities that are not found
 type NotFoundError struct {
     Entity string
 }
@@ -11,14 +11,14 @@ func (e *NotFoundError) Error() string {
     return fmt.Sprintf("%s not found", e.Entity)
 }
 
-// Helper untuk cek apakah error adalah NotFoundError
+// Helper to check if error is NotFoundError
 func IsNotFoundError(err error) bool {
     _, ok := err.(*NotFoundError)
     return ok
 }
 
-// Contoh error spesifik untuk Agent
+// Example specific error for Agent
 var ErrAgentNotFound = &NotFoundError{Entity: "agent"}
 
-// Tambahkan error khusus lain sesuai kebutuhan, misal:
+// Add other custom errors as needed, for example:
 // var ErrUserNotFound = &NotFoundError{Entity: "user"}

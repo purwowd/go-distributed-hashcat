@@ -404,7 +404,7 @@ func (s *jobEnrichmentService) getWordlistName(wordlist string) string {
 		return wordlist[:8] + "..."
 	}
 
-	// Direct filename
+	// Direct filename - return as is
 	return wordlist
 }
 

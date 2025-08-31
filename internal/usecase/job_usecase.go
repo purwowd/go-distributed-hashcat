@@ -150,9 +150,9 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					continue
 				}
 				
-				speed := 1 // Default untuk CPU
+				speed := 1 // Default for CPU
 				if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
-					speed = 5 // GPU lebih cepat
+					speed = 5 // GPU is faster
 				} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
 					speed = 8 // RTX lebih cepat lagi
 				} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {

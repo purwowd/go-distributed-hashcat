@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
+	"go-distributed-hashcat/internal/infrastructure"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -75,7 +75,7 @@ func main() {
 	viper.BindPFlags(rootCmd.Flags())
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		infrastructure.AgentLogger.Fatal("%v", err)
 	}
 }
 
@@ -89,66 +89,66 @@ func runAgent(cmd *cobra.Command, args []string) {
 	uploadDir := viper.GetString("upload-dir")
 
 	if agentKey == "" {
-		log.Fatalf("❌ Agent key is required. Please provide --agent-key parameter.")
+		infrastructure.AgentLogger.Fatal("Agent key is required. Please provide --agent-key parameter.")
 	}
 
-	// Buat temporary agent client untuk cek agent key
+	// Create temporary agent client to check agent key
 	tempAgent := &Agent{
 		ServerURL: serverURL,
 		Client:    &http.Client{Timeout: 30 * time.Second},
 	}
 
-	// ✅ Cek apakah agent key ada di database
+	// Check if agent key exists in database
 	info, lookupErr := getAgentByKeyOnly(tempAgent, agentKey)
 	if lookupErr != nil {
-		log.Fatalf("❌ Agent key '%s' not registered in the database. Agent failed to run.", agentKey)
+		infrastructure.AgentLogger.Fatal("Agent key '%s' not registered in the database. Agent failed to run.", agentKey)
 	}
 
-	// ✅ Validasi IP address dengan IP lokal
+	// Validate IP address with local IP
 	if ip != "" {
 		if err := validateLocalIP(ip); err != nil {
-			log.Fatalf("%v", err)
+			infrastructure.AgentLogger.Fatal("%v", err)
 		}
 	} else {
-		// Jika IP kosong, ambil otomatis
+		// If IP is empty, get automatically
 		ip = getLocalIP()
-		log.Printf("🔍 Auto-detected local IP: %s", ip)
+		infrastructure.AgentLogger.Info("Auto-detected local IP: %s", ip)
 	}
 
-	// ✅ Auto-detect capabilities menggunakan hashcat -I jika tidak dispecify atau kosong
+	// Auto-detect capabilities using hashcat -I if not specified or empty
 	if capabilities == "" || capabilities == "auto" {
-		log.Printf("🔍 Auto-detection mode: Running hashcat -I to detect capabilities...")
+		infrastructure.AgentLogger.Info("Auto-detection mode: Running hashcat -I to detect capabilities...")
 		capabilities = detectCapabilitiesWithHashcat()
-		log.Printf("🔍 Auto-detected capabilities using hashcat -I: %s", capabilities)
+		infrastructure.AgentLogger.Success("Auto-detected capabilities using hashcat -I: %s", capabilities)
 	} else {
-		log.Printf("ℹ️ Using manually specified capabilities: %s", capabilities)
+		infrastructure.AgentLogger.Info("Using manually specified capabilities: %s", capabilities)
 	}
 
-	// ✅ Update capabilities di database jika berbeda dengan yang terdeteksi
+	// Update capabilities in database if different from detected
 	if info.Capabilities == "" || info.Capabilities != capabilities {
-		log.Printf("🔄 Updating capabilities from '%s' to '%s'", info.Capabilities, capabilities)
+		infrastructure.AgentLogger.Info("Updating capabilities from '%s' to '%s'", info.Capabilities, capabilities)
 		if err := updateAgentCapabilities(tempAgent, agentKey, capabilities); err != nil {
-			log.Printf("⚠️ Warning: Failed to update capabilities: %v", err)
+			infrastructure.AgentLogger.Warning("Failed to update capabilities: %v", err)
 		} else {
-			log.Printf("✅ Capabilities updated successfully")
+			infrastructure.AgentLogger.Success("Capabilities updated successfully")
 		}
 	} else {
-		log.Printf("ℹ️ Capabilities already up-to-date: %s", capabilities)
+		infrastructure.AgentLogger.Info("Capabilities already up-to-date: %s", capabilities)
 	}
 
-	// Jika name kosong, pakai hostname
+	// If name is empty, use hostname
 	if name == "" {
 		hostname, _ := os.Hostname()
 		name = fmt.Sprintf("agent-%s", hostname)
 	}
 
-	// Simpan port asli dari database untuk restoration
+	// Save original port from database for restoration
 	originalPort := info.Port
 	if originalPort == 0 {
 		originalPort = 8080 // Default port
 	}
 
-	// Buat object agent sesungguhnya
+	// Create the actual agent object
 	agent := &Agent{
 		ID:           info.ID,
 		Name:         name,
@@ -163,60 +163,60 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	// Inisialisasi direktori
 	if err := agent.initializeDirectories(); err != nil {
-		log.Fatalf("❌ Failed to initialize directories: %v", err)
+		infrastructure.AgentLogger.Fatal("Failed to initialize directories: %v", err)
 	}
 
 	if err := agent.scanLocalFiles(); err != nil {
-		log.Printf("⚠️ Warning: Failed to scan local files: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to scan local files: %v", err)
 	}
 
 	// Registrasi ke server
 	err := agent.registerWithServer(name, ip, port, capabilities, agentKey)
 	if err != nil && strings.Contains(err.Error(), "already registered") {
 		if info.Name != name {
-			log.Fatalf("❌ Agent key '%s' already used by another agent: %s", agentKey, info.Name)
+			infrastructure.AgentLogger.Fatal("Agent key '%s' already used by another agent: %s", agentKey, info.Name)
 		}
 
-		// Jika IP, Port, atau Capabilities kosong → update data
+		// If IP, Port, or Capabilities are empty → update data
 		if info.IPAddress == "" || info.Port == 0 || info.Capabilities == "" {
-			log.Printf("⚠️ Agent data '%s' is incomplete, being updated...", name)
+			infrastructure.AgentLogger.Info("Agent data '%s' is incomplete, being updated...", name)
 			if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
-				log.Fatalf("❌ Failed to update agent info: %v", err)
+				infrastructure.AgentLogger.Fatal("Failed to update agent info: %v", err)
 			}
-			// Tetap gunakan log "registered successfully"
-			log.Printf("✅ Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
+			// Still use "registered successfully" log
+			infrastructure.AgentLogger.Success("Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 			agent.updateStatus("online")
 		} else {
-			// Data lengkap → log already exists beserta datanya
-			log.Printf("ℹ️ Agent key already exists with complete data:")
-			log.Printf("    Name: %s", info.Name)
-			log.Printf("    ID: %s", info.ID.String())
-			log.Printf("    IP: %s", info.IPAddress)
-			log.Printf("    Port: %d", info.Port)
-			log.Printf("    Capabilities: %s", info.Capabilities)
-			log.Printf("✅ Agent %s (%s) is running", agent.Name, agent.ID.String())
+			// Complete data → log already exists with its data
+			infrastructure.AgentLogger.Info("Agent key already exists with complete data:")
+			infrastructure.AgentLogger.Info("Name: %s", agent.Name)
+			infrastructure.AgentLogger.Info("    ID: %s", info.ID.String())
+			infrastructure.AgentLogger.Info("Server URL: %s", agent.ServerURL)
+			infrastructure.AgentLogger.Info("Port: %d", info.Port)
+			infrastructure.AgentLogger.Info("Capabilities: %s", info.Capabilities)
+			infrastructure.AgentLogger.Success("Agent %s (%s) is running", agent.Name, agent.ID.String())
 			agent.updateStatus("online")
 		}
 	} else if err != nil {
-		log.Fatalf("❌ Failed to register and lookup agent: %v", err)
+		infrastructure.AgentLogger.Fatal("Failed to register and lookup agent: %v", err)
 	} else {
-		// Registrasi baru sukses
-		log.Printf("✅ Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
+		// New registration successful
+		infrastructure.AgentLogger.Success("Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 	}
 
-	// ✅ Update status to online and port to 8081 when agent starts running
-	log.Printf("🔄 Updating agent status to online and port to 8081...")
+	// Update status to online and port to 8081 when agent starts running
+	infrastructure.AgentLogger.Info("Updating agent status to online and port to 8081...")
 	if err := agent.updateAgentInfo(agent.ID, ip, 8081, capabilities, "online"); err != nil {
-		log.Printf("⚠️ Warning: Failed to update agent status to online: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to update agent status to online: %v", err)
 	} else {
-		log.Printf("✅ Agent status updated to online with port 8081")
+		infrastructure.AgentLogger.Success("Agent status updated to online with port 8081")
 	}
 
-	log.Printf("Local upload directory: %s", agent.UploadDir)
-	log.Printf("Found %d local files", len(agent.LocalFiles))
+	infrastructure.AgentLogger.Info("Upload Directory: %s", agent.UploadDir)
+	infrastructure.AgentLogger.Info("Found %d local files", len(agent.LocalFiles))
 
 	if err := agent.registerLocalFiles(); err != nil {
-		log.Printf("⚠️ Warning: Failed to register local files: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to register local files: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -230,22 +230,22 @@ func runAgent(cmd *cobra.Command, args []string) {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down agent...")
+	infrastructure.AgentLogger.Info("Shutting down agent...")
 
-	// ✅ Update status to offline and restore original port 8080 before shutdown
-	log.Printf("🔄 Updating agent status to offline and restoring port to 8080...")
-	log.Printf("🔄 Preserving capabilities: %s", capabilities)
+	// Update status to offline and restore original port 8080 before shutdown
+	infrastructure.AgentLogger.Info("Updating agent status to offline and restoring port to 8080...")
+	infrastructure.AgentLogger.Info("Preserving capabilities: %s", capabilities)
 	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, "offline"); err != nil {
-		log.Printf("⚠️ Warning: Failed to update agent status to offline: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to update agent status to offline: %v", err)
 	} else {
-		log.Printf("✅ Agent status updated to offline with port 8080 and capabilities preserved")
+		infrastructure.AgentLogger.Success("Agent status updated to offline with port 8080 and capabilities preserved")
 	}
 
-	// ✅ Note: restoreOriginalPort() is no longer needed since we already updated everything above
+	// Note: restoreOriginalPort() is no longer needed since we already updated everything above
 	// The single updateAgentInfo call above handles both status and port updates
-	log.Printf("ℹ️ Skipping restoreOriginalPort() to avoid capabilities override")
+	infrastructure.AgentLogger.Info("Skipping restoreOriginalPort() to avoid capabilities override")
 
-	log.Println("Agent exited")
+	infrastructure.AgentLogger.Info("Agent exited")
 }
 
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
@@ -259,7 +259,7 @@ func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return info, fmt.Errorf("gagal ambil agent: %s", string(body))
+		return info, fmt.Errorf("failed to get agent: %s", string(body))
 	}
 
 	var res struct {
@@ -270,7 +270,7 @@ func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	}
 
 	if len(res.Data) == 0 {
-		return info, fmt.Errorf("agent key tidak ditemukan")
+		return info, fmt.Errorf("agent key not found")
 	}
 
 	return res.Data[0], nil
@@ -350,33 +350,33 @@ func (a *Agent) initializeDirectories() error {
 		}
 	}
 
-	log.Printf("📁 Initialized directory structure in %s", a.UploadDir)
+	infrastructure.AgentLogger.Info("Initialized directory structure in %s", a.UploadDir)
 	return nil
 }
 
 func (a *Agent) scanLocalFiles() error {
-	log.Println("🔍 Scanning local files...")
+	infrastructure.AgentLogger.Info("Scanning local files...")
 
 	// Scan wordlists
 	wordlistDir := filepath.Join(a.UploadDir, "wordlists")
 	if err := a.scanDirectory(wordlistDir, "wordlist"); err != nil {
-		log.Printf("Warning: Failed to scan wordlists directory: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to scan wordlists directory: %v", err)
 	}
 
 	// Scan hash files
 	hashFileDir := filepath.Join(a.UploadDir, "hash-files")
 	if err := a.scanDirectory(hashFileDir, "hash_file"); err != nil {
-		log.Printf("Warning: Failed to scan hash-files directory: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to scan hash-files directory: %v", err)
 	}
 
 	// Also scan root upload directory for legacy files
 	if err := a.scanDirectory(a.UploadDir, "auto"); err != nil {
-		log.Printf("Warning: Failed to scan root upload directory: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to scan root upload directory: %v", err)
 	}
 
-	log.Printf("✅ Scanned %d local files", len(a.LocalFiles))
+	infrastructure.AgentLogger.Info("Scanned %d local files", len(a.LocalFiles))
 	for filename, file := range a.LocalFiles {
-		log.Printf("  📄 %s (%s, %s)", filename, file.Type, formatFileSize(file.Size))
+		infrastructure.AgentLogger.Info("  %s (%s, %s)", filename, file.Type, formatFileSize(file.Size))
 	}
 
 	return nil
@@ -410,7 +410,7 @@ func (a *Agent) scanDirectory(dir, fileType string) error {
 		// Calculate file hash for integrity
 		hash, err := a.calculateFileHash(path)
 		if err != nil {
-			log.Printf("Warning: Failed to calculate hash for %s: %v", path, err)
+			infrastructure.AgentLogger.Warning("Failed to calculate hash for %s: %v", path, err)
 			hash = ""
 		}
 
@@ -477,15 +477,15 @@ func (a *Agent) watchLocalFiles(ctx context.Context) {
 		case <-ticker.C:
 			oldCount := len(a.LocalFiles)
 			if err := a.scanLocalFiles(); err != nil {
-				log.Printf("Error rescanning local files: %v", err)
+				infrastructure.AgentLogger.Error("Error rescanning local files: %v", err)
 				continue
 			}
 
 			newCount := len(a.LocalFiles)
 			if newCount != oldCount {
-				log.Printf("📁 Local files changed: %d -> %d", oldCount, newCount)
+				infrastructure.AgentLogger.Info("Local files changed: %d -> %d", oldCount, newCount)
 				if err := a.registerLocalFiles(); err != nil {
-					log.Printf("Error re-registering local files: %v", err)
+					infrastructure.AgentLogger.Error("Error re-registering local files: %v", err)
 				}
 			}
 		}
@@ -497,7 +497,7 @@ func (a *Agent) registerLocalFiles() error {
 		return nil
 	}
 
-	log.Println("📤 Registering local files with server...")
+	infrastructure.AgentLogger.Info("Registering local files with server...")
 
 	req := struct {
 		AgentID uuid.UUID            `json:"agent_id"`
@@ -524,7 +524,7 @@ func (a *Agent) registerLocalFiles() error {
 		return fmt.Errorf("failed to register local files: %s", string(body))
 	}
 
-	log.Printf("✅ Registered %d local files with server", len(a.LocalFiles))
+	infrastructure.AgentLogger.Success("Registered %d local files with server", len(a.LocalFiles))
 	return nil
 }
 
@@ -594,13 +594,13 @@ func (a *Agent) registerWithServer(name, ip string, port int, capabilities, agen
 }
 
 func (a *Agent) startHeartbeat(ctx context.Context) {
-	// ✅ Ultra-fast real-time heartbeat: every 1 second for instant detection
+	// Ultra-fast real-time heartbeat: every 1 second for instant detection
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	// Send initial heartbeat immediately
 	if err := a.sendHeartbeat(); err != nil {
-		log.Printf("Initial heartbeat failed: %v", err)
+		infrastructure.AgentLogger.Warning("Initial heartbeat failed: %v", err)
 	}
 
 	for {
@@ -609,7 +609,7 @@ func (a *Agent) startHeartbeat(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := a.sendHeartbeat(); err != nil {
-				log.Printf("Failed to send heartbeat: %v", err)
+				infrastructure.AgentLogger.Error("Failed to send heartbeat: %v", err)
 			}
 		}
 	}
@@ -647,7 +647,7 @@ func (a *Agent) sendHeartbeat() error {
 
 func (a *Agent) updateStatus(status string) {
 	if a.ID == uuid.Nil {
-		log.Printf("⚠️ Agent ID belum tersedia, tidak bisa update status")
+		infrastructure.AgentLogger.Warning("Agent ID not yet available, cannot update status")
 		return
 	}
 
@@ -662,25 +662,25 @@ func (a *Agent) updateStatus(status string) {
 
 	httpReq, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("⚠️ Gagal membuat request update status: %v", err)
+		infrastructure.AgentLogger.Error("Failed to create status update request: %v", err)
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
-		log.Printf("⚠️ Gagal update status agent: %v", err)
+		infrastructure.AgentLogger.Error("Failed to update agent status: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("⚠️ Gagal update status agent: %s", string(body))
+		infrastructure.AgentLogger.Error("Failed to update agent status: %s", string(body))
 		return
 	}
 
-	log.Printf("✅ Status agent '%s' berhasil diupdate menjadi '%s'", a.Name, status)
+	infrastructure.AgentLogger.Success("Agent '%s' status successfully updated to '%s'", a.Name, status)
 }
 
 func (a *Agent) pollForJobs(ctx context.Context) {
@@ -694,7 +694,7 @@ func (a *Agent) pollForJobs(ctx context.Context) {
 		case <-ticker.C:
 			if a.CurrentJob == nil {
 				if err := a.checkForNewJob(); err != nil {
-					log.Printf("Error checking for new job: %v", err)
+					infrastructure.AgentLogger.Error("Error checking for new job: %v", err)
 				}
 			}
 		}
@@ -719,7 +719,7 @@ func (a *Agent) checkForNewJob() error {
 
 	// Check if we got a job
 	if response.Data != nil {
-		log.Printf("Found assigned job: %s", response.Data.Name)
+		infrastructure.AgentLogger.Info("Found assigned job: %s", response.Data.Name)
 		a.CurrentJob = response.Data
 		go a.executeJob(response.Data)
 	}
@@ -733,24 +733,24 @@ func (a *Agent) executeJob(job *domain.Job) {
 		a.updateStatus("online")
 	}()
 
-	log.Printf("Starting job: %s", job.Name)
+	infrastructure.AgentLogger.Info("Starting job: %s", job.Name)
 	a.updateStatus("busy")
 
 	// Start the job
 	if err := a.startJob(job.ID); err != nil {
-		log.Printf("Failed to start job: %v", err)
+		infrastructure.AgentLogger.Error("Failed to start job: %v", err)
 		a.failJob(job.ID, fmt.Sprintf("Failed to start job: %v", err))
 		return
 	}
 
 	// Execute hashcat command
 	if err := a.runHashcat(job); err != nil {
-		log.Printf("Hashcat execution failed: %v", err)
+		infrastructure.AgentLogger.Error("Hashcat execution failed: %v", err)
 		a.failJob(job.ID, fmt.Sprintf("Hashcat execution failed: %v", err))
 		return
 	}
 
-	log.Printf("Job completed: %s", job.Name)
+	infrastructure.AgentLogger.Success("Job completed: %s", job.Name)
 }
 
 func (a *Agent) startJob(jobID uuid.UUID) error {
@@ -778,7 +778,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		if hashFileName != "" {
 			if localPath, found := a.findLocalFile(filepath.Base(hashFileName)); found {
 				localHashFile = localPath
-				log.Printf("📁 Using local hash file: %s", localHashFile)
+				infrastructure.AgentLogger.Info("Using local hash file: %s", localHashFile)
 			}
 		}
 
@@ -789,7 +789,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 				return fmt.Errorf("failed to download hash file: %w", err)
 			}
 			// defer os.Remove(localHashFile) // Keep file for debugging/--show command
-			log.Printf("📥 Downloaded hash file: %s", localHashFile)
+			infrastructure.AgentLogger.Success("Downloaded hash file: %s", localHashFile)
 		}
 	} else {
 		// Fallback to original path
@@ -806,7 +806,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			return fmt.Errorf("failed to download wordlist %s: %w", job.WordlistID.String(), err)
 		}
 		localWordlist = downloadedPath
-		log.Printf("📥 Downloaded wordlist from ID: %s", localWordlist)
+		infrastructure.AgentLogger.Success("Downloaded wordlist from ID: %s", localWordlist)
 	} else if job.Wordlist != "" {
 		// Check if wordlist contains newlines (indicating it's content, not a path)
 		if strings.Contains(job.Wordlist, "\n") {
@@ -822,13 +822,13 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			}
 			
 			localWordlist = wordlistFile
-			log.Printf("📝 Created wordlist file from content: %s", localWordlist)
-			log.Printf("📋 Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
+			infrastructure.AgentLogger.Info("Created wordlist file from content: %s", localWordlist)
+			infrastructure.AgentLogger.Info("Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
 		} else {
 			// Fallback to wordlist filename resolution
 			if localPath, found := a.findLocalFile(job.Wordlist); found {
 				localWordlist = localPath
-				log.Printf("📁 Using local wordlist: %s", localWordlist)
+				infrastructure.AgentLogger.Info("Using local wordlist: %s", localWordlist)
 			} else {
 				// Try to parse as UUID and download
 				if wordlistUUID, err := uuid.Parse(job.Wordlist); err == nil {
@@ -837,11 +837,11 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 						return fmt.Errorf("failed to download wordlist %s: %w", job.Wordlist, err)
 					}
 					localWordlist = downloadedPath
-					log.Printf("📥 Downloaded wordlist: %s", localWordlist)
+					infrastructure.AgentLogger.Success("Downloaded wordlist: %s", localWordlist)
 				} else {
 					// If not UUID, use as direct path
 					localWordlist = job.Wordlist
-					log.Printf("⚠️  Using wordlist path directly: %s", localWordlist)
+					infrastructure.AgentLogger.Info("Using wordlist path directly: %s", localWordlist)
 				}
 			}
 		}
@@ -850,7 +850,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	// Build hashcat command with UUID-based outfile
 	tempDir := filepath.Join(a.UploadDir, "temp")
 	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", job.ID.String()))
-	log.Printf("📁 Outfile will be: %s", outfile)
+	infrastructure.AgentLogger.Info("Outfile will be: %s", outfile)
 	args := []string{
 		"-m", strconv.Itoa(job.HashType),
 		"-a", strconv.Itoa(job.AttackMode),
@@ -864,11 +864,22 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		"--outfile-format", "2", // Format: hash:plain
 	}
 
+	// Add skip and limit parameters for distributed cracking
+	if job.Skip != nil && *job.Skip > 0 {
+		args = append(args, "--skip", strconv.FormatInt(*job.Skip, 10))
+		infrastructure.AgentLogger.Info("Using --skip parameter: %d", *job.Skip)
+	}
+	
+	if job.WordLimit != nil && *job.WordLimit > 0 {
+		args = append(args, "--limit", strconv.FormatInt(*job.WordLimit, 10))
+		infrastructure.AgentLogger.Info("Using --limit parameter: %d", *job.WordLimit)
+	}
+
 	if job.Rules != "" {
 		args = append(args, "-r", job.Rules)
 	}
 
-	log.Printf("🔨 Running hashcat with args: %v", args)
+	infrastructure.AgentLogger.Info("Running hashcat with args: %v", args)
 
 	cmd := exec.Command("hashcat", args...)
 
@@ -900,12 +911,13 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		// Check if hashcat found the password (exit code 0) or exhausted (exit code 1)
 		if exitError, ok := err.(*exec.ExitError); ok {
 			exitCode := exitError.ExitCode()
-			if exitCode == 1 {
+			switch exitCode {
+			case 1:
 				// Exhausted - not an error
 				a.completeJob(job.ID, "Password not found - exhausted")
 				a.cleanupJobFiles(job.ID)
 				return nil
-			} else if exitCode == 255 {
+			case 255:
 				// Exit code 255 usually means invalid arguments or file not found
 				// Check if this is due to password not being found vs other errors
 				// For now, treat exit 255 as password not found scenario
@@ -922,7 +934,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	// Success - password found, now capture the actual password
 	password, err := a.extractPassword(job.ID)
 	if err != nil {
-		log.Printf("⚠️  Failed to extract password: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to extract password: %v", err)
 		a.completeJob(job.ID, "Password found (extraction failed)")
 	} else {
 		a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
@@ -976,7 +988,7 @@ func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	log.Printf("Downloaded hash file to: %s", localPath)
+	infrastructure.AgentLogger.Success("Downloaded hash file to: %s", localPath)
 	return localPath, nil
 }
 
@@ -1023,7 +1035,7 @@ func (a *Agent) downloadWordlist(wordlistID uuid.UUID) (string, error) {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	log.Printf("Downloaded wordlist to: %s", localPath)
+	infrastructure.AgentLogger.Success("Downloaded wordlist to: %s", localPath)
 	return localPath, nil
 }
 
@@ -1056,9 +1068,9 @@ func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
 	outfile := filepath.Join(tempDir, fmt.Sprintf("cracked-%s.txt", jobID.String()))
 
 	if err := os.Remove(outfile); err != nil && !os.IsNotExist(err) {
-		log.Printf("⚠️  Failed to cleanup outfile %s: %v", outfile, err)
+		infrastructure.AgentLogger.Warning("Failed to cleanup outfile %s: %v", outfile, err)
 	} else {
-		log.Printf("🗑️  Cleaned up outfile: %s", outfile)
+		infrastructure.AgentLogger.Info("Cleaned up outfile: %s", outfile)
 	}
 }
 
@@ -1137,16 +1149,16 @@ func (a *Agent) sendInitialJobData(job *domain.Job) {
 
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
-		log.Printf("❌ Failed to send initial job data to server: %v", err)
+		infrastructure.AgentLogger.Error("Failed to send initial job data to server: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("❌ Initial job data failed with status %d: %s", resp.StatusCode, string(body))
+		infrastructure.AgentLogger.Error("Initial job data failed with status %d: %s", resp.StatusCode, string(body))
 	} else {
-		log.Printf("✅ Initial job data sent successfully to server")
+		infrastructure.AgentLogger.Success("Initial job data sent successfully to server")
 	}
 }
 
@@ -1184,16 +1196,16 @@ func (a *Agent) updateJobDataFromAgent(jobID uuid.UUID, progress float64, speed 
 
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
-		log.Printf("❌ Failed to send job data update to server: %v", err)
+		infrastructure.AgentLogger.Error("Failed to send job data update to server: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("❌ Job data update failed with status %d: %s", resp.StatusCode, string(body))
+		infrastructure.AgentLogger.Error("Job data update failed with status %d: %s", resp.StatusCode, string(body))
 	} else {
-		log.Printf("✅ Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+		infrastructure.AgentLogger.Info("Job data update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
 	}
 }
 
@@ -1209,14 +1221,14 @@ func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec
 			// Check job status from server
 			status, err := a.checkJobStatus(jobID)
 			if err != nil {
-				log.Printf("⚠️  Failed to check job status: %v", err)
+				infrastructure.AgentLogger.Error("Failed to check job status: %v", err)
 				continue
 			}
 
 			// Handle status changes
 			switch status {
 			case "paused", "failed", "cancelled":
-				log.Printf("🛑 Job %s status changed to %s, terminating hashcat", jobID, status)
+				infrastructure.AgentLogger.Warning("Job %s status changed to %s, terminating hashcat", jobID, status)
 				if cmd.Process != nil {
 					cmd.Process.Kill()
 				}
@@ -1261,16 +1273,16 @@ func (a *Agent) completeJob(jobID uuid.UUID, result string) {
 
 	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("❌ Failed to send job completion to server: %v", err)
+		infrastructure.AgentLogger.Error("Failed to send job completion to server: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("❌ Job completion failed with status %d: %s", resp.StatusCode, string(body))
+		infrastructure.AgentLogger.Error("Job completion failed with status %d: %s", resp.StatusCode, string(body))
 	} else {
-		log.Printf("✅ Job completion sent successfully to server")
+		infrastructure.AgentLogger.Success("Job completion sent successfully to server")
 	}
 }
 
@@ -1284,16 +1296,16 @@ func (a *Agent) failJob(jobID uuid.UUID, reason string) {
 
 	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("❌ Failed to send job failure to server: %v", err)
+		infrastructure.AgentLogger.Error("Failed to send job failure to server: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("❌ Job failure notification failed with status %d: %s", resp.StatusCode, string(body))
+		infrastructure.AgentLogger.Error("Job failure notification failed with status %d: %s", resp.StatusCode, string(body))
 	} else {
-		log.Printf("✅ Job failure notification sent successfully to server")
+		infrastructure.AgentLogger.Success("Job failure notification sent successfully to server")
 	}
 }
 
@@ -1302,7 +1314,7 @@ func getLocalIP() string {
 	cmd := exec.Command("hostname", "-I")
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("⚠️ Warning: Failed to get local IP using hostname -I: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to get local IP using hostname -I: %v", err)
 		return "127.0.0.1" // Fallback to localhost
 	}
 
@@ -1312,12 +1324,12 @@ func getLocalIP() string {
 		ip = strings.TrimSpace(ip)
 		// Skip localhost and loopback addresses
 		if ip != "127.0.0.1" && ip != "::1" && ip != "" {
-			log.Printf("🔍 Found local IP: %s", ip)
+			infrastructure.AgentLogger.Info("Found local IP: %s", ip)
 			return ip
 		}
 	}
 
-	log.Printf("⚠️ Warning: No valid local IP found, using fallback")
+	infrastructure.AgentLogger.Warning("No valid local IP found, using fallback")
 	return "127.0.0.1"
 }
 
@@ -1327,7 +1339,7 @@ func validateLocalIP(providedIP string) error {
 	cmd := exec.Command("hostname", "-I")
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("⚠️ Warning: Failed to get local IP using hostname -I: %v", err)
+		infrastructure.AgentLogger.Warning("Failed to get local IP using hostname -I: %v", err)
 		// If we can't validate, allow the IP to pass
 		return nil
 	}
@@ -1337,47 +1349,47 @@ func validateLocalIP(providedIP string) error {
 	for _, localIP := range localIPs {
 		localIP = strings.TrimSpace(localIP)
 		if localIP == providedIP {
-			log.Printf("✅ IP address validation passed: %s is a valid local IP", providedIP)
+			infrastructure.AgentLogger.Success("IP address validation passed: %s is a valid local IP", providedIP)
 			return nil
 		}
 	}
 
 	// IP not found in local IPs
-	return fmt.Errorf("❌ IP address validation failed: provided IP '%s' is not a valid local IP address. Local IPs: %v", providedIP, localIPs)
+	return fmt.Errorf("IP address validation failed: provided IP '%s' is not a valid local IP address. Local IPs: %v", providedIP, localIPs)
 }
 
 // detectCapabilitiesWithHashcat detects server capabilities using hashcat -I command
 func detectCapabilitiesWithHashcat() string {
-	log.Printf("🔍 Starting hashcat -I capabilities detection...")
+	infrastructure.AgentLogger.Info("Starting hashcat -I capabilities detection...")
 
 	// Check if hashcat is available
 	if _, err := exec.LookPath("hashcat"); err != nil {
-		log.Printf("⚠️ Warning: hashcat not found, falling back to basic detection")
-		log.Printf("🔍 Error details: %v", err)
+		infrastructure.AgentLogger.Warning("hashcat not found, falling back to basic detection")
+		infrastructure.AgentLogger.Debug("Error details: %v", err)
 		return detectCapabilitiesBasic()
 	}
 
-	log.Printf("✅ hashcat command found, executing hashcat -I...")
+	infrastructure.AgentLogger.Info("hashcat command found, executing hashcat -I...")
 
 	// Run hashcat -I to get device information
 	cmd := exec.Command("hashcat", "-I")
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("⚠️ Warning: Failed to run hashcat -I: %v", err)
-		log.Printf("⚠️ Falling back to basic detection")
+		infrastructure.AgentLogger.Warning("Failed to run hashcat -I: %v", err)
+		infrastructure.AgentLogger.Info("Falling back to basic detection")
 		return detectCapabilitiesBasic()
 	}
 
-	log.Printf("✅ hashcat -I executed successfully")
+	infrastructure.AgentLogger.Success("hashcat -I executed successfully")
 
 	// Parse output to find device types
 	outputStr := string(output)
 	lines := strings.Split(outputStr, "\n")
 
-	log.Printf("🔍 Hashcat -I output lines count: %d", len(lines))
-	log.Printf("🔍 Raw output preview (first 10 lines):")
+	infrastructure.AgentLogger.Debug("Hashcat -I output lines count: %d", len(lines))
+	infrastructure.AgentLogger.Debug("Raw output preview (first 10 lines):")
 	for i, line := range lines[:min(10, len(lines))] {
-		log.Printf("   Line %d: %s", i+1, line)
+		infrastructure.AgentLogger.Debug("   Line %d: %s", i+1, line)
 	}
 
 	var deviceTypes []string
@@ -1387,54 +1399,54 @@ func detectCapabilitiesWithHashcat() string {
 
 		// Look for device section headers
 		if strings.Contains(line, "Backend Device ID #") {
-			log.Printf("🔍 Found device section header at line %d: %s", i+1, line)
+			infrastructure.AgentLogger.Debug("Found device section header at line %d: %s", i+1, line)
 			continue
 		}
 
 		// Look for Type line
 		if strings.HasPrefix(line, "Type...........:") {
-			log.Printf("🔍 Found Type line at line %d: %s", i+1, line)
+			infrastructure.AgentLogger.Debug("Found Type line at line %d: %s", i+1, line)
 			parts := strings.Split(line, ":")
 			if len(parts) >= 2 {
 				deviceType := strings.TrimSpace(parts[1])
 				if deviceType != "" {
 					deviceTypes = append(deviceTypes, deviceType)
-					log.Printf("🔍 Detected device type: %s", deviceType)
+					infrastructure.AgentLogger.Info("Detected device type: %s", deviceType)
 				}
 			}
 		}
 	}
 
-	log.Printf("🔍 Total device types found: %d", len(deviceTypes))
-	log.Printf("🔍 Device types: %v", deviceTypes)
+	infrastructure.AgentLogger.Info("Total device types found: %d", len(deviceTypes))
+	infrastructure.AgentLogger.Info("Device types: %v", deviceTypes)
 
 	// Determine capabilities based on detected devices
 	if len(deviceTypes) == 0 {
-		log.Printf("⚠️ No device types found in hashcat -I output, falling back to basic detection")
+		infrastructure.AgentLogger.Warning("No device types found in hashcat -I output, falling back to basic detection")
 		return detectCapabilitiesBasic()
 	}
 
 	// Check if any GPU devices are found
 	for _, deviceType := range deviceTypes {
-		log.Printf("🔍 Checking device type for GPU: %s", deviceType)
+		infrastructure.AgentLogger.Debug("Checking device type for GPU: %s", deviceType)
 		if strings.Contains(strings.ToUpper(deviceType), "GPU") {
-			log.Printf("✅ GPU device detected: %s", deviceType)
+			infrastructure.AgentLogger.Success("GPU device detected: %s", deviceType)
 			return "GPU"
 		}
 	}
 
 	// If no GPU, check for CPU
 	for _, deviceType := range deviceTypes {
-		log.Printf("🔍 Checking device type for CPU: %s", deviceType)
+		infrastructure.AgentLogger.Debug("Checking device type for CPU: %s", deviceType)
 		if strings.Contains(strings.ToUpper(deviceType), "CPU") {
-			log.Printf("✅ CPU device detected: %s", deviceType)
+			infrastructure.AgentLogger.Info("CPU device detected: %s", deviceType)
 			return "CPU"
 		}
 	}
 
 	// If we can't determine, log all found types and fallback
-	log.Printf("⚠️ Could not determine capabilities from device types: %v", deviceTypes)
-	log.Printf("⚠️ Falling back to basic detection")
+	infrastructure.AgentLogger.Warning("Could not determine capabilities from device types: %v", deviceTypes)
+	infrastructure.AgentLogger.Info("Falling back to basic detection")
 	return detectCapabilitiesBasic()
 }
 
@@ -1459,55 +1471,55 @@ func detectCapabilitiesBasic() string {
 
 // hasGPU checks if GPU is available on the system
 func hasGPU() bool {
-	log.Printf("🔍 Starting GPU detection...")
+	infrastructure.AgentLogger.Info("Starting GPU detection...")
 
 	// Check for NVIDIA GPU
 	if _, err := exec.LookPath("nvidia-smi"); err == nil {
-		log.Printf("🔍 nvidia-smi command found, checking if GPU is working...")
+		infrastructure.AgentLogger.Info("nvidia-smi command found, checking if GPU is working...")
 		// Try to run nvidia-smi to verify GPU is working
 		cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits")
 		if output, err := cmd.Output(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
 			gpuName := strings.TrimSpace(string(output))
-			log.Printf("✅ Detected NVIDIA GPU: %s", gpuName)
+			infrastructure.AgentLogger.Success("Detected NVIDIA GPU: %s", gpuName)
 			return true
 		} else {
-			log.Printf("⚠️ nvidia-smi found but failed to run or no output: %v", err)
+			infrastructure.AgentLogger.Warning("nvidia-smi found but failed to run or no output: %v", err)
 		}
 	} else {
-		log.Printf("🔍 nvidia-smi command not found")
+		infrastructure.AgentLogger.Debug("nvidia-smi command not found")
 	}
 
 	// Check for AMD GPU
 	if _, err := exec.LookPath("rocm-smi"); err == nil {
-		log.Printf("🔍 rocm-smi command found, checking if GPU is working...")
+		infrastructure.AgentLogger.Info("rocm-smi command found, checking if GPU is working...")
 		cmd := exec.Command("rocm-smi", "--list-gpus")
 		if output, err := cmd.Output(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
-			log.Printf("✅ Detected AMD GPU (ROCm): %s", strings.TrimSpace(string(output)))
+			infrastructure.AgentLogger.Success("Detected AMD GPU (ROCm): %s", strings.TrimSpace(string(output)))
 			return true
 		} else {
-			log.Printf("⚠️ rocm-smi found but failed to run or no output: %v", err)
+			infrastructure.AgentLogger.Warning("rocm-smi found but failed to run or no output: %v", err)
 		}
 	} else {
-		log.Printf("🔍 rocm-smi command not found")
+		infrastructure.AgentLogger.Debug("rocm-smi command not found")
 	}
 
 	// Check for Intel GPU
 	if _, err := exec.LookPath("intel_gpu_top"); err == nil {
-		log.Printf("🔍 intel_gpu_top command found, checking if GPU is working...")
+		infrastructure.AgentLogger.Info("intel_gpu_top command found, checking if GPU is working...")
 		cmd := exec.Command("intel_gpu_top", "-J", "-s", "1")
 		if output, err := cmd.Output(); err == nil && len(strings.TrimSpace(string(output))) > 0 {
-			log.Printf("✅ Detected Intel GPU: %s", strings.TrimSpace(string(output)))
+			infrastructure.AgentLogger.Success("Detected Intel GPU: %s", strings.TrimSpace(string(output)))
 			return true
 		} else {
-			log.Printf("⚠️ intel_gpu_top found but failed to run or no output: %v", err)
+			infrastructure.AgentLogger.Warning("intel_gpu_top found but failed to run or no output: %v", err)
 		}
 	} else {
-		log.Printf("🔍 intel_gpu_top command not found")
+		infrastructure.AgentLogger.Debug("intel_gpu_top command not found")
 	}
 
 	// Additional check: look for GPU devices in /proc
 	if _, err := os.Stat("/proc/driver/nvidia"); err == nil {
-		log.Printf("✅ Found NVIDIA driver in /proc/driver/nvidia")
+		infrastructure.AgentLogger.Info("Found NVIDIA driver in /proc/driver/nvidia")
 		return true
 	}
 
@@ -1516,14 +1528,14 @@ func hasGPU() bool {
 		if files, err := os.ReadDir("/sys/class/drm"); err == nil {
 			for _, file := range files {
 				if strings.HasPrefix(file.Name(), "card") && file.Name() != "card0" {
-					log.Printf("✅ Found GPU device: %s", file.Name())
+					infrastructure.AgentLogger.Info("Found GPU device: %s", file.Name())
 					return true
 				}
 			}
 		}
 	}
 
-	log.Printf("🔍 No GPU detected, using CPU")
+	infrastructure.AgentLogger.Info("No GPU detected, using CPU")
 	return false
 }
 
