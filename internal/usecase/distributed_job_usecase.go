@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -98,7 +96,7 @@ func (u *distributedJobUsecase) CreateDistributedJobs(ctx context.Context, req *
 		UpdatedAt:  time.Now(),
 	}
 
-	// Create sub-jobs for each agent
+	// Create sub-jobs for each agent using skip/limit ranges
 	var subJobs []domain.Job
 	var agentAssignments []domain.AgentPerformance
 
@@ -109,13 +107,11 @@ func (u *distributedJobUsecase) CreateDistributedJobs(ctx context.Context, req *
 
 		agent := agentPerformances[i]
 
-		// Create wordlist segment file
-		_, err = u.createWordlistSegment(wordlist, segment, i)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create wordlist segment %d: %w", i, err)
-		}
+		// Calculate skip and limit values for this segment
+		skip := segment.StartIndex
+		limit := segment.WordCount
 
-		// Create sub-job
+		// Create sub-job with skip/limit parameters
 		subJob := domain.Job{
 			ID:         uuid.New(),
 			Name:       fmt.Sprintf("%s (Part %d - %s)", req.Name, i+1, agent.Name),
@@ -124,10 +120,13 @@ func (u *distributedJobUsecase) CreateDistributedJobs(ctx context.Context, req *
 			AttackMode: req.AttackMode,
 			HashFile:   hashFile.OrigName,
 			HashFileID: &hashFileID,
-			Wordlist:   fmt.Sprintf("%s_part_%d", wordlist.OrigName, i+1),
-			WordlistID: &wordlistID, // Reference to original wordlist
+			Wordlist:   wordlist.OrigName, // Use original wordlist, not segment file
+			WordlistID: &wordlistID,
 			Rules:      req.Rules,
 			AgentID:    &agent.AgentID,
+			Skip:       &skip,  // Hashcat --skip parameter
+			WordLimit:  &limit, // Hashcat --limit parameter
+			TotalWords: segment.WordCount,
 			CreatedAt:  time.Now(),
 			UpdatedAt:  time.Now(),
 		}
@@ -292,40 +291,8 @@ func (u *distributedJobUsecase) divideWordlistByPerformance(wordlist *domain.Wor
 	return segments
 }
 
-// createWordlistSegment creates a physical file for wordlist segment
-func (u *distributedJobUsecase) createWordlistSegment(wordlist *domain.Wordlist, segment domain.WordlistSegment, partIndex int) (string, error) {
-	// Create segments directory
-	segmentsDir := filepath.Join(u.uploadDir, "wordlists", "segments")
-	if err := os.MkdirAll(segmentsDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create segments directory: %w", err)
-	}
-
-	// Generate segment filename
-	segmentFilename := fmt.Sprintf("%s_part_%d_%d-%d.txt",
-		strings.TrimSuffix(wordlist.Name, filepath.Ext(wordlist.Name)),
-		partIndex+1,
-		segment.StartIndex,
-		segment.EndIndex,
-	)
-
-	segmentPath := filepath.Join(segmentsDir, segmentFilename)
-
-	// For now, create a placeholder file
-	// In a real implementation, you would read the original wordlist and extract the segment
-	placeholderContent := fmt.Sprintf("# Wordlist Segment %d\n# Original: %s\n# Range: %d-%d\n# Total Words: %d\n\n",
-		partIndex+1,
-		wordlist.OrigName,
-		segment.StartIndex,
-		segment.EndIndex,
-		segment.WordCount,
-	)
-
-	if err := os.WriteFile(segmentPath, []byte(placeholderContent), 0644); err != nil {
-		return "", fmt.Errorf("failed to create segment file: %w", err)
-	}
-
-	return segmentPath, nil
-}
+// NOTE: createWordlistSegment function removed - we now use hashcat's --skip and --limit
+// parameters for distributed cracking instead of creating physical segment files
 
 // GetDistributedJobStatus gets the status of all sub-jobs for a master job
 func (u *distributedJobUsecase) GetDistributedJobStatus(ctx context.Context, masterJobID uuid.UUID) (*domain.DistributedJobResult, error) {

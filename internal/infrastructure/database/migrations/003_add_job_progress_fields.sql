@@ -1,7 +1,9 @@
--- Migration: Add job progress tracking fields
--- Date: 2025-08-17
+-- Migration: 003_add_job_progress_fields.sql
 -- Description: Add fields for tracking job progress, speed, ETA, and word counts
+-- Author: System
+-- Date: 2025-01-08
 
+-- +migrate Up
 -- Add new columns to jobs table
 ALTER TABLE jobs ADD COLUMN total_words INTEGER DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN processed_words INTEGER DEFAULT 0;
@@ -15,9 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status_progress ON jobs(status, progress);
 CREATE INDEX IF NOT EXISTS idx_jobs_speed ON jobs(speed);
 CREATE INDEX IF NOT EXISTS idx_jobs_total_words ON jobs(total_words);
 
--- Add comments to explain the new fields
-COMMENT ON COLUMN jobs.total_words IS 'Total dictionary words for this job';
-COMMENT ON COLUMN jobs.processed_words IS 'Number of words already processed';
-COMMENT ON COLUMN jobs.speed IS 'Hash rate in H/s (hashes per second)';
-COMMENT ON COLUMN jobs.eta IS 'Estimated time of completion';
-COMMENT ON COLUMN jobs.rules IS 'Hashcat rules or cracked password result';
+-- +migrate Down
+DROP INDEX IF EXISTS idx_jobs_total_words;
+DROP INDEX IF EXISTS idx_jobs_speed;
+DROP INDEX IF EXISTS idx_jobs_status_progress;

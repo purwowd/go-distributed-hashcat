@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at DATETIME NOT NULL,
     started_at DATETIME,
     completed_at DATETIME,
+    skip INTEGER,
+    word_limit INTEGER,
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
     FOREIGN KEY (hash_file_id) REFERENCES hash_files(id) ON DELETE SET NULL,
     FOREIGN KEY (wordlist_id) REFERENCES wordlists(id) ON DELETE SET NULL

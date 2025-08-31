@@ -168,7 +168,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
+			return nil, domain.ErrAgentNotFound // <-- use custom error
 		}
 		return nil, err
 	}
@@ -202,7 +202,7 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
+			return nil, domain.ErrAgentNotFound // <-- use custom error
 		}
 		return nil, err
 	}
@@ -399,7 +399,7 @@ func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domai
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.ErrAgentNotFound // <-- pakai error khusus
+			return nil, domain.ErrAgentNotFound // <-- use custom error
 		}
 		return nil, err
 	}

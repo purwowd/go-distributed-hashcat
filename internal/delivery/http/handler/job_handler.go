@@ -514,7 +514,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		return
 	}
 
-	log.Printf("🚀 Starting parallel job creation with %d online agents", len(onlineAgents))
+	log.Printf("Starting parallel job creation with %d online agents", len(onlineAgents))
 
 	// Ambil detail wordlist
 	wordlistID, err := uuid.Parse(request.WordlistID)
@@ -535,7 +535,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		return
 	}
 
-	// Filter kata-kata yang tidak kosong
+	// Filter non-empty words
 	var validWords []string
 	for _, word := range wordlistLines {
 		word = strings.TrimSpace(word)
@@ -556,9 +556,9 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 	var agentSpeeds []AgentSpeed
 
 	for _, agent := range onlineAgents {
-		speed := 1 // Default untuk CPU
+		speed := 1 // Default for CPU
 		if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
-			speed = 5 // GPU lebih cepat
+			speed = 5 // GPU is faster
 		} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
 			speed = 8 // RTX lebih cepat lagi
 		} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
@@ -578,7 +578,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		totalSpeed += agentSpeed.Speed
 	}
 
-	// Hitung weight untuk setiap agent
+	// Calculate weight for each agent
 	for i := range agentSpeeds {
 		agentSpeeds[i].Weight = float64(agentSpeeds[i].Speed) / float64(totalSpeed)
 	}
@@ -625,7 +625,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		}
 	}
 
-	// Buat job untuk setiap bagian
+	// Create job for each part
 	var createdJobs []domain.Job
 	for agentID, words := range wordlistParts {
 		job, err := h.jobUsecase.CreateJob(c.Request.Context(), &domain.CreateJobRequest{
@@ -734,7 +734,7 @@ func (h *JobHandler) UpdateJobDataFromAgent(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Job data updated successfully"})
 }
 
-// Fungsi pembantu untuk membaca file wordlist
+// Helper function to read wordlist file
 func readWordlistFile(path string) ([]string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
