@@ -473,7 +473,8 @@ class DashboardApplication {
                 return this.reactiveAgentKeys || []
             },
             get jobs() {
-                return this.reactiveJobs || []
+                // Filter out master jobs (distributed coordinators) from UI display
+                return (this.reactiveJobs || []).filter(job => job.status !== 'distributed')
             },
             get hashFiles() {
                 return this.reactiveHashFiles || []
@@ -1483,15 +1484,34 @@ class DashboardApplication {
 
                     
                     const result = await jobStore.actions.createJob(jobPayload)
-                    if (result) {
-                        this.showNotification('Job created successfully!', 'success')
+                    
+                    // Always check job state for success/warning messages
+                    const jobState = jobStore.getState()
+                    
+                    // Check if jobs were actually created (for distributed jobs, check if we have new jobs)
+                    const jobsCreated = result || (jobState.jobs && jobState.jobs.length > 0)
+                    
+                    if (jobsCreated && !jobState.error?.includes('failed to create any sub-jobs')) {
+                        // Job creation successful (either single or distributed)
+                        if (jobState.error && jobState.error.includes('Warning:')) {
+                            // Distributed job with some failed agents
+                            this.showNotification('Jobs created with warnings - some agents failed', 'warning')
+                        } else {
+                            // Full success
+                            this.showNotification('Job created successfully!', 'success')
+                        }
+                        
+                        // Always close modal on success
                         this.showJobModal = false
+                        this.currentStep = 1 // Reset to first step
                         this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
                         
                         // Refresh jobs list to show the new job
                         await this.refreshJobsTable()
                     } else {
-                        this.showNotification('Failed to create job - server returned null', 'error')
+                        // Job creation failed
+                        const errorMsg = jobState.error || 'Failed to create job - server returned null'
+                        this.showNotification(errorMsg, 'error')
                     }
                 } catch (error) {
                     console.error('Job creation error:', error)

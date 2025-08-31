@@ -83,20 +83,61 @@ class JobStore {
             this.setState({ loading: true, error: null })
             
             try {
-                const newJob = await apiService.createJob(jobData)
-                if (newJob) {
-                    this.setState({ 
-                        jobs: [...this.state.jobs, newJob],
-                        loading: false 
-                    })
-                    return newJob
+                // Check if multiple agents are selected - use distributed job endpoint
+                if ((jobData as any).agent_ids && (jobData as any).agent_ids.length > 1) {
+                    const distributedResult = await apiService.createDistributedJob(jobData)
+                    if (distributedResult) {
+                        // Handle successful distributed job creation
+                        if (distributedResult.sub_jobs && distributedResult.sub_jobs.length > 0) {
+                            // Add all sub-jobs to the store
+                            const newJobs = distributedResult.sub_jobs
+                            
+                            // Check if there were warnings about failed agents
+                            let stateUpdate: any = { 
+                                jobs: [...this.state.jobs, ...newJobs],
+                                loading: false,
+                                error: null // Clear any previous errors
+                            }
+                            
+                            // If message contains warning about failed agents, store it
+                            if (distributedResult.message && distributedResult.message.includes('Warning:')) {
+                                stateUpdate.error = distributedResult.message
+                            }
+                            
+                            this.setState(stateUpdate)
+                            return newJobs[0] // Return first job for compatibility
+                        } else {
+                            // No sub-jobs created (all agents failed)
+                            this.setState({ 
+                                loading: false, 
+                                error: distributedResult.message || 'No jobs could be created - all agents failed'
+                            })
+                            return null
+                        }
+                    } else {
+                        this.setState({ 
+                            loading: false, 
+                            error: 'Failed to create distributed jobs'
+                        })
+                        return null
+                    }
                 } else {
-                    // API returned success but null data
-                    this.setState({ 
-                        loading: false, 
-                        error: 'Server returned empty response'
-                    })
-                    return null
+                    // Single agent - use regular job endpoint
+                    const newJob = await apiService.createJob(jobData)
+                    if (newJob) {
+                        this.setState({ 
+                            jobs: [...this.state.jobs, newJob],
+                            loading: false 
+                        })
+                        return newJob
+                    } else {
+                        // API returned success but null data
+                        this.setState({ 
+                            loading: false, 
+                            error: 'Server returned empty response'
+                        })
+                        return null
+                    }
                 }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Failed to create job'

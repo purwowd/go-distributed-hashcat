@@ -291,6 +291,12 @@ class ApiService {
         return response.success ? response.data! : null
     }
 
+    // Distributed Job Creation - for multiple agents with H/s-based distribution
+    public async createDistributedJob(jobData: any): Promise<any | null> {
+        const response = await this.post<any>('/api/v1/distributed-jobs/', jobData)
+        return response.success ? response.data! : null
+    }
+
     public async updateJob(id: string, jobData: Partial<Job>): Promise<Job | null> {
         const response = await this.put<Job>(`/api/v1/jobs/${id}`, jobData)
         return response.success ? response.data! : null

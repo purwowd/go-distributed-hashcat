@@ -271,7 +271,7 @@ func (r *jobRepository) GetAvailableJobForAgent(ctx context.Context, agentID uui
 	query := `
 		SELECT id, name, status, hash_type, attack_mode, hash_file, hash_file_id, 
 		       wordlist, wordlist_id, rules, agent_id, progress, speed, eta, result, 
-		       created_at, updated_at, started_at, completed_at
+		       created_at, updated_at, started_at, completed_at, skip, word_limit
 		FROM jobs 
 		WHERE agent_id = ? AND status = 'pending'
 		ORDER BY created_at ASC
@@ -329,6 +329,8 @@ func (r *jobRepository) Update(ctx context.Context, job *domain.Job) error {
 		job.UpdatedAt,
 		job.StartedAt,
 		job.CompletedAt,
+		job.Skip,
+		job.WordLimit,
 		job.ID.String(),
 	)
 
