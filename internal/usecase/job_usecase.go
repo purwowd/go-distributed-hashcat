@@ -383,18 +383,12 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 	job.Progress = 100
 	job.CompletedAt = &now
 
-	// Check if this is a distributed job (sub-job)
-	if strings.Contains(job.Name, "Part") && strings.Contains(job.Name, "-") {
-		// Extract master job name from sub-job name
-		parts := strings.Split(job.Name, " (Part")
-		if len(parts) > 0 {
-			masterJobName := parts[0]
-
-			// Check if password was found
-			if result != "" && result != "Password not found - exhausted" {
-				// Password found! Cancel other running jobs
-				u.cancelOtherDistributedJobs(ctx, masterJobName, id)
-			}
+	// Check if password was found
+	if result != "" && result != "Password not found - exhausted" {
+		// Password found! Stop other related running jobs
+		if err := u.stopRelatedRunningJobs(ctx, job); err != nil {
+			// Log error but don't fail the job completion
+			fmt.Printf("Warning: failed to stop related running jobs: %v\n", err)
 		}
 	}
 
@@ -403,38 +397,6 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 	}
 
 	return nil
-}
-
-// cancelOtherDistributedJobs cancels other running jobs when one agent finds the password
-func (u *jobUsecase) cancelOtherDistributedJobs(ctx context.Context, masterJobName string, successfulJobID uuid.UUID) {
-	// Get all jobs with similar name pattern
-	allJobs, err := u.jobRepo.GetAll(ctx)
-	if err != nil {
-		log.Printf("Warning: failed to get jobs for distributed cancellation: %v", err)
-		return
-	}
-
-	// Find and cancel other running/pending sub-jobs
-	for _, job := range allJobs {
-		if strings.Contains(job.Name, masterJobName) &&
-			strings.Contains(job.Name, "Part") &&
-			job.ID != successfulJobID &&
-			(job.Status == "running" || job.Status == "pending") {
-
-			// Mark job as failed with 100% progress
-			job.Status = "failed"
-			job.Progress = 100
-			job.Result = "Password not found - Job cancelled due to success in another agent"
-			now := time.Now()
-			job.CompletedAt = &now
-
-			if err := u.jobRepo.Update(ctx, &job); err != nil {
-				log.Printf("Warning: failed to cancel distributed job %s: %v", job.ID, err)
-			} else {
-				log.Printf("✅ Cancelled distributed job %s due to success in another agent", job.Name)
-			}
-		}
-	}
 }
 
 func (u *jobUsecase) FailJob(ctx context.Context, id uuid.UUID, reason string) error {
