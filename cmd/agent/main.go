@@ -212,6 +212,15 @@ func runAgent(cmd *cobra.Command, args []string) {
 		infrastructure.AgentLogger.Success("Agent status updated to online with port 8081")
 	}
 
+	// Run hashcat benchmark to detect and update agent speed
+	infrastructure.AgentLogger.Info("Running hashcat benchmark to detect agent speed...")
+	if err := agent.runHashcatBenchmark(); err != nil {
+		infrastructure.AgentLogger.Warning("Failed to run hashcat benchmark: %v", err)
+		infrastructure.AgentLogger.Info("Agent will continue without speed information")
+	} else {
+		infrastructure.AgentLogger.Success("Hashcat benchmark completed and speed updated")
+	}
+
 	infrastructure.AgentLogger.Info("Upload Directory: %s", agent.UploadDir)
 	infrastructure.AgentLogger.Info("Found %d local files", len(agent.LocalFiles))
 
@@ -1664,4 +1673,112 @@ func (a *Agent) updateJobProgress(jobID uuid.UUID, progress float64, speed int64
 	} else {
 		infrastructure.AgentLogger.Info("Job progress update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
 	}
+}
+
+// runHashcatBenchmark runs hashcat benchmark and updates agent speed
+func (a *Agent) runHashcatBenchmark() error {
+	infrastructure.AgentLogger.Info("Starting hashcat benchmark to detect agent speed...")
+
+	// Check if hashcat is available
+	if _, err := exec.LookPath("hashcat"); err != nil {
+		infrastructure.AgentLogger.Warning("hashcat not found in PATH: %v", err)
+		infrastructure.AgentLogger.Info("Skipping automatic speed detection. You can manually set speed via API:")
+		infrastructure.AgentLogger.Info("PUT /api/v1/agents/%s/speed", a.ID.String())
+		return nil
+	}
+
+	// Run hashcat -b -m 2500 for WPA benchmark
+	cmd := exec.Command("hashcat", "-b", "-m", "2500")
+
+	// Capture stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start hashcat benchmark: %w", err)
+	}
+
+	// Parse output for speed
+	speedRegex := regexp.MustCompile(`Speed\.#\d+\.+:\s*(\d+)\s*H/s`)
+	var detectedSpeed int64
+
+	scanner := func(reader io.Reader) {
+		buf := make([]byte, 1024)
+		for {
+			n, err := reader.Read(buf)
+			if err != nil {
+				return
+			}
+
+			output := string(buf[:n])
+
+			// Parse speed from output
+			if matches := speedRegex.FindStringSubmatch(output); len(matches) > 1 {
+				if speed, err := strconv.ParseInt(matches[1], 10, 64); err == nil {
+					detectedSpeed = speed
+					infrastructure.AgentLogger.Info("Detected hashcat speed: %d H/s", detectedSpeed)
+				}
+			}
+		}
+	}
+
+	go scanner(stdout)
+	go scanner(stderr)
+
+	// Wait for command to complete
+	if err := cmd.Wait(); err != nil {
+		infrastructure.AgentLogger.Warning("Hashcat benchmark completed with error: %v", err)
+		// Continue anyway to use detected speed if available
+	}
+
+	// Update agent speed in database if speed was detected
+	if detectedSpeed > 0 {
+		if err := a.updateAgentSpeed(detectedSpeed); err != nil {
+			infrastructure.AgentLogger.Error("Failed to update agent speed: %v", err)
+			return err
+		}
+		infrastructure.AgentLogger.Success("Agent speed updated successfully: %d H/s", detectedSpeed)
+	} else {
+		infrastructure.AgentLogger.Warning("No speed detected from hashcat benchmark")
+		infrastructure.AgentLogger.Info("You can manually set speed via API:")
+		infrastructure.AgentLogger.Info("PUT /api/v1/agents/%s/speed", a.ID.String())
+	}
+
+	return nil
+}
+
+// updateAgentSpeed updates the agent speed in the database
+func (a *Agent) updateAgentSpeed(speed int64) error {
+	req := struct {
+		Speed int64 `json:"speed"`
+	}{
+		Speed: speed,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/agents/%s/speed", a.ServerURL, a.ID.String())
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send speed update request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("speed update failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }

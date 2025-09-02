@@ -107,6 +107,11 @@ func (m *MockAgentRepository) GetByNameAndIPForStartup(ctx context.Context, name
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed int64) error {
+	args := m.Called(ctx, id, speed)
+	return args.Error(0)
+}
+
 func TestAgentUsecase_RegisterAgent(t *testing.T) {
 	existingAgentID := uuid.New()
 

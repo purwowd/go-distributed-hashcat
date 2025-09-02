@@ -315,6 +315,52 @@ func (h *AgentHandler) UpdateAgentHeartbeat(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "heartbeat updated"})
 }
 
+// UpdateAgentSpeed updates the speed of an agent
+func (h *AgentHandler) UpdateAgentSpeed(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid agent ID",
+			"code":    "INVALID_AGENT_ID",
+			"message": "The provided agent ID is not valid.",
+		})
+		return
+	}
+
+	var req struct {
+		Speed   int64  `json:"speed" binding:"required,gte=0"`
+		Message string `json:"message,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request body",
+			"code":    "INVALID_REQUEST",
+			"message": "The request body is invalid.",
+		})
+		return
+	}
+
+	// Update agent speed
+	if err := h.agentUsecase.UpdateAgentSpeed(c.Request.Context(), id, req.Speed); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update agent speed",
+			"code":    "UPDATE_SPEED_FAILED",
+			"message": "Failed to update agent speed.",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Agent speed updated successfully",
+		"data": gin.H{
+			"id":    id.String(),
+			"speed": req.Speed,
+		},
+	})
+}
+
 // UpdateAgentData updates only the data fields (ip_address, port, capabilities) without changing status
 func (h *AgentHandler) UpdateAgentData(c *gin.Context) {
 	type updateAgentDataDTO struct {

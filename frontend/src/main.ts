@@ -416,6 +416,7 @@ class DashboardApplication {
             agentKeyForm: { name: '', agent_key: '' },
             createdAgent: null as any,
             createdAgentKey: null as any,
+            showAgentNameError: false,
             deleteModalConfig: { entityType: '', entityName: '', description: '', warning: '', entityId: '', confirmAction: null as any },
             jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [] as string[], hash_type: '', attack_mode: '' },
             distributedJobForm: { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', auto_distribute: true },
@@ -553,6 +554,30 @@ class DashboardApplication {
                 }
                 
                 return '0'
+            },
+
+            // Get selected wordlist count as number for regular job form
+            get selectedWordlistCountRegularNumber() {
+                if (!this.jobForm.wordlist_id) {
+                    return 0
+                }
+                
+                const selectedWordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
+                if (!selectedWordlist) {
+                    return 0
+                }
+                
+                return selectedWordlist.word_count || 0
+            },
+
+            // Check if selected wordlist has less than 1000 words
+            get isWordlistTooSmall() {
+                return this.selectedWordlistCountRegularNumber > 0 && this.selectedWordlistCountRegularNumber < 1000
+            },
+
+            // Check if multi-agent selection should be disabled
+            get isMultiAgentSelectionDisabled() {
+                return this.isWordlistTooSmall
             },
 
             
@@ -1248,11 +1273,13 @@ class DashboardApplication {
                 const pregenerated = Math.random().toString(16).slice(2, 10).padEnd(8, '0').slice(0,8)
                 this.agentKeyForm = { name: '', agent_key: pregenerated }
                 this.createdAgentKey = null
+                this.showAgentNameError = false
             },
             
             closeAgentKeyModal() {
                 this.showAgentKeyModal = false
                 this.createdAgentKey = null
+                this.showAgentNameError = false
             },
 
             // Generic Delete Modal actions
@@ -1364,6 +1391,21 @@ class DashboardApplication {
                 }
             },
             
+            async validateAndCreateAgentKey(agentKeyData: any) {
+                // Reset error state
+                this.showAgentNameError = false
+
+                // Validate required fields
+                if (!agentKeyData.name || agentKeyData.name.trim() === '') {
+                    this.showAgentNameError = true
+                    this.showNotification('Agent name is required', 'error')
+                    return
+                }
+
+                // Call the original createAgentKey function
+                await this.createAgentKey(agentKeyData)
+            },
+
             async createAgentKey(agentKeyData: any) {
                 // Use the new generateAgentKey action for creating agent keys
                 const result = await agentStore.actions.generateAgentKey(agentKeyData.name)
@@ -1388,7 +1430,7 @@ class DashboardApplication {
                     } else if (state.error != null && String(state.error).trim() !== '') {
                         // Try to extract user-friendly message from error
                         let userMessage = String(state.error);
-                        
+
                         // Remove HTTP status prefix if present
                         if (userMessage.includes('HTTP 400: Bad Request - ')) {
                             userMessage = userMessage.replace('HTTP 400: Bad Request - ', '');
@@ -1397,7 +1439,7 @@ class DashboardApplication {
                         } else if (userMessage.includes('HTTP 500: Internal Server Error - ')) {
                             userMessage = userMessage.replace('HTTP 500: Internal Server Error - ', '');
                         }
-                        
+
                         this.showNotification(userMessage, 'error')
                     } else {
                         this.showNotification('Failed to generate agent key', 'error')
@@ -1617,6 +1659,19 @@ class DashboardApplication {
                 this.showWordlistModal = false
             },
 
+            // Handle wordlist change and validate agent selection
+            handleWordlistChange() {
+                // Check if wordlist is too small and reset agent selection if needed
+                if (this.isWordlistTooSmall) {
+                    // If more than 1 agent is selected, reset to single agent
+                    if (this.jobForm.agent_ids && this.jobForm.agent_ids.length > 1) {
+                        this.jobForm.agent_ids = [this.jobForm.agent_ids[0]] // Keep only first agent
+                        this.showNotification('Wordlist dengan kurang dari 1000 kata hanya dapat menggunakan 1 agent. Agent selection telah di-reset.', 'warning')
+                    }
+                }
+                this.updateCommandTemplate()
+            },
+
             // Update command template based on form inputs
             updateCommandTemplate() {
                 // Set default values if not set
@@ -1683,9 +1738,16 @@ class DashboardApplication {
             },
 
 
+            
 
             // Toggle select all agents
             toggleSelectAllAgents(checked: boolean) {
+                // Check if wordlist is too small for multi-agent selection
+                if (this.isWordlistTooSmall) {
+                    this.showNotification('Wordlists with less than 1000 words can only use one agent. Select agents individually.', 'warning')
+                    return
+                }
+
                 if (checked) {
                     // Select all online agents
                     this.jobForm.agent_ids = this.onlineAgents.map((agent: any) => agent.id)
@@ -1697,9 +1759,40 @@ class DashboardApplication {
 
             // Check if all agents are selected
             areAllAgentsSelected(): boolean {
+                // If wordlist is too small, disable select all functionality
+                if (this.isWordlistTooSmall) {
+                    return false
+                }
+                
                 return this.onlineAgents.length > 0 && 
                        this.jobForm.agent_ids.length === this.onlineAgents.length &&
                        this.onlineAgents.every((agent: any) => this.jobForm.agent_ids.includes(agent.id))
+            },
+
+            // Handle individual agent selection with wordlist validation
+            toggleAgentSelection(agentId: string) {
+                if (!this.jobForm.agent_ids) {
+                    this.jobForm.agent_ids = []
+                }
+
+                const isSelected = this.jobForm.agent_ids.includes(agentId)
+                
+                if (isSelected) {
+                    // Remove agent from selection
+                    this.jobForm.agent_ids = this.jobForm.agent_ids.filter((id: string) => id !== agentId)
+                } else {
+                    // Check if wordlist is too small
+                    if (this.isWordlistTooSmall) {
+                        // If wordlist is too small, only allow single agent selection
+                        if (this.jobForm.agent_ids.length > 0) {
+                            this.showNotification('Wordlists with less than 1000 words can only use one agent. Deselect other agents first.', 'warning')
+                            return
+                        }
+                    }
+                    
+                    // Add agent to selection
+                    this.jobForm.agent_ids.push(agentId)
+                }
             },
 
             // Toggle compact mode for agent selection
@@ -2201,8 +2294,20 @@ class DashboardApplication {
                          this.onlineAgents.length > 0)
             },
 
+            // Check if can preview distribution (same validation as create)
+            canPreviewDistribution(): boolean {
+                return !!(this.distributedJobForm.name && 
+                         this.distributedJobForm.hash_file_id && 
+                         this.distributedJobForm.wordlist_id &&
+                         this.onlineAgents.length > 0)
+            },
+
             // Preview distribution
             previewDistribution() {
+                if (!this.canPreviewDistribution()) {
+                    this.showNotification('Please complete all required fields: Job name, WiFi Handshake File, Wordlist, and ensure agents are available', 'warning')
+                    return
+                }
                 this.updateDistributionPreview()
                 this.showNotification('Distribution preview updated', 'success')
             },

@@ -74,6 +74,9 @@ func (m *MockJobRepository) UpdateProgress(ctx context.Context, id uuid.UUID, pr
 	return args.Error(0)
 }
 
+// MockAgentRepository is defined in agent_usecase_test.go
+// We only need to add the missing UpdateSpeed method here
+
 // MockHashFileRepository for job tests
 type MockHashFileRepository struct {
 	mock.Mock

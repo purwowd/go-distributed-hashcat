@@ -16,6 +16,7 @@ type Agent struct {
 	Status       string    `json:"status" db:"status"` // online, offline, busy
 	Capabilities string    `json:"capabilities" db:"capabilities"`
 	AgentKey     string    `json:"agent_key" db:"agent_key"`
+	Speed        int64     `json:"speed" db:"speed"` // Hash rate dalam H/s dari benchmark
 	LastSeen     time.Time `json:"last_seen" db:"last_seen"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`

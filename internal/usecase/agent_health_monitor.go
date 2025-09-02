@@ -48,6 +48,7 @@ type HealthConfig struct {
 
 type WebSocketHub interface {
 	BroadcastAgentStatus(agentID string, status string, lastSeen string)
+	BroadcastAgentSpeed(agentID string, speed int64)
 }
 
 func NewAgentHealthMonitor(

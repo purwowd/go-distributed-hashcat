@@ -11,7 +11,7 @@
     <div class="flex items-center justify-center min-h-screen px-4">
         <div class="modal-backdrop" @click="closeAgentKeyModal()"></div>
         <div class="modal-content animate-scale-in">
-            <form @submit.prevent="createAgentKey(agentKeyForm)">
+            <form @submit.prevent="validateAndCreateAgentKey(agentKeyForm)">
                 <div class="p-6 border-b border-gray-100/50">
                     <div class="flex items-center space-x-3 mb-2">
                         <div class="icon-modern icon-primary">
@@ -25,13 +25,17 @@
                 <div class="p-6 space-y-6">
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Agent Name <span class="text-red-500">*</span></label>
-                        <input type="text" 
-                               x-model="agentKeyForm.name" 
-                               required 
+                        <input type="text"
+                               x-model="agentKeyForm.name"
+                               @input="showAgentNameError = false"
+                               required
                                :disabled="createdAgentKey"
-                               class="input-modern" 
+                               class="input-modern"
                                placeholder="GPU-Server-01">
                         <p class="text-xs text-gray-500 mt-1">Choose a descriptive name for easy identification</p>
+                        <p x-show="showAgentNameError" class="text-xs text-red-600 mt-1">
+                            <i class="fas fa-exclamation-circle mr-1"></i>Agent name is required
+                        </p>
                     </div>
 
                     <!-- Preview field so users can see/copy the key from the same modal after generation -->

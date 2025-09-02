@@ -27,6 +27,7 @@ type AgentUsecase interface {
 	GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error)
 	GetAllAgents(ctx context.Context) ([]domain.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error
 	DeleteAgent(ctx context.Context, id uuid.UUID) error
 	GetAvailableAgent(ctx context.Context) (*domain.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error
@@ -252,6 +253,30 @@ func (u *agentUsecase) UpdateAgentLastSeen(ctx context.Context, id uuid.UUID) er
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
 		log.Printf("Real-time agent last seen broadcast: %s -> %s", agent.Name, agent.LastSeen.Format(time.RFC3339))
+	} else {
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+func (u *agentUsecase) UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error {
+	// Update speed in database
+	if err := u.agentRepo.UpdateSpeed(ctx, id, speed); err != nil {
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the speed update if broadcast fails
+	}
+
+	// Broadcast real-time speed update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentSpeed(agent.ID.String(), agent.Speed)
+		log.Printf("Real-time agent speed broadcast: %s -> %d H/s", agent.Name, speed)
 	} else {
 		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
 	}

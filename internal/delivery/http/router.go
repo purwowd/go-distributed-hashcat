@@ -94,6 +94,7 @@ func NewRouter(
 			agents.GET("/", agentHandler.GetAllAgents)
 			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
+			agents.PUT("/:id/speed", agentHandler.UpdateAgentSpeed)
 			agents.PUT("/:id/heartbeat", agentHandler.UpdateAgentHeartbeat)
 			agents.POST("/:id/files", agentHandler.RegisterAgentFiles)
 			agents.GET("/:id/jobs", jobHandler.GetJobsByAgentID)
