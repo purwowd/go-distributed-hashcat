@@ -38,6 +38,24 @@ type JobRepository interface {
 	UpdateProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error
 }
 
+// JobUsecase defines the interface for job business logic operations
+type JobUsecase interface {
+	CreateJob(ctx context.Context, req *CreateJobRequest) (*Job, error)
+	GetJob(ctx context.Context, id uuid.UUID) (*Job, error)
+	GetAllJobs(ctx context.Context) ([]Job, error)
+	GetJobsByStatus(ctx context.Context, status string) ([]Job, error)
+	GetJobsByAgentID(ctx context.Context, agentID uuid.UUID) ([]Job, error)
+	StartJob(ctx context.Context, id uuid.UUID) error
+	UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error
+	UpdateJobData(ctx context.Context, job *Job) error
+	CompleteJob(ctx context.Context, id uuid.UUID, result string, speed int64) error
+	FailJob(ctx context.Context, id uuid.UUID, reason string) error
+	PauseJob(ctx context.Context, id uuid.UUID) error
+	ResumeJob(ctx context.Context, id uuid.UUID) error
+	DeleteJob(ctx context.Context, id uuid.UUID) error
+	AssignJobsToAgents(ctx context.Context) error
+}
+
 // HashFileRepository defines the interface for hash file data operations
 type HashFileRepository interface {
 	Create(ctx context.Context, hashFile *HashFile) error

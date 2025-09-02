@@ -120,7 +120,7 @@
                             <label class="block text-sm font-semibold text-gray-700 mb-1">Attack Mode</label>
                             <div class="input-modern bg-gray-50 cursor-not-allowed flex items-center justify-between">
                                 <span class="text-gray-700">Dictionary Attack</span>
-                                <span class="text-xs text-gray-500 bg-green-100 px-2 py-1 rounded" x-text="selectedWordlistCount"></span>
+                                <span class="text-xs text-gray-500 bg-green-100 px-2 py-1 rounded" x-text="selectedWordlistCountRegular"></span>
                             </div>
                             <input type="hidden" x-model="jobForm.attack_mode" value="0">
                             <p class="text-xs text-gray-500 mt-1">Uses wordlist to attempt password combinations</p>
@@ -303,8 +303,8 @@
                         <!-- Step 2: Create Job Button -->
                     <button type="submit" 
                                 x-show="currentStep === 2"
-                            :disabled="!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0"
-                            :class="(!jobForm.agent_ids || jobForm.agent_ids.length === 0 || !jobForm.name || !jobForm.hash_file_id || !jobForm.wordlist_id || onlineAgents.length === 0) ? 'btn-disabled' : 'btn-primary'"
+                            :disabled="!canProceedToStep2() || isLoading"
+                            :class="(!canProceedToStep2() || isLoading) ? 'btn-disabled' : 'btn-primary'"
                                 class="btn-primary">
                         <i class="fas fa-plus mr-2"></i>Create Job
                     </button>

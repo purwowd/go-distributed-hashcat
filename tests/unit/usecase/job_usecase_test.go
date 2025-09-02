@@ -456,7 +456,7 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
 			ctx := context.Background()
 
-			err := usecase.CompleteJob(ctx, tt.jobID, tt.result)
+			err := usecase.CompleteJob(ctx, tt.jobID, tt.result, 1000000) // Add speed parameter
 
 			if tt.expectedError {
 				assert.Error(t, err)

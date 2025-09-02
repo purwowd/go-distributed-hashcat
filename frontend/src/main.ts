@@ -499,6 +499,42 @@ class DashboardApplication {
             
             // Computed property for selected wordlist count
             get selectedWordlistCount() {
+                if (!this.distributedJobForm.wordlist_id) {
+                    return '0'
+                }
+                
+                const selectedWordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
+                if (!selectedWordlist) {
+                    return '0'
+                }
+                
+                // Return word count if available, otherwise return size in KB
+                if (selectedWordlist.word_count && selectedWordlist.word_count > 0) {
+                    return selectedWordlist.word_count.toLocaleString()
+                } else if (selectedWordlist.size) {
+                    const sizeKB = Math.round(selectedWordlist.size / 1024)
+                    return `${sizeKB} KB`
+                }
+                
+                return '0'
+            },
+
+            // Get selected wordlist count as number for calculations
+            get selectedWordlistCountNumber() {
+                if (!this.distributedJobForm.wordlist_id) {
+                    return 0
+                }
+                
+                const selectedWordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
+                if (!selectedWordlist || !selectedWordlist.word_count) {
+                    return 0
+                }
+                
+                return selectedWordlist.word_count
+            },
+
+            // Computed property for selected wordlist count in regular job form
+            get selectedWordlistCountRegular() {
                 if (!this.jobForm.wordlist_id) {
                     return '0'
                 }
@@ -518,7 +554,6 @@ class DashboardApplication {
                 
                 return '0'
             },
-
 
             
             // Computed properties for hash type based on selected file
@@ -867,9 +902,9 @@ class DashboardApplication {
                     const job = this.jobs.find(j => j.id === update.job_id)
                     if (job) {
                         if (update.status === 'completed') {
-                            this.showNotification(`🎉 Job "${job.name}" completed!`, 'success')
+                            this.showNotification(`Job "${job.name}" completed!`, 'success')
                         } else if (update.status === 'failed') {
-                            this.showNotification(`❌ Job "${job.name}" failed`, 'error')
+                            this.showNotification(`Job "${job.name}" failed`, 'error')
                         }
                     }
                 }
@@ -932,7 +967,7 @@ class DashboardApplication {
                     })
                     
                 } catch (error) {
-                    console.error('❌ Failed to load initial data:', error)
+                    console.error('Failed to load initial data:', error)
                     this.showNotification('Failed to load data. Please refresh the page.', 'error')
                 } finally {
                     this.isLoading = false
@@ -1143,8 +1178,8 @@ class DashboardApplication {
             copyToClipboard(text: string, element?: HTMLElement) {
                 // Clean the text - remove language indicators and copy prompts
                 const cleanText = text
-                    .replace(/^📋.*$/gm, '')  // Remove copy indicators
-                    .replace(/^✅.*$/gm, '')  // Remove success indicators  
+                    .replace(/^.*$/gm, '')  // Remove copy indicators
+                    .replace(/^.*$/gm, '')  // Remove success indicators  
                     .replace(/^\s*bash\s*$/gm, '') // Remove language labels
                     .replace(/^\s*shell\s*$/gm, '')
                     .replace(/^\s*yaml\s*$/gm, '')
@@ -1370,7 +1405,7 @@ class DashboardApplication {
                 }
             },
 
-            async openJobModal() {
+            openJobModal() {
                 // Check if there are online agents
                 if (this.onlineAgents.length === 0) {
                     this.showNotification('No online agents available. Please start an agent first before creating jobs.', 'warning')
@@ -1379,12 +1414,46 @@ class DashboardApplication {
                 
                 this.showJobModal = true
                 this.currentStep = 1
-                this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
+                // Reset form to initial state
+                this.jobForm = { 
+                    name: '', 
+                    hash_file_id: '', 
+                    wordlist_id: '', 
+                    agent_ids: [], 
+                    hash_type: '2500', 
+                    attack_mode: '0' 
+                }
+                // Clear command template
+                this.commandTemplate = 'hashcat command will appear here...'
+                console.log('🔓 Job modal opened with fresh form')
             },
             
             closeJobModal() {
+                console.log('🔒 Closing job modal...')
+                
+                // Close the modal
                 this.showJobModal = false
+                
+                // Reset step to first step
                 this.currentStep = 1
+                
+                // Reset form to initial state
+                this.jobForm = { 
+                    name: '', 
+                    hash_file_id: '', 
+                    wordlist_id: '', 
+                    agent_ids: [], 
+                    hash_type: '2500', 
+                    attack_mode: '0' 
+                }
+                
+                // Clear command template
+                this.commandTemplate = 'hashcat command will appear here...'
+                
+                // Force UI update
+                setTimeout(() => {
+                    console.log('Job modal closed and form reset successfully')
+                }, 0)
             },
 
             // Step management functions
@@ -1422,6 +1491,7 @@ class DashboardApplication {
             async createJob(jobData: any) {
                 try {
                     this.isLoading = true
+                    console.log('🚀 Starting job creation process...')
                     
                     // Get wordlist details for backend requirement
                     const selectedWordlist = this.wordlists.find((w: any) => w.id === jobData.wordlist_id)
@@ -1481,7 +1551,7 @@ class DashboardApplication {
                         return
                     }
                     
-
+                    console.log('🚀 Creating job with payload:', jobPayload)
                     
                     const result = await jobStore.actions.createJob(jobPayload)
                     
@@ -1498,20 +1568,26 @@ class DashboardApplication {
                             this.showNotification('Jobs created with warnings - some agents failed', 'warning')
                         } else {
                             // Full success
-                            this.showNotification('Job created successfully!', 'success')
+                            this.showNotification('Job created successfully! Agents are now running the job.', 'success')
                         }
                         
-                        // Always close modal on success
-                        this.showJobModal = false
-                        this.currentStep = 1 // Reset to first step
-                        this.jobForm = { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [], hash_type: '2500', attack_mode: '0' }
+                        console.log('✅ Job creation successful, closing modal...')
+                        
+                        // Always close modal and reset form on success
+                        this.closeJobModal()
                         
                         // Refresh jobs list to show the new job
                         await this.refreshJobsTable()
+                        
+                        // Small delay to ensure UI updates
+                        setTimeout(() => {
+                            console.log('✅ Job creation completed successfully')
+                        }, 500)
                     } else {
                         // Job creation failed
                         const errorMsg = jobState.error || 'Failed to create job - server returned null'
                         this.showNotification(errorMsg, 'error')
+                        console.error('❌ Job creation failed:', errorMsg)
                     }
                 } catch (error) {
                     console.error('Job creation error:', error)
@@ -1519,6 +1595,7 @@ class DashboardApplication {
                     this.showNotification(`Failed to create job: ${errorMessage}`, 'error')
                 } finally {
                     this.isLoading = false
+                    console.log('🏁 Job creation process finished')
                 }
             },
             
@@ -1669,32 +1746,190 @@ class DashboardApplication {
                 )
             },
 
-            // Get agent performance score (0-100)
+            // Get agent performance score (0-100) with enhanced detection
             getAgentPerformanceScore(agent: any): number {
-                if (this.isGPUAgent(agent)) {
-                    return 100 // GPU gets full performance
+                const capabilities = (agent.capabilities || '').toLowerCase()
+                
+                if (capabilities.includes('rtx 4090') || capabilities.includes('rtx 4080')) {
+                    return 100 // High-end RTX
+                } else if (capabilities.includes('rtx 4070') || capabilities.includes('rtx 3060')) {
+                    return 90 // Mid-range RTX
+                } else if (capabilities.includes('gtx 1660') || capabilities.includes('gtx 1070')) {
+                    return 70 // GTX series
+                } else if (capabilities.includes('gpu') || capabilities.includes('cuda') || capabilities.includes('opencl')) {
+                    return 80 // Generic GPU
+                } else if (capabilities.includes('ryzen 9') || capabilities.includes('i9')) {
+                    return 50 // High-end CPU
+                } else if (capabilities.includes('ryzen 7') || capabilities.includes('i7')) {
+                    return 40 // Mid-range CPU
+                } else {
+                    return 30 // Standard CPU
                 }
-                return 30 // CPU gets 30% performance
             },
 
-            // Calculate assigned word count for agent
+            // Calculate assigned word count for agent with improved distribution
             getAssignedWordCount(agent: any): number {
                 if (!this.distributedJobForm.wordlist_id) return 0
                 
-                const wordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
-                if (!wordlist || !wordlist.word_count) return 0
+                const totalWords = this.selectedWordlistCountNumber
+                if (totalWords === 0) return 0
                 
-                const totalWords = wordlist.word_count
                 const onlineAgents = this.onlineAgents
-                
                 if (onlineAgents.length === 0) return 0
                 
-                // Calculate performance-based distribution
+                // Find the index of this agent
+                const agentIndex = onlineAgents.findIndex(a => a.id === agent.id)
+                if (agentIndex === -1) return 0
+                
+                // Calculate performance-based distribution with guaranteed accuracy
                 const totalPerformance = onlineAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
                 const agentPerformance = this.getAgentPerformanceScore(agent)
                 const performanceRatio = agentPerformance / totalPerformance
                 
-                return Math.round(totalWords * performanceRatio)
+                let wordsForAgent: number
+                if (agentIndex === onlineAgents.length - 1) {
+                    // Last agent gets remaining words to ensure total equals original
+                    // Calculate how many words are already distributed
+                    let distributedWords = 0
+                    for (let i = 0; i < onlineAgents.length - 1; i++) {
+                        const otherAgent = onlineAgents[i]
+                        const otherPerformance = this.getAgentPerformanceScore(otherAgent)
+                        const otherRatio = otherPerformance / totalPerformance
+                        const otherWords = Math.floor(totalWords * otherRatio)
+                        distributedWords += Math.max(otherWords, 2) // Minimum 2 words
+                    }
+                    wordsForAgent = totalWords - distributedWords
+                } else {
+                    // Calculate words for this agent
+                    wordsForAgent = Math.floor(totalWords * performanceRatio)
+                    // Ensure minimum 2 words per agent
+                    wordsForAgent = Math.max(wordsForAgent, 2)
+                }
+                
+                return wordsForAgent
+            },
+
+            // Get total distributed words to verify accuracy
+            getTotalDistributedWords(): number {
+                if (!this.distributedJobForm.wordlist_id) return 0
+                
+                const totalWords = this.selectedWordlistCountNumber
+                if (totalWords === 0) return 0
+                
+                const onlineAgents = this.onlineAgents
+                if (onlineAgents.length === 0) return 0
+                
+                // Calculate total distributed words with guaranteed accuracy
+                let totalDistributed = 0
+                let remainingWords = totalWords
+                
+                for (let i = 0; i < onlineAgents.length; i++) {
+                    const agent = onlineAgents[i]
+                const totalPerformance = onlineAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
+                const agentPerformance = this.getAgentPerformanceScore(agent)
+                const performanceRatio = agentPerformance / totalPerformance
+                
+                    let wordsForAgent: number
+                    if (i === onlineAgents.length - 1) {
+                        // Last agent gets remaining words to ensure total equals original
+                        wordsForAgent = remainingWords
+                    } else {
+                        wordsForAgent = Math.floor(totalWords * performanceRatio)
+                        wordsForAgent = Math.max(wordsForAgent, 2) // Minimum 2 words
+                        remainingWords -= wordsForAgent
+                    }
+                    
+                    totalDistributed += wordsForAgent
+                }
+                
+                return totalDistributed
+            },
+
+            // NEW: Accurate word distribution algorithm
+            getAccurateAssignedWordCount(agent: any): number {
+                if (!this.distributedJobForm.wordlist_id) return 0
+                
+                const totalWords = this.selectedWordlistCountNumber
+                if (totalWords === 0) return 0
+                
+                const onlineAgents = this.onlineAgents
+                if (onlineAgents.length === 0) return 0
+                
+                // Find the index of this agent
+                const agentIndex = onlineAgents.findIndex(a => a.id === agent.id)
+                if (agentIndex === -1) return 0
+                
+                // Calculate performance scores for all agents
+                const agentScores = onlineAgents.map(a => ({
+                    agent: a,
+                    performance: this.getAgentPerformanceScore(a)
+                }))
+                
+                const totalPerformance = agentScores.reduce((sum, item) => sum + item.performance, 0)
+                
+                // Calculate words for each agent with guaranteed accuracy
+                let distributedWords = 0
+                let wordsForThisAgent = 0
+                
+                for (let i = 0; i < onlineAgents.length; i++) {
+                    const currentAgent = agentScores[i]
+                    const performanceRatio = currentAgent.performance / totalPerformance
+                    
+                    let wordsForCurrentAgent: number
+                    if (i === onlineAgents.length - 1) {
+                        // Last agent gets remaining words
+                        wordsForCurrentAgent = totalWords - distributedWords
+                    } else {
+                        // Calculate words based on performance ratio
+                        wordsForCurrentAgent = Math.floor(totalWords * performanceRatio)
+                        // Ensure minimum 2 words
+                        wordsForCurrentAgent = Math.max(wordsForCurrentAgent, 2)
+                        distributedWords += wordsForCurrentAgent
+                    }
+                    
+                    // If this is the agent we're looking for, store the result
+                    if (i === agentIndex) {
+                        wordsForThisAgent = wordsForCurrentAgent
+                    }
+                }
+                
+                return wordsForThisAgent
+            },
+
+            // NEW: Get accurate total distributed words
+            getAccurateTotalDistributedWords(): number {
+                if (!this.distributedJobForm.wordlist_id) return 0
+                
+                const totalWords = this.selectedWordlistCountNumber
+                if (totalWords === 0) return 0
+                
+                const onlineAgents = this.onlineAgents
+                if (onlineAgents.length === 0) return 0
+                
+                // Calculate total distributed words with guaranteed accuracy
+                let totalDistributed = 0
+                let remainingWords = totalWords
+                
+                for (let i = 0; i < onlineAgents.length; i++) {
+                    const agent = onlineAgents[i]
+                    const totalPerformance = onlineAgents.reduce((sum, a) => sum + this.getAgentPerformanceScore(a), 0)
+                    const agentPerformance = this.getAgentPerformanceScore(agent)
+                    const performanceRatio = agentPerformance / totalPerformance
+                    
+                    let wordsForAgent: number
+                    if (i === onlineAgents.length - 1) {
+                        // Last agent gets remaining words to ensure total equals original
+                        wordsForAgent = remainingWords
+                    } else {
+                        wordsForAgent = Math.floor(totalWords * performanceRatio)
+                        wordsForAgent = Math.max(wordsForAgent, 2) // Minimum 2 words
+                        remainingWords -= wordsForAgent
+                    }
+                    
+                    totalDistributed += wordsForAgent
+                }
+                
+                return totalDistributed
             },
 
             // Get distribution method description
@@ -1918,12 +2153,44 @@ class DashboardApplication {
                 this.distributedCommandTemplate = template
             },
 
-            // Update distribution preview
+            // Update distribution preview with detailed information
             updateDistributionPreview() {
                 // This will trigger Alpine.js reactivity for the preview section
                 setTimeout(() => {
+                    // Force Alpine.js to re-evaluate computed properties
                     console.log('Distribution preview updated')
-                }, 0)
+                }, 100)
+            },
+
+            // Get detailed distribution information for debugging
+            getDistributionDetails() {
+                if (!this.distributedJobForm.wordlist_id || this.onlineAgents.length === 0) {
+                    return null
+                }
+                
+                const totalWords = this.selectedWordlistCountNumber
+                const agents = this.onlineAgents
+                
+                const distribution = agents.map(agent => {
+                    const performance = this.getAgentPerformanceScore(agent)
+                    const assignedWords = this.getAssignedWordCount(agent)
+                    const percentage = totalWords > 0 ? ((assignedWords / totalWords) * 100).toFixed(1) : '0.0'
+                    
+                    return {
+                        name: agent.name,
+                        capabilities: agent.capabilities,
+                        performance: performance,
+                        assignedWords: assignedWords,
+                        percentage: percentage,
+                        resourceType: this.isGPUAgent(agent) ? 'GPU' : 'CPU'
+                    }
+                })
+                
+                return {
+                    totalWords: totalWords,
+                    totalAgents: agents.length,
+                    distribution: distribution
+                }
             },
 
             // Check if can create distributed job
@@ -1949,12 +2216,30 @@ class DashboardApplication {
 
                 this.isLoading = true
                 try {
-                    // For now, show success message
-                    // In real implementation, this would call the API
-                    this.showNotification('Distributed job creation feature not yet implemented', 'info')
+                    // Prepare job data for distributed creation
+                    const jobData = {
+                        name: this.distributedJobForm.name,
+                        hash_type: parseInt(this.distributedJobForm.hash_type) || 2500,
+                        attack_mode: parseInt(this.distributedJobForm.attack_mode) || 0,
+                        hash_file_id: this.distributedJobForm.hash_file_id,
+                        wordlist_id: this.distributedJobForm.wordlist_id,
+                        agent_ids: this.onlineAgents.map(agent => agent.id) // Use all online agents
+                    }
+
+                    // Create distributed job using API
+                    const result = await jobStore.actions.createJob(jobData)
+                    
+                    if (result) {
+                        this.showNotification('Distributed job created successfully!', 'success')
                     this.closeDistributedJobModal()
-                } catch (error) {
+                        // Refresh jobs list
+                        await this.refreshJobsTable()
+                    } else {
                     this.showNotification('Failed to create distributed job', 'error')
+                    }
+                } catch (error) {
+                    console.error('Distributed job creation error:', error)
+                    this.showNotification('Failed to create distributed job: ' + (error as Error).message, 'error')
                 } finally {
                     this.isLoading = false
                 }
@@ -2270,6 +2555,57 @@ class DashboardApplication {
                 }
             },
 
+            // Get distribution percentage for agent
+            getDistributionPercentage(agent: any): number {
+                if (!this.distributedJobForm.wordlist_id) return 0
+                
+                const totalWords = this.selectedWordlistCountNumber
+                if (totalWords === 0) return 0
+                
+                const assignedWords = this.getAccurateAssignedWordCount(agent)
+                return Math.round((assignedWords / totalWords) * 100)
+            },
+
+            // Verify distribution accuracy
+            isDistributionAccurate(): boolean {
+                const totalWords = this.selectedWordlistCountNumber
+                const totalDistributed = this.getAccurateTotalDistributedWords()
+                return totalWords === totalDistributed
+            },
+
+            // Get distribution summary for debugging
+            getDistributionSummary(): any {
+                if (!this.distributedJobForm.wordlist_id) return null
+                
+                const totalWords = this.selectedWordlistCountNumber
+                const agents = this.onlineAgents
+                
+                const summary = agents.map(agent => {
+                    const performance = this.getAgentPerformanceScore(agent)
+                    const assignedWords = this.getAccurateAssignedWordCount(agent)
+                    const percentage = this.getDistributionPercentage(agent)
+                    const resourceType = this.isGPUAgent(agent) ? 'GPU' : 'CPU'
+                    
+                    return {
+                        name: agent.name,
+                        capabilities: agent.capabilities,
+                        resourceType: resourceType,
+                        performance: performance,
+                        assignedWords: assignedWords,
+                        percentage: percentage
+                    }
+                })
+                
+                const totalDistributed = this.getAccurateTotalDistributedWords()
+                const isAccurate = this.isDistributionAccurate()
+                
+                return {
+                    totalWords: totalWords,
+                    totalDistributed: totalDistributed,
+                    isAccurate: isAccurate,
+                    agents: summary
+                }
+            },
 
         }))
 

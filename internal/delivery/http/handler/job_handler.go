@@ -100,11 +100,11 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 	normalized := make([]gin.H, 0, len(enrichedJobs))
 	for _, ej := range enrichedJobs {
 		var (
-			hashFileID    string
-			wordlistID    string
-			agentID       string
-			etaStr        string
-			startedAtStr  string
+			hashFileID     string
+			wordlistID     string
+			agentID        string
+			etaStr         string
+			startedAtStr   string
 			completedAtStr string
 		)
 
@@ -203,13 +203,13 @@ func (h *JobHandler) UpdateJobProgress(c *gin.Context) {
 		ETA      *string `json:"eta,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("❌ Invalid request body for job progress update %s: %v", id.String(), err)
+		log.Printf("Invalid request body for job progress update %s: %v", id.String(), err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if err := h.jobUsecase.UpdateJobProgress(c.Request.Context(), id, req.Progress, req.Speed); err != nil {
-		log.Printf("❌ Failed to update job progress %s: %v", id.String(), err)
+		log.Printf("Failed to update job progress %s: %v", id.String(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -243,7 +243,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 	// Get job details before completion
 	job, err := h.jobUsecase.GetJob(c.Request.Context(), id)
 	if err != nil {
-		log.Printf("❌ Failed to get job %s for completion logging: %v", id.String(), err)
+		log.Printf("Failed to get job %s for completion logging: %v", id.String(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -253,7 +253,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 	if job.AgentID != nil {
 		agent, err := h.agentUsecase.GetAgent(c.Request.Context(), *job.AgentID)
 		if err != nil {
-			log.Printf("⚠️ Failed to get agent details for job %s: %v", id.String(), err)
+			log.Printf("Failed to get agent details for job %s: %v", id.String(), err)
 			agentName = "Unknown Agent"
 		} else {
 			agentName = agent.Name
@@ -264,13 +264,18 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 
 	// Log job completion with agent details
 	if req.Result != "" && req.Result != "Password not found - exhausted" {
-		log.Printf("🎉 SUCCESS: Agent %s found password for job %s", agentName, job.Name)
-		log.Printf("   📍 Result: %s", req.Result)
-		log.Printf("   🔍 Job ID: %s", job.ID.String())
+		log.Printf("🎉SUCCESS: Agent %s found password for job %s", agentName, job.Name)
+		log.Printf("   Result: %s", req.Result)
+		log.Printf("   Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
-		log.Printf("   📊 Progress: %.2f%%", job.Progress)
+		log.Printf("   Progress: %.2f%%", job.Progress)
+
+		// Check if this is a distributed job and log coordination info
+		if strings.Contains(job.Name, " (Part ") || strings.Contains(job.Name, " (") {
+			log.Printf("🔄 COORDINATION: This is a distributed job - checking for related running jobs...")
+		}
 	} else {
-		log.Printf("❌ FAILED: Agent %s did not find password for job %s", agentName, job.Name)
+		log.Printf("FAILED: Agent %s did not find password for job %s", agentName, job.Name)
 		log.Printf("   🔍 Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
 		log.Printf("   📊 Progress: %.2f%%", job.Progress)
@@ -279,8 +284,8 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 		}
 	}
 
-	if err := h.jobUsecase.CompleteJob(c.Request.Context(), id, req.Result); err != nil {
-		log.Printf("❌ Failed to complete job %s: %v", id.String(), err)
+	if err := h.jobUsecase.CompleteJob(c.Request.Context(), id, req.Result, job.Speed); err != nil {
+		log.Printf("Failed to complete job %s: %v", id.String(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -635,19 +640,19 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 			Name:       fmt.Sprintf("Parallel Job - %s", wordlist.Name),
 		})
 		if err != nil {
-			log.Printf("❌ Failed to create job for agent %s: %v", agentID, err)
+			log.Printf("Failed to create job for agent %s: %v", agentID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create job"})
 			return
 		}
 
 		createdJobs = append(createdJobs, *job)
-		log.Printf("✅ Created job %s for agent %s with %d words",
+		log.Printf("Created job %s for agent %s with %d words",
 			job.ID.String(),
 			agentID,
 			len(words))
 	}
 
-	log.Printf("🎉 Successfully created %d parallel jobs", len(createdJobs))
+	log.Printf("Successfully created %d parallel jobs", len(createdJobs))
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Parallel jobs created successfully",

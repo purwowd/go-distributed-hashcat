@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -21,7 +22,7 @@ type JobUsecase interface {
 	StartJob(ctx context.Context, id uuid.UUID) error
 	UpdateJobProgress(ctx context.Context, id uuid.UUID, progress float64, speed int64) error
 	UpdateJobData(ctx context.Context, job *domain.Job) error
-	CompleteJob(ctx context.Context, id uuid.UUID, result string) error
+	CompleteJob(ctx context.Context, id uuid.UUID, result string, speed int64) error
 	FailJob(ctx context.Context, id uuid.UUID, reason string) error
 	PauseJob(ctx context.Context, id uuid.UUID) error
 	ResumeJob(ctx context.Context, id uuid.UUID) error
@@ -109,7 +110,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 			// Get wordlist details for distribution
 			var wordlistContent []string
 			var totalWords int64
-			
+
 			if req.WordlistID != "" {
 				_, err := uuid.Parse(req.WordlistID)
 				if err == nil {
@@ -140,16 +141,16 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 				Speed        int
 				Weight       float64
 			}
-			
+
 			var agentPerformances []AgentPerformance
 			totalSpeed := 0
-			
+
 			for _, agentID := range agentIDs {
 				agent, err := u.agentRepo.GetByID(ctx, agentID)
 				if err != nil {
 					continue
 				}
-				
+
 				speed := 1 // Default for CPU
 				if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
 					speed = 5 // GPU is faster
@@ -158,9 +159,9 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 				} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
 					speed = 6 // GTX lebih cepat
 				}
-				
+
 				totalSpeed += speed
-				
+
 				agentPerformances = append(agentPerformances, AgentPerformance{
 					AgentID:      agent.ID,
 					Name:         agent.Name,
@@ -169,7 +170,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					Weight:       0, // Will be calculated below
 				})
 			}
-			
+
 			// Calculate weights
 			for i := range agentPerformances {
 				agentPerformances[i].Weight = float64(agentPerformances[i].Speed) / float64(totalSpeed)
@@ -182,17 +183,17 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 			for i, agentPerf := range agentPerformances {
 				// Calculate word count for this agent
 				wordCount := int(float64(totalWords) * agentPerf.Weight)
-				
+
 				// Ensure last agent gets remaining words
 				if i == len(agentPerformances)-1 {
 					wordCount = int(totalWords) - currentIndex
 				}
-				
+
 				// Ensure minimum words per agent
 				if wordCount < 1 {
 					wordCount = 1
 				}
-				
+
 				// Get agent's wordlist segment
 				var agentWordlist string
 				if len(wordlistContent) > 0 {
@@ -200,7 +201,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					if endIndex > len(wordlistContent) {
 						endIndex = len(wordlistContent)
 					}
-					
+
 					agentWords := wordlistContent[currentIndex:endIndex]
 					agentWordlist = strings.Join(agentWords, "\n")
 					currentIndex = endIndex
@@ -233,10 +234,17 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					return nil, fmt.Errorf("failed to create sub-job %d: %w", i, err)
 				}
 
+				// Auto-start the job after creation
+				if err := u.StartJob(ctx, subJob.ID); err != nil {
+					fmt.Printf("Warning: failed to auto-start job %s: %v\n", subJob.Name, err)
+				} else {
+					fmt.Printf("✅ Auto-started job \"%s\" for agent %s\n", subJob.Name, agentPerf.Name)
+				}
+
 				subJobs = append(subJobs, subJob)
-				
+
 				// Log distribution info
-				fmt.Printf("✅ Created job \"%s\" for agent %s with %d words (%.1f%%)\n", 
+				fmt.Printf("✅ Created job \"%s\" for agent %s with %d words (%.1f%%)\n",
 					subJob.Name, agentPerf.Name, wordCount, agentPerf.Weight*100)
 			}
 
@@ -273,6 +281,15 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 
 	if err := u.jobRepo.Create(ctx, job); err != nil {
 		return nil, fmt.Errorf("failed to create job: %w", err)
+	}
+
+	// Auto-start the job if it has an agent assigned
+	if job.AgentID != nil {
+		if err := u.StartJob(ctx, job.ID); err != nil {
+			fmt.Printf("Warning: failed to auto-start job %s: %v\n", job.Name, err)
+		} else {
+			fmt.Printf("✅ Auto-started job \"%s\"\n", job.Name)
+		}
 	}
 
 	return job, nil
@@ -353,7 +370,7 @@ func (u *jobUsecase) UpdateJobData(ctx context.Context, job *domain.Job) error {
 	return nil
 }
 
-func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result string) error {
+func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result string, speed int64) error {
 	job, err := u.jobRepo.GetByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get job: %w", err)
@@ -362,22 +379,62 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 	now := time.Now()
 	job.Status = "completed"
 	job.Result = result
-	job.Progress = 100.0
+	job.Speed = speed
+	job.Progress = 100
 	job.CompletedAt = &now
+
+	// Check if this is a distributed job (sub-job)
+	if strings.Contains(job.Name, "Part") && strings.Contains(job.Name, "-") {
+		// Extract master job name from sub-job name
+		parts := strings.Split(job.Name, " (Part")
+		if len(parts) > 0 {
+			masterJobName := parts[0]
+
+			// Check if password was found
+			if result != "" && result != "Password not found - exhausted" {
+				// Password found! Cancel other running jobs
+				u.cancelOtherDistributedJobs(ctx, masterJobName, id)
+			}
+		}
+	}
 
 	if err := u.jobRepo.Update(ctx, job); err != nil {
 		return fmt.Errorf("failed to update job: %w", err)
 	}
 
-	// Update agent status to online
-	if job.AgentID != nil {
-		if err := u.agentRepo.UpdateStatus(ctx, *job.AgentID, "online"); err != nil {
-			// Log error but don't fail the job completion
-			fmt.Printf("Warning: failed to update agent status: %v\n", err)
-		}
+	return nil
+}
+
+// cancelOtherDistributedJobs cancels other running jobs when one agent finds the password
+func (u *jobUsecase) cancelOtherDistributedJobs(ctx context.Context, masterJobName string, successfulJobID uuid.UUID) {
+	// Get all jobs with similar name pattern
+	allJobs, err := u.jobRepo.GetAll(ctx)
+	if err != nil {
+		log.Printf("Warning: failed to get jobs for distributed cancellation: %v", err)
+		return
 	}
 
-	return nil
+	// Find and cancel other running/pending sub-jobs
+	for _, job := range allJobs {
+		if strings.Contains(job.Name, masterJobName) &&
+			strings.Contains(job.Name, "Part") &&
+			job.ID != successfulJobID &&
+			(job.Status == "running" || job.Status == "pending") {
+
+			// Mark job as failed with 100% progress
+			job.Status = "failed"
+			job.Progress = 100
+			job.Result = "Password not found - Job cancelled due to success in another agent"
+			now := time.Now()
+			job.CompletedAt = &now
+
+			if err := u.jobRepo.Update(ctx, &job); err != nil {
+				log.Printf("Warning: failed to cancel distributed job %s: %v", job.ID, err)
+			} else {
+				log.Printf("✅ Cancelled distributed job %s due to success in another agent", job.Name)
+			}
+		}
+	}
 }
 
 func (u *jobUsecase) FailJob(ctx context.Context, id uuid.UUID, reason string) error {
@@ -488,4 +545,80 @@ func (u *jobUsecase) AssignJobsToAgents(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// stopRelatedRunningJobs stops all running jobs that are related to the completed job
+// This is used when a password is found to stop other agents from continuing
+func (u *jobUsecase) stopRelatedRunningJobs(ctx context.Context, completedJob *domain.Job) error {
+	// Extract base job name (remove agent-specific suffixes)
+	baseJobName := u.extractBaseJobName(completedJob.Name)
+	if baseJobName == "" {
+		return nil // Not a distributed job
+	}
+
+	// Find all running jobs with similar names
+	runningJobs, err := u.jobRepo.GetByStatus(ctx, "running")
+	if err != nil {
+		return fmt.Errorf("failed to get running jobs: %w", err)
+	}
+
+	var jobsToStop []*domain.Job
+	for _, job := range runningJobs {
+		// Skip the completed job itself
+		if job.ID == completedJob.ID {
+			continue
+		}
+
+		// Check if this job is related (same base name)
+		if u.isRelatedJob(job.Name, baseJobName) {
+			jobsToStop = append(jobsToStop, &job)
+		}
+	}
+
+	// Stop all related running jobs
+	for _, job := range jobsToStop {
+		if err := u.FailJob(ctx, job.ID, "Password found by another agent - stopping"); err != nil {
+			fmt.Printf("Warning: failed to stop related job %s: %v\n", job.Name, err)
+			continue
+		}
+		fmt.Printf("✅ Stopped related job %s because password was found by %s\n",
+			job.Name, completedJob.Name)
+	}
+
+	return nil
+}
+
+// extractBaseJobName extracts the base job name from a distributed job name
+// Examples:
+// "test-cracking (Part 1 - test-agent-A)" -> "test-cracking"
+// "test-cracking (Part 2 - test-agent-B)" -> "test-cracking"
+// "test-cracking (test-agent-C)" -> "test-cracking"
+func (u *jobUsecase) extractBaseJobName(jobName string) string {
+	// Look for patterns like "(Part X - Agent)" or "(Agent)"
+	if strings.Contains(jobName, " (Part ") {
+		// Extract everything before " (Part "
+		parts := strings.Split(jobName, " (Part ")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	} else if strings.Contains(jobName, " (") && strings.Contains(jobName, ")") {
+		// Extract everything before " ("
+		parts := strings.Split(jobName, " (")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+
+	return "" // Not a distributed job
+}
+
+// isRelatedJob checks if a job name is related to a base job name
+func (u *jobUsecase) isRelatedJob(jobName, baseJobName string) bool {
+	if baseJobName == "" {
+		return false
+	}
+
+	// Check if the job name starts with the base name and contains agent-specific info
+	return strings.HasPrefix(jobName, baseJobName) &&
+		(strings.Contains(jobName, " (Part ") || strings.Contains(jobName, " ("))
 }
