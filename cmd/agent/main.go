@@ -815,12 +815,12 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			if err := os.MkdirAll(tempDir, 0755); err != nil {
 				return fmt.Errorf("failed to create temp directory: %w", err)
 			}
-			
+
 			wordlistFile := filepath.Join(tempDir, fmt.Sprintf("wordlist-%s.txt", job.ID.String()))
 			if err := os.WriteFile(wordlistFile, []byte(job.Wordlist), 0644); err != nil {
 				return fmt.Errorf("failed to create wordlist file: %w", err)
 			}
-			
+
 			localWordlist = wordlistFile
 			infrastructure.AgentLogger.Info("Created wordlist file from content: %s", localWordlist)
 			infrastructure.AgentLogger.Info("Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
@@ -869,7 +869,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		args = append(args, "--skip", strconv.FormatInt(*job.Skip, 10))
 		infrastructure.AgentLogger.Info("Using --skip parameter: %d", *job.Skip)
 	}
-	
+
 	if job.WordLimit != nil && *job.WordLimit > 0 {
 		args = append(args, "--limit", strconv.FormatInt(*job.WordLimit, 10))
 		infrastructure.AgentLogger.Info("Using --limit parameter: %d", *job.WordLimit)
@@ -1227,7 +1227,27 @@ func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec
 
 			// Handle status changes
 			switch status {
-			case "paused", "failed", "cancelled":
+			case "paused":
+				infrastructure.AgentLogger.Warning("Job %s status changed to %s, pausing hashcat", jobID, status)
+				if cmd.Process != nil {
+					cmd.Process.Signal(syscall.SIGSTOP)
+				}
+				return
+			case "failed":
+				infrastructure.AgentLogger.Warning("Job %s status changed to %s, terminating hashcat", jobID, status)
+				if cmd.Process != nil {
+					cmd.Process.Kill()
+				}
+
+				// Check if this is a coordination stop (password found by another agent)
+				if a.isCoordinationStop(jobID) {
+					infrastructure.AgentLogger.Info("Job stopped due to password found by another agent - updating progress to 100%%")
+					// Update progress to 100% and send final status
+					a.updateJobProgress(jobID, 100.0, 0)
+					a.failJob(jobID, "Password not found - stopped due to password found by another agent")
+				}
+				return
+			case "cancelled":
 				infrastructure.AgentLogger.Warning("Job %s status changed to %s, terminating hashcat", jobID, status)
 				if cmd.Process != nil {
 					cmd.Process.Kill()
@@ -1236,6 +1256,36 @@ func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec
 			}
 		}
 	}
+}
+
+// isCoordinationStop checks if the job was stopped due to password being found by another agent
+func (a *Agent) isCoordinationStop(jobID uuid.UUID) bool {
+	// Get job details to check the failure reason
+	url := fmt.Sprintf("%s/api/v1/jobs/%s", a.ServerURL, jobID.String())
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		infrastructure.AgentLogger.Error("Failed to get job details for coordination check: %v", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	var jobResp struct {
+		Data struct {
+			Result string `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
+		infrastructure.AgentLogger.Error("Failed to decode job response: %v", err)
+		return false
+	}
+
+	// Check if the failure reason indicates coordination stop
+	return strings.Contains(jobResp.Data.Result, "Password found by another agent")
 }
 
 func (a *Agent) checkJobStatus(jobID uuid.UUID) (string, error) {
@@ -1583,4 +1633,35 @@ func formatFileSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// updateJobProgress updates job progress and speed
+func (a *Agent) updateJobProgress(jobID uuid.UUID, progress float64, speed int64) {
+	req := struct {
+		Progress float64 `json:"progress"`
+		Speed    int64   `json:"speed"`
+	}{
+		Progress: progress,
+		Speed:    speed,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/jobs/%s/progress", a.ServerURL, jobID.String())
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		infrastructure.AgentLogger.Error("Failed to send job progress update to server: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		infrastructure.AgentLogger.Error("Job progress update failed with status %d: %s", resp.StatusCode, string(body))
+	} else {
+		infrastructure.AgentLogger.Info("Job progress update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+	}
 }

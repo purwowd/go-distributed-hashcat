@@ -467,10 +467,10 @@ func TestAgentUsecase_UpdateAgentStatus(t *testing.T) {
 			status:  "offline",
 			mockSetup: func(repo *MockAgentRepository) {
 				expectedAgent := &domain.Agent{
-					ID:        agentID,
-					Name:      "test-agent",
-					Status:    "offline",
-					LastSeen:  time.Now(),
+					ID:       agentID,
+					Name:     "test-agent",
+					Status:   "offline",
+					LastSeen: time.Now(),
 				}
 				repo.On("UpdateStatus", mock.Anything, agentID, "offline").Return(nil)
 				repo.On("GetByID", mock.Anything, agentID).Return(expectedAgent, nil)

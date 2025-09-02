@@ -74,7 +74,7 @@ func (l *Logger) Fatal(format string, args ...interface{}) {
 
 // Global logger instances
 var (
-	ServerLogger = NewLogger("SERVER")
-	AgentLogger  = NewLogger("AGENT")
+	ServerLogger  = NewLogger("SERVER")
+	AgentLogger   = NewLogger("AGENT")
 	DefaultLogger = NewLogger("")
 )
