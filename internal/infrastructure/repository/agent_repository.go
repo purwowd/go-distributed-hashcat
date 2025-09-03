@@ -394,7 +394,7 @@ func (r *agentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed i
 	}
 
 	// Log speed update for real-time monitoring
-	log.Printf("🔄 [REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s",
+	log.Printf("[REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s",
 		id.String(), speed, now.Format("2006-01-02 15:04:05"))
 
 	// Invalidate cache to ensure fresh data
@@ -419,33 +419,8 @@ func (r *agentRepository) UpdateSpeedWithStatus(ctx context.Context, id uuid.UUI
 	}
 
 	// Log comprehensive update for real-time monitoring
-	log.Printf("🔄 [REAL-TIME AGENT UPDATE] Agent %s: speed=%d H/s, status=%s, time=%s",
+	log.Printf("[REAL-TIME AGENT UPDATE] Agent %s: speed=%d H/s, status=%s, time=%s",
 		id.String(), speed, status, now.Format("2006-01-02 15:04:05"))
-
-	// Invalidate cache to ensure fresh data
-	r.cache.Delete(ctx, "agent:"+id.String())
-	r.cache.Delete(ctx, "agents:all")
-
-	return nil
-}
-
-// ResetSpeedOnOffline resets agent speed to 0 when agent goes offline
-// This method ensures speed data is cleared when agent is not actively processing
-func (r *agentRepository) ResetSpeedOnOffline(ctx context.Context, id uuid.UUID) error {
-	query := `
-		UPDATE agents SET speed = 0, updated_at = ? WHERE id = ?
-	`
-	now := time.Now()
-
-	// Execute speed reset query
-	_, err := r.db.DB().ExecContext(ctx, query, now, id.String())
-	if err != nil {
-		return fmt.Errorf("failed to reset agent speed on offline: %w", err)
-	}
-
-	// Log speed reset for monitoring
-	log.Printf("🔄 [SPEED RESET] Agent %s speed reset to 0 (offline) at %s",
-		id.String(), now.Format("2006-01-02 15:04:05"))
 
 	// Invalidate cache to ensure fresh data
 	r.cache.Delete(ctx, "agent:"+id.String())

@@ -216,6 +216,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	}
 
 	// Run hashcat benchmark to detect and update agent speed
+	// This should run after status is set to online to ensure proper speed update
 	infrastructure.AgentLogger.Info("Running hashcat benchmark to detect agent speed...")
 	if err := agent.runHashcatBenchmark(); err != nil {
 		infrastructure.AgentLogger.Warning("Failed to run hashcat benchmark: %v", err)
@@ -254,14 +255,8 @@ func runAgent(cmd *cobra.Command, args []string) {
 	// Set agent status for real-time monitoring
 	agent.Status = "offline"
 
-	// Reset agent speed to 0 when going offline
-	infrastructure.AgentLogger.Info("Resetting agent speed to 0 (offline)...")
-	if err := agent.resetAgentSpeedOnOffline(); err != nil {
-		infrastructure.AgentLogger.Warning("Failed to reset agent speed: %v", err)
-		// Continue with shutdown even if speed reset fails
-	} else {
-		infrastructure.AgentLogger.Success("Agent speed reset to 0 (offline)")
-	}
+	// Note: Speed is no longer reset to 0 during shutdown to preserve speed data
+	// Speed will be updated when agent comes back online
 
 	// Update agent data (IP, port, capabilities) first
 	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, ""); err != nil {
@@ -270,16 +265,12 @@ func runAgent(cmd *cobra.Command, args []string) {
 		infrastructure.AgentLogger.Success("Agent data updated successfully")
 	}
 
-	// Update status to offline separately using the correct endpoint
-	if err := agent.updateAgentStatusOnly("offline"); err != nil {
+	// Update status to offline without resetting speed using the new endpoint
+	if err := agent.updateAgentStatusOffline(); err != nil {
 		infrastructure.AgentLogger.Warning("Failed to update agent status to offline: %v", err)
 	} else {
-		infrastructure.AgentLogger.Success("Agent status updated to offline")
+		infrastructure.AgentLogger.Success("Agent status updated to offline (speed preserved)")
 	}
-
-	// Note: restoreOriginalPort() is no longer needed since we already updated everything above
-	// The single updateAgentInfo call above handles both status and port updates
-	infrastructure.AgentLogger.Info("Skipping restoreOriginalPort() to avoid capabilities override")
 
 	infrastructure.AgentLogger.Info("Agent exited")
 }
@@ -1840,32 +1831,32 @@ func (a *Agent) updateAgentStatusOnly(status string) error {
 	return nil
 }
 
-// resetAgentSpeedOnOffline resets agent speed to 0 when agent goes offline
-// This method ensures speed data is cleared when agent is not actively processing
-func (a *Agent) resetAgentSpeedOnOffline() error {
-	url := fmt.Sprintf("%s/api/v1/agents/%s/speed-reset", a.ServerURL, a.ID.String())
+// updateAgentStatusOffline updates agent status to offline without resetting speed
+// This method is used for normal shutdown scenarios to preserve speed data
+func (a *Agent) updateAgentStatusOffline() error {
+	url := fmt.Sprintf("%s/api/v1/agents/%s/status-offline", a.ServerURL, a.ID.String())
 
-	infrastructure.AgentLogger.Info("Sending speed reset request to: %s", url)
+	infrastructure.AgentLogger.Info("Sending status offline request to: %s", url)
 
 	httpReq, _ := http.NewRequest(http.MethodPut, url, nil)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.Client.Do(httpReq)
 	if err != nil {
-		infrastructure.AgentLogger.Error("❌ Network error during speed reset: %v", err)
-		return fmt.Errorf("failed to send speed reset request: %w", err)
+		infrastructure.AgentLogger.Error("❌ Network error during status offline update: %v", err)
+		return fmt.Errorf("failed to send status offline request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	infrastructure.AgentLogger.Info("📡 Speed reset response status: %d", resp.StatusCode)
+	infrastructure.AgentLogger.Info("📡 Status offline response status: %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		infrastructure.AgentLogger.Error("❌ Speed reset failed with status %d: %s", resp.StatusCode, string(body))
-		return fmt.Errorf("speed reset failed with status %d: %s", resp.StatusCode, string(body))
+		infrastructure.AgentLogger.Error("❌ Status offline update failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("status offline update failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	infrastructure.AgentLogger.Success("✅ Speed reset request successful")
+	infrastructure.AgentLogger.Success("✅ Status offline request successful")
 	return nil
 }
 

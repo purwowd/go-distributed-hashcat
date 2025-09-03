@@ -419,9 +419,9 @@ func (h *AgentHandler) UpdateAgentSpeedWithStatus(c *gin.Context) {
 	})
 }
 
-// ResetAgentSpeedOnOffline resets agent speed to 0 when agent goes offline
-// This method ensures speed data is cleared when agent is not actively processing
-func (h *AgentHandler) ResetAgentSpeedOnOffline(c *gin.Context) {
+// UpdateAgentStatusOffline updates agent status to offline without resetting speed
+// This method is used for normal shutdown scenarios to preserve speed data
+func (h *AgentHandler) UpdateAgentStatusOffline(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -433,28 +433,28 @@ func (h *AgentHandler) ResetAgentSpeedOnOffline(c *gin.Context) {
 		return
 	}
 
-	// Log speed reset request
-	log.Printf("[SPEED RESET REQUEST] Agent %s: resetting speed to 0 (offline)", id.String())
+	// Log status update request
+	log.Printf("[STATUS UPDATE REQUEST] Agent %s: updating status to offline (preserving speed)", id.String())
 
-	// Reset agent speed to 0
-	if err := h.agentUsecase.ResetAgentSpeedOnOffline(c.Request.Context(), id); err != nil {
-		log.Printf("❌ [SPEED RESET FAILED] Agent %s: error=%v", id.String(), err)
+	// Update agent status to offline without resetting speed
+	if err := h.agentUsecase.UpdateAgentStatusOffline(c.Request.Context(), id); err != nil {
+		log.Printf("❌ [STATUS UPDATE FAILED] Agent %s: error=%v", id.String(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to reset agent speed",
-			"code":    "RESET_SPEED_FAILED",
-			"message": "Failed to reset agent speed.",
+			"error":   "Failed to update agent status",
+			"code":    "UPDATE_STATUS_FAILED",
+			"message": "Failed to update agent status to offline.",
 		})
 		return
 	}
 
-	// Log successful reset
-	log.Printf("✅ [SPEED RESET SUCCESS] Agent %s: speed reset to 0", id.String())
+	// Log successful update
+	log.Printf("✅ [STATUS UPDATE SUCCESS] Agent %s: status updated to offline", id.String())
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Agent speed reset successfully",
+		"message": "Agent status updated to offline successfully",
 		"data": gin.H{
-			"id":    id.String(),
-			"speed": 0,
+			"id":     id.String(),
+			"status": "offline",
 		},
 	})
 }

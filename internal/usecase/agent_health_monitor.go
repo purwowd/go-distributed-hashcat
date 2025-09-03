@@ -180,10 +180,10 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 		infrastructure.ServerLogger.Warning("Agent %s (%s) has no IP address, forcing offline status",
 			agent.Name, agent.ID.String()[:8])
 		*offlineCount++
-		// Update status ke offline dan reset speed ke 0 jika belum
+		// Update status ke offline tanpa reset speed
 		if agent.Status != "offline" {
-			if err := h.agentUsecase.ResetAgentSpeedOnOffline(ctx, agent.ID); err != nil {
-				infrastructure.ServerLogger.Error("Failed to reset agent %s speed on offline: %v", agent.Name, err)
+			if err := h.agentUsecase.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
+				infrastructure.ServerLogger.Error("Failed to update agent %s status to offline: %v", agent.Name, err)
 			} else if h.wsHub != nil {
 				h.wsHub.BroadcastAgentStatus(agent.ID.String(), "offline", agent.LastSeen.Format(time.RFC3339))
 			}
@@ -214,9 +214,9 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 		infrastructure.ServerLogger.Warning("Agent %s (%s) timeout detected - last seen %v ago",
 			agent.Name, agent.ID.String()[:8], timeSinceLastSeen)
 
-		// Update status to offline and reset speed to 0
-		if err := h.agentUsecase.ResetAgentSpeedOnOffline(ctx, agent.ID); err != nil {
-			infrastructure.ServerLogger.Error("Failed to reset agent %s speed on offline: %v", agent.Name, err)
+		// Update status to offline without resetting speed
+		if err := h.agentUsecase.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
+			infrastructure.ServerLogger.Error("Failed to update agent %s status to offline: %v", agent.Name, err)
 			return
 		}
 
@@ -230,7 +230,7 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 			)
 		}
 
-		infrastructure.ServerLogger.Info("Agent %s status updated to offline and speed reset to 0", agent.Name)
+		infrastructure.ServerLogger.Info("Agent %s status updated to offline", agent.Name)
 	} else if !shouldBeOffline && !currentlyOnline {
 		// Handle online status change (agent came back online)
 		infrastructure.ServerLogger.Info("Agent %s (%s) came back online - last seen %v ago",

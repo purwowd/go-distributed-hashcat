@@ -423,6 +423,7 @@ class DashboardApplication {
             fileForm: { file: null },
             wordlistForm: { file: null },
             showValidationErrors: false,
+            agentDistributionData: [] as Array<{agent: any, wordLimit: number, percentage: number, speed: number}>,
             
             // Command template for job creation
             commandTemplate: '',
@@ -1513,6 +1514,7 @@ class DashboardApplication {
                 this.currentStep = step
                 if (step === 2) {
                     this.updateCommandTemplate()
+                    this.updateDistributionPreview()
                 }
             },
 
@@ -1569,7 +1571,16 @@ class DashboardApplication {
                         hash_file_id: jobData.hash_file_id,
                         wordlist: wordlistContent || wordlistName,  // Send content if available, otherwise name
                         wordlist_id: jobData.wordlist_id,         // Optional reference ID
-                        agent_ids: jobData.agent_ids || []        // Include multiple agent assignments
+                        agent_ids: jobData.agent_ids || [],       // Include multiple agent assignments
+                        distribution_data: this.agentDistributionData // Include calculated distribution data
+                    }
+                    
+                    // Log distribution information for debugging
+                    if (this.agentDistributionData && this.agentDistributionData.length > 0) {
+                        console.log('📊 Job distribution data:', this.agentDistributionData)
+                        this.agentDistributionData.forEach((dist: any) => {
+                            console.log(`Agent ${dist.agent.name}: ${dist.wordLimit} words (${dist.percentage}%) - Speed: ${dist.speed} H/s`)
+                        })
                     }
                     
                     // Validate required fields before sending
@@ -1808,6 +1819,14 @@ class DashboardApplication {
 
             // Distributed Job Functions
             openDistributedJobModal() {
+                console.log('🚀 Opening distributed job modal')
+                console.log('📊 Initial state:', {
+                    agents: this.agents.length,
+                    onlineAgents: this.onlineAgents.length,
+                    hashFiles: this.hashFiles.length,
+                    wordlists: this.wordlists.length
+                })
+                
                 this.showDistributedJobModal = true
                 this.distributedJobForm = { 
                     name: '', 
@@ -1818,6 +1837,8 @@ class DashboardApplication {
                     auto_distribute: true 
                 }
                 this.updateDistributedCommandTemplate()
+                
+                console.log('✅ Modal opened and form initialized')
             },
 
             closeDistributedJobModal() {
@@ -2255,9 +2276,18 @@ class DashboardApplication {
             // Update distribution preview with detailed information
             updateDistributionPreview() {
                 // This will trigger Alpine.js reactivity for the preview section
+                console.log('🔄 updateDistributionPreview called')
+                console.log('📊 Current state:', {
+                    wordlistId: this.distributedJobForm.wordlist_id,
+                    onlineAgentsCount: this.onlineAgents.length,
+                    agents: this.onlineAgents,
+                    wordlists: this.wordlists,
+                    selectedWordlist: this.wordlists.find(w => w.id === this.distributedJobForm.wordlist_id)
+                })
+                
                 setTimeout(() => {
                     // Force Alpine.js to re-evaluate computed properties
-                    console.log('Distribution preview updated')
+                    console.log('✅ Distribution preview updated')
                 }, 100)
             },
 
@@ -2717,6 +2747,18 @@ class DashboardApplication {
                     agents: summary
                 }
             },
+
+            // Get total speed of all selected agents
+            getTotalSelectedAgentSpeed(): number {
+                if (!this.jobForm.agent_ids || this.jobForm.agent_ids.length === 0) return 0
+                
+                return this.jobForm.agent_ids.reduce((total: number, agentId: string) => {
+                    const agent = this.agents.find((a: any) => a.id === agentId)
+                    return total + (agent?.speed || 0)
+                }, 0)
+            },
+
+
 
         }))
 

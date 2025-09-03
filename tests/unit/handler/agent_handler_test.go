@@ -134,7 +134,7 @@ func (m *MockAgentUsecase) UpdateAgentSpeedWithStatus(ctx context.Context, id uu
 	return args.Error(0)
 }
 
-func (m *MockAgentUsecase) ResetAgentSpeedOnOffline(ctx context.Context, id uuid.UUID) error {
+func (m *MockAgentUsecase) UpdateAgentStatusOffline(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }

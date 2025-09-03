@@ -6,6 +6,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// AgentSpeedUpdate represents the data structure for updating agent speed
+// This struct is used for request body and data transfer when updating agent speed
+//
+// Example usage:
+//   - HTTP request body for PUT /api/v1/agents/{id}/speed
+//   - Data transfer between layers (handler -> usecase -> repository)
+//   - JSON serialization/deserialization
+//
+// JSON format:
+//
+//	{
+//	  "agent_id": "uuid-string",
+//	  "speed": 5000
+//	}
+type AgentSpeedUpdate struct {
+	AgentID string `json:"agent_id" binding:"required"`
+	Speed   int64  `json:"speed" binding:"required,min=0"`
+}
+
 // AgentRepository defines the interface for agent data operations
 type AgentRepository interface {
 	Create(ctx context.Context, agent *Agent) error
@@ -19,7 +38,6 @@ type AgentRepository interface {
 	UpdateLastSeen(ctx context.Context, id uuid.UUID) error
 	UpdateSpeed(ctx context.Context, id uuid.UUID, speed int64) error
 	UpdateSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error
-	ResetSpeedOnOffline(ctx context.Context, id uuid.UUID) error
 	GetByIPAddress(ctx context.Context, ip string) (*Agent, error)
 	GetByAgentKey(ctx context.Context, agentKey string) (*Agent, error)
 	CreateAgent(ctx context.Context, agent *Agent) error // bisa panggil Create

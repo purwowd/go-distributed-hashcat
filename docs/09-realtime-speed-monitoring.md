@@ -7,7 +7,7 @@ Fitur **Real-Time Speed Monitoring** adalah sistem monitoring real-time yang mem
 ## 🎯 Tujuan Utama
 
 1. **Real-time Speed Updates**: Field data speed di tabel agent harus selalu diperbarui secara real-time selama agent online
-2. **Automatic Speed Reset**: Field speed harus diupdate menjadi 0 ketika agent offline
+2. **Status Update**: Field status diupdate ke offline ketika agent offline (speed tetap)
 3. **Comprehensive Logging**: Log harus mencatat waktu, agent ID, dan nilai speed terbaru setiap kali diperbarui
 4. **Non-Intrusive Operation**: Mekanisme tidak boleh mengganggu proses utama agent
 5. **WebSocket Broadcasting**: Update real-time ke frontend via WebSocket
@@ -34,7 +34,7 @@ type AgentRepository interface {
 type AgentUsecase interface {
     UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error
     UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error
-    ResetAgentSpeedOnOffline(ctx context.Context, id uuid.UUID) error
+    
     // ... existing methods
 }
 ```
@@ -66,15 +66,15 @@ log.Printf("[REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s",
 log.Printf("[REAL-TIME AGENT UPDATE] Agent %s: speed=%d H/s, status=%s, time=%s", 
     id.String(), speed, status, now.Format("2006-01-02 15:04:05"))
 
-// Speed reset on offline
-log.Printf("[SPEED RESET] Agent %s speed reset to 0 (offline) at %s", 
-    id.String(), now.Format("2006-01-02 15:04:05"))
+// Status update on offline
+log.Printf("[STATUS UPDATE] Agent %s status updated to offline at %s",
+	id.String(), now.Format("2006-01-02 15:04:05"))
 ```
 
 ### 4. WebSocket Broadcasting
 - **Real-time Updates**: Broadcast perubahan speed ke semua client
 - **Status Changes**: Broadcast perubahan status agent
-- **Speed Reset**: Broadcast reset speed ke 0
+- **Status Update**: Broadcast status update ke offline
 
 ## 📡 API Endpoints
 
@@ -133,14 +133,7 @@ func (a *Agent) startRealTimeSpeedMonitoring(ctx context.Context) {
 }
 ```
 
-### Automatic Speed Reset
-```go
-// Reset speed when agent goes offline
-func (a *Agent) resetAgentSpeedOnOffline() error {
-    url := fmt.Sprintf("%s/api/v1/agents/%s/speed-reset", a.ServerURL, a.ID.String())
-    // ... HTTP request implementation
-}
-```
+
 
 ### Database Operations
 ```go
@@ -179,7 +172,7 @@ func (r *agentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed i
 4. ✅ Database persistence
 5. ✅ Multiple real-time updates
 6. ✅ Status changes (online/busy/offline)
-7. ✅ Speed reset on offline
+
 8. ✅ Real-time monitoring simulation
 9. ✅ Cleanup
 
@@ -188,7 +181,7 @@ func (r *agentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed i
 ### Log Categories
 - **[REAL-TIME SPEED UPDATE]**: Speed updates
 - **[REAL-TIME AGENT UPDATE]**: Combined speed and status updates
-- **[SPEED RESET]**: Speed reset operations
+
 - **✅ [SUCCESS]**: Successful operations
 - **❌ [FAILED]**: Failed operations
 - **⚠️ [WARNING]**: Warning messages
@@ -225,7 +218,7 @@ Status Change → Speed Update → Database Update → Cache Invalidation → We
 
 ### 4. Agent Shutdown
 ```
-Shutdown Signal → Speed Reset → Status Offline → Database Update → WebSocket Broadcast
+Shutdown Signal → Status Offline → Database Update → WebSocket Broadcast
 ```
 
 ## 🚨 Error Handling

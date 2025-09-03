@@ -19,7 +19,7 @@ Dokumen ini merangkum implementasi fitur **Real-Time Speed Monitoring** yang tel
 
 - **Real-time monitoring** hanya mengupdate status untuk konsistensi
 - **Tidak mengganggu data speed** yang sudah valid
-- **Automatic speed reset** ketika agent offline terdeteksi
+- **Status update** ketika agent offline terdeteksi (speed tetap)
 
 ## 🏗️ Architecture Changes
 
@@ -52,10 +52,10 @@ func (a *Agent) updateAgentStatusOnly(status string) error {
 ### Health Monitor Layer (`internal/usecase/agent_health_monitor.go`)
 
 ```go
-// Automatic speed reset when agent goes offline
+// Update status when agent goes offline
 if shouldBeOffline && currentlyOnline {
-    // Update status to offline and reset speed to 0
-    if err := h.agentUsecase.ResetAgentSpeedOnOffline(ctx, agent.ID); err != nil {
+    // Update status to offline without resetting speed
+    if err := h.agentUsecase.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
         // Handle error
     }
     // Broadcast status change via WebSocket
@@ -63,8 +63,8 @@ if shouldBeOffline && currentlyOnline {
 
 // Handle agents without IP address
 if agent.IPAddress == "" {
-    // Force offline status and reset speed to 0
-    if err := h.agentUsecase.ResetAgentSpeedOnOffline(ctx, agent.ID); err != nil {
+    // Force offline status without resetting speed
+    if err := h.agentUsecase.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
         // Handle error
     }
 }
@@ -102,7 +102,7 @@ Start Real-time Monitoring
     ↓
 Agent Goes Offline (Detected by Health Monitor)
     ↓
-Automatic Speed Reset to 0 + Status to Offline
+Status Update to Offline (Speed Preserved)
 ```
 
 ## 🔧 API Endpoints
@@ -117,11 +117,7 @@ Content-Type: application/json
 }
 ```
 
-### Speed Reset (Automatic)
-```http
-PUT /api/v1/agents/{id}/speed-reset
-```
-*Called automatically by health monitor when agent goes offline*
+
 
 ## 🧪 Testing
 
@@ -129,7 +125,7 @@ Untuk memverifikasi implementasi:
 
 1. **Start agent** - Speed akan diupdate sekali
 2. **Monitor logs** - Tidak ada speed updates berulang
-3. **Stop agent** - Speed otomatis reset ke 0
+3. **Stop agent** - Status berubah ke offline (speed tetap)
 4. **Check database** - Speed field konsisten
 
 ## 📝 Log Examples
@@ -139,7 +135,7 @@ Untuk memverifikasi implementasi:
 🚀 Starting real-time speed monitoring...
 [MONITORING] Agent status updated for consistency
 🛑 Real-time speed monitoring stopped
-[SPEED RESET] Agent speed reset to 0 (offline)
+[STATUS UPDATE] Agent status updated to offline
 ```
 
 ## 🔮 Future Enhancements
