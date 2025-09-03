@@ -70,10 +70,14 @@
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Job Name <span class="text-red-500">*</span></label>
                         <input type="text" 
                                x-model="jobForm.name" 
+                               @input="showValidationErrors = false"
                                required 
                                class="input-modern" 
                                placeholder="WiFi Password Crack - Corporate Network">
                         <p class="text-xs text-gray-500 mt-1">Descriptive name to identify this cracking job</p>
+                        <p x-show="showValidationErrors && !jobForm.name" class="text-xs text-red-600 mt-1">
+                            <i class="fas fa-exclamation-circle mr-1"></i>Job name is required
+                        </p>
                     </div>
                     
                     <!-- Hash File & Wordlist Row -->
@@ -81,7 +85,7 @@
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-1">WiFi Handshake File <span class="text-red-500">*</span></label>
                             <select x-model="jobForm.hash_file_id" 
-                                    @change="updateCommandTemplate()" 
+                                    @change="updateCommandTemplate(); showValidationErrors = false" 
                                     required 
                                     class="select-modern">
                                 <option value="">Select handshake file (.hccapx)</option>
@@ -89,12 +93,15 @@
                                     <option :value="file.id" x-text="file.orig_name || file.name"></option>
                                 </template>
                             </select>
+                            <p x-show="showValidationErrors && !jobForm.hash_file_id" class="text-xs text-red-600 mt-1">
+                                <i class="fas fa-exclamation-circle mr-1"></i>WiFi handshake file is required
+                            </p>
                         </div>
                         
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-1">Wordlist <span class="text-red-500">*</span></label>
                             <select x-model="jobForm.wordlist_id" 
-                                    @change="handleWordlistChange()" 
+                                    @change="handleWordlistChange(); showValidationErrors = false" 
                                     required 
                                     class="select-modern">
                                 <option value="">Select wordlist</option>
@@ -102,6 +109,9 @@
                                     <option :value="wordlist.id" x-text="wordlist.orig_name || wordlist.name"></option>
                                 </template>
                             </select>
+                            <p x-show="showValidationErrors && !jobForm.wordlist_id" class="text-xs text-red-600 mt-1">
+                                <i class="fas fa-exclamation-circle mr-1"></i>Wordlist is required
+                            </p>
                         </div>
                     </div>
                     
@@ -160,7 +170,7 @@
                                 <label class="flex items-center space-x-2" 
                                        :class="isMultiAgentSelectionDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'">
                                     <input type="checkbox" 
-                                           @change="toggleSelectAllAgents($event.target.checked)"
+                                           @change="toggleSelectAllAgents($event.target.checked); showValidationErrors = false"
                                            :checked="areAllAgentsSelected()"
                                            :disabled="isMultiAgentSelectionDisabled"
                                            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2">
@@ -196,14 +206,14 @@
                                     <input type="checkbox" 
                                            :value="agent.id"
                                            :checked="jobForm.agent_ids && jobForm.agent_ids.includes(agent.id)"
-                                           @change="toggleAgentSelection(agent.id)"
+                                           @change="toggleAgentSelection(agent.id); showValidationErrors = false"
                                            class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 flex-shrink-0">
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center justify-between">
                                             <span class="font-medium text-gray-900 truncate text-sm" x-text="agent.name"></span>
                                             <div class="flex items-center space-x-1.5 flex-shrink-0">
                                                 <!-- Status Badge -->
-                                                <span class="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                                <span class="text-xs px-2 py-1 rounded-full font-medium"
                                                       :class="{
                                                           'bg-green-100 text-green-800': agent.status === 'online',
                                                           'bg-red-100 text-red-800': agent.status === 'offline',
@@ -212,7 +222,7 @@
                                                       x-text="agent.status.charAt(0).toUpperCase() + agent.status.slice(1)">
                                                 </span>
                                                 <!-- Capabilities Badge -->
-                                                <span class="text-xs text-gray-500 bg-blue-100 px-1.5 py-0.5 rounded" x-text="agent.capabilities || 'Unknown GPU'"></span>
+                                                <span class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded" x-text="agent.capabilities || 'Unknown GPU'"></span>
                                             </div>
                                         </div>
                                         <div class="text-xs text-gray-600 truncate" x-text="agent.ip_address"></div>
@@ -242,6 +252,9 @@
                                     <i class="fas fa-compress-alt mr-1"></i>Compact mode active
                                 </span>
                             </span>
+                        </p>
+                        <p x-show="showValidationErrors && (!jobForm.agent_ids || jobForm.agent_ids.length === 0)" class="text-xs text-red-600 mt-1">
+                            <i class="fas fa-exclamation-circle mr-1"></i>Agent assignment is required
                         </p>
                     </div>
                     </div>
@@ -319,8 +332,6 @@
                         <button type="button" 
                                 x-show="currentStep === 1"
                                 @click="goToStep(2)"
-                                :disabled="!canProceedToStep2()"
-                                :class="canProceedToStep2() ? 'btn-primary' : 'btn-disabled'"
                                 class="btn-primary">
                             <i class="fas fa-arrow-right mr-2"></i>Next: Preview Distribution
                         </button>

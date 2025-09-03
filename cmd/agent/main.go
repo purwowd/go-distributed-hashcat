@@ -1845,7 +1845,7 @@ func (a *Agent) updateAgentStatusOnly(status string) error {
 func (a *Agent) resetAgentSpeedOnOffline() error {
 	url := fmt.Sprintf("%s/api/v1/agents/%s/speed-reset", a.ServerURL, a.ID.String())
 
-	infrastructure.AgentLogger.Info("🔄 Sending speed reset request to: %s", url)
+	infrastructure.AgentLogger.Info("Sending speed reset request to: %s", url)
 
 	httpReq, _ := http.NewRequest(http.MethodPut, url, nil)
 	httpReq.Header.Set("Content-Type", "application/json")

@@ -65,7 +65,7 @@ echo "✅ Test agent created with ID: $AGENT_ID"
 echo ""
 
 # Step 2: Test manual speed update
-echo "🔄 Step 2: Testing manual speed update..."
+echo "Step 2: Testing manual speed update..."
 TEST_SPEED=1928
 SPEED_UPDATE_RESPONSE=$(curl -s -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID/speed" \
     -H "Content-Type: application/json" \
@@ -102,7 +102,7 @@ fi
 echo ""
 
 # Step 4: Test different speed values
-echo "🔄 Step 4: Testing different speed values..."
+echo "Step 4: Testing different speed values..."
 SPEED_VALUES=(1000 5000 10000 50000)
 
 for speed in "${SPEED_VALUES[@]}"; do
@@ -121,7 +121,7 @@ done
 echo ""
 
 # Step 5: Test invalid speed values
-echo "🔄 Step 5: Testing invalid speed values..."
+echo "Step 5: Testing invalid speed values..."
 INVALID_SPEEDS=(-100 0 "abc" "")
 
 for speed in "${INVALID_SPEEDS[@]}"; do
@@ -146,7 +146,7 @@ done
 echo ""
 
 # Step 6: Test speed persistence
-echo "🔄 Step 6: Testing speed persistence..."
+echo "Step 6: Testing speed persistence..."
 FINAL_SPEED=25000
 SPEED_UPDATE_RESPONSE=$(curl -s -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID/speed" \
     -H "Content-Type: application/json" \
@@ -170,7 +170,7 @@ fi
 echo ""
 
 # Step 7: Test WebSocket speed broadcast (if WebSocket is available)
-echo "🔄 Step 7: Testing WebSocket speed broadcast..."
+echo "Step 7: Testing WebSocket speed broadcast..."
 echo "Note: WebSocket testing requires active WebSocket connection"
 echo "This step is informational only"
 echo ""

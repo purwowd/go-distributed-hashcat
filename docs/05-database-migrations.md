@@ -129,7 +129,7 @@ wordlists (1) ──→ (N) jobs
 | jobs | agent_id | agents(id) | SET NULL |
 | agent_files | agent_id | agents(id) | CASCADE |
 
-## 🔄 Migration System
+## Migration System
 
 ### **Migration Structure**
 ```
@@ -202,7 +202,7 @@ CREATE INDEX idx_agents_status_last_seen ON agents(status, last_seen);
 CREATE INDEX idx_agent_files_agent_type ON agent_files(agent_id, type);
 ```
 
-## 🔄 Backup & Recovery
+## Backup & Recovery
 
 ### **Database Backup**
 ```bash

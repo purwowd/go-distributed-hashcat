@@ -54,7 +54,7 @@ echo "✅ Test agent created with ID: $AGENT_ID"
 echo ""
 
 # Step 2: Test real-time speed and status update
-echo "🔄 Step 2: Testing real-time speed and status update..."
+echo "Step 2: Testing real-time speed and status update..."
 TEST_SPEED=5000
 TEST_STATUS="online"
 
@@ -93,7 +93,7 @@ fi
 echo ""
 
 # Step 4: Test multiple real-time updates
-echo "🔄 Step 4: Testing multiple real-time updates..."
+echo "Step 4: Testing multiple real-time updates..."
 SPEED_VALUES=(1000 2500 5000 10000 25000)
 
 for speed in "${SPEED_VALUES[@]}"; do
@@ -115,7 +115,7 @@ done
 echo ""
 
 # Step 5: Test status change to busy
-echo "🔄 Step 5: Testing status change to busy..."
+echo "Step 5: Testing status change to busy..."
 BUSY_SPEED=15000
 SPEED_STATUS_RESPONSE=$(curl -s -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID/speed-status" \
     -H "Content-Type: application/json" \
@@ -130,7 +130,7 @@ fi
 echo ""
 
 # Step 6: Test speed reset on offline
-echo "🔄 Step 6: Testing speed reset on offline..."
+echo "Step 6: Testing speed reset on offline..."
 SPEED_RESET_RESPONSE=$(curl -s -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID/speed-reset" \
     -H "Content-Type: application/json")
 
@@ -165,7 +165,7 @@ fi
 echo ""
 
 # Step 8: Test real-time monitoring simulation
-echo "🔄 Step 8: Testing real-time monitoring simulation..."
+echo "Step 8: Testing real-time monitoring simulation..."
 echo "Simulating continuous real-time updates every 2 seconds..."
 
 for i in {1..5}; do
@@ -191,7 +191,7 @@ done
 echo ""
 
 # Step 9: Test final status change and speed reset
-echo "🔄 Step 9: Testing final status change and speed reset..."
+echo "Step 9: Testing final status change and speed reset..."
 echo "Setting agent to offline and resetting speed..."
 
 # First change status to offline

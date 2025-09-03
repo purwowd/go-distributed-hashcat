@@ -391,7 +391,7 @@ func (h *AgentHandler) UpdateAgentSpeedWithStatus(c *gin.Context) {
 	}
 
 	// Log real-time update request
-	log.Printf("🔄 [REAL-TIME UPDATE REQUEST] Agent %s: speed=%d H/s, status=%s",
+	log.Printf("[REAL-TIME UPDATE REQUEST] Agent %s: speed=%d H/s, status=%s",
 		id.String(), req.Speed, req.Status)
 
 	// Update agent speed and status simultaneously
@@ -434,7 +434,7 @@ func (h *AgentHandler) ResetAgentSpeedOnOffline(c *gin.Context) {
 	}
 
 	// Log speed reset request
-	log.Printf("🔄 [SPEED RESET REQUEST] Agent %s: resetting speed to 0 (offline)", id.String())
+	log.Printf("[SPEED RESET REQUEST] Agent %s: resetting speed to 0 (offline)", id.String())
 
 	// Reset agent speed to 0
 	if err := h.agentUsecase.ResetAgentSpeedOnOffline(c.Request.Context(), id); err != nil {

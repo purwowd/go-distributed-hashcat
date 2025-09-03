@@ -88,7 +88,7 @@ echo "✅ Test agent created with ID: $AGENT_ID"
 echo ""
 
 # Test updating agent speed
-echo "🔄 Testing speed update API..."
+echo "Testing speed update API..."
 SPEED_UPDATE_RESPONSE=$(curl -s -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID/speed" \
     -H "Content-Type: application/json" \
     -d "{\"speed\": $SPEED}")

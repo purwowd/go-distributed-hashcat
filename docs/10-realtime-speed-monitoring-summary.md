@@ -137,9 +137,9 @@ Untuk memverifikasi implementasi:
 ```
 ✅ [STARTUP] Agent speed updated successfully: 1928 H/s
 🚀 Starting real-time speed monitoring...
-🔄 [MONITORING] Agent status updated for consistency
+[MONITORING] Agent status updated for consistency
 🛑 Real-time speed monitoring stopped
-🔄 [SPEED RESET] Agent speed reset to 0 (offline)
+[SPEED RESET] Agent speed reset to 0 (offline)
 ```
 
 ## 🔮 Future Enhancements

@@ -59,15 +59,15 @@ type AgentUsecase interface {
 ### 3. Comprehensive Logging
 ```go
 // Real-time speed update
-log.Printf("🔄 [REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s", 
+log.Printf("[REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s", 
     id.String(), speed, now.Format("2006-01-02 15:04:05"))
 
 // Combined speed and status update
-log.Printf("🔄 [REAL-TIME AGENT UPDATE] Agent %s: speed=%d H/s, status=%s, time=%s", 
+log.Printf("[REAL-TIME AGENT UPDATE] Agent %s: speed=%d H/s, status=%s, time=%s", 
     id.String(), speed, status, now.Format("2006-01-02 15:04:05"))
 
 // Speed reset on offline
-log.Printf("🔄 [SPEED RESET] Agent %s speed reset to 0 (offline) at %s", 
+log.Printf("[SPEED RESET] Agent %s speed reset to 0 (offline) at %s", 
     id.String(), now.Format("2006-01-02 15:04:05"))
 ```
 
@@ -155,7 +155,7 @@ func (r *agentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed i
     }
 
     // Log for real-time monitoring
-    log.Printf("🔄 [REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s", 
+    log.Printf("[REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s", 
         id.String(), speed, now.Format("2006-01-02 15:04:05"))
 
     // Invalidate cache
@@ -186,9 +186,9 @@ func (r *agentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed i
 ## 📊 Monitoring and Logging
 
 ### Log Categories
-- **🔄 [REAL-TIME SPEED UPDATE]**: Speed updates
-- **🔄 [REAL-TIME AGENT UPDATE]**: Combined speed and status updates
-- **🔄 [SPEED RESET]**: Speed reset operations
+- **[REAL-TIME SPEED UPDATE]**: Speed updates
+- **[REAL-TIME AGENT UPDATE]**: Combined speed and status updates
+- **[SPEED RESET]**: Speed reset operations
 - **✅ [SUCCESS]**: Successful operations
 - **❌ [FAILED]**: Failed operations
 - **⚠️ [WARNING]**: Warning messages
@@ -200,13 +200,13 @@ func (r *agentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed i
 
 ### Example Logs
 ```
-2025/09/03 09:33:20 🔄 [REAL-TIME UPDATE REQUEST] Agent 71b1fcdb: speed=5000 H/s, status=online
-2025/09/03 09:33:20 🔄 [REAL-TIME AGENT UPDATE] Agent 71b1fcdb: speed=5000 H/s, status=online, time=2025-09-03 09:33:20
-2025/09/03 09:33:20 🔄 [REAL-TIME BROADCAST] Agent test-agent: speed=5000 H/s, status=online
+2025/09/03 09:33:20 [REAL-TIME UPDATE REQUEST] Agent 71b1fcdb: speed=5000 H/s, status=online
+2025/09/03 09:33:20 [REAL-TIME AGENT UPDATE] Agent 71b1fcdb: speed=5000 H/s, status=online, time=2025-09-03 09:33:20
+2025/09/03 09:33:20 [REAL-TIME BROADCAST] Agent test-agent: speed=5000 H/s, status=online
 2025/09/03 09:33:20 ✅ [REAL-TIME UPDATE SUCCESS] Agent 71b1fcdb: speed=5000 H/s, status=online
 ```
 
-## 🔄 Real-Time Monitoring Flow
+## Real-Time Monitoring Flow
 
 ### 1. Agent Startup
 ```
@@ -253,7 +253,7 @@ if err := u.agentRepo.UpdateSpeedWithStatus(ctx, id, speed, status); err != nil 
 ```go
 if u.wsHub != nil {
     u.wsHub.BroadcastAgentSpeed(agent.ID.String(), agent.Speed)
-    log.Printf("🔄 [REAL-TIME BROADCAST] Agent %s: speed=%d H/s, status=%s", 
+    log.Printf("[REAL-TIME BROADCAST] Agent %s: speed=%d H/s, status=%s", 
         agent.Name, speed, status)
 } else {
     log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")

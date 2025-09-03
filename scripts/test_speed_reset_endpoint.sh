@@ -102,7 +102,7 @@ get_agent_info() {
 
 # Function to test speed reset endpoint
 test_speed_reset() {
-    log "${BLUE}🔄 Testing speed reset endpoint...${NC}"
+    log "${BLUE}Testing speed reset endpoint...${NC}"
     
     AGENT_ID=$(cat /tmp/speed_reset_agent_id.txt)
     
@@ -130,7 +130,7 @@ test_speed_reset() {
     fi
     
     # Now test speed reset endpoint
-    log "${BLUE}🔄 Calling speed-reset endpoint...${NC}"
+    log "${BLUE}Calling speed-reset endpoint...${NC}"
     response=$(curl -s -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID/speed-reset")
     
     log "${BLUE}📡 Speed reset response: $response${NC}"

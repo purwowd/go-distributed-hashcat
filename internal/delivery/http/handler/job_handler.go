@@ -272,7 +272,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 
 		// Check if this is a distributed job and log coordination info
 		if strings.Contains(job.Name, " (Part ") || strings.Contains(job.Name, " (") {
-			log.Printf("🔄 COORDINATION: This is a distributed job - checking for related running jobs...")
+			log.Printf("COORDINATION: This is a distributed job - checking for related running jobs...")
 		}
 	} else {
 		log.Printf("FAILED: Agent %s did not find password for job %s", agentName, job.Name)

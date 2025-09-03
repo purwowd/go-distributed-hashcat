@@ -76,7 +76,7 @@ agents ──┐
 └── Progress Reporting # Real-time status updates
 ```
 
-## 🔄 Data Flow
+## Data Flow
 
 ### **Job Lifecycle**
 ```

@@ -134,7 +134,7 @@ monitor_speed_updates() {
 
 # Function to test offline speed reset
 test_offline_speed_reset() {
-    log "${BLUE}🔄 Testing automatic speed reset when agent goes offline...${NC}"
+    log "${BLUE}Testing automatic speed reset when agent goes offline...${NC}"
     
     AGENT_ID=$(cat /tmp/agent_id.txt)
     

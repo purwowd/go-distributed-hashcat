@@ -2,7 +2,7 @@
 
 # Script untuk restart server dan test fitur real-time speed monitoring
 
-echo "🔄 Restarting Server and Testing Real-Time Speed Monitoring"
+echo "Restarting Server and Testing Real-Time Speed Monitoring"
 echo "============================================================"
 
 # Check if server is running
@@ -70,7 +70,7 @@ AGENT_ID=$(echo "$CREATE_RESPONSE" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
 echo "✅ Test agent created with ID: $AGENT_ID"
 
 # Test speed-status endpoint
-echo "🔄 Testing speed-status endpoint..."
+echo "Testing speed-status endpoint..."
 SPEED_STATUS_RESPONSE=$(curl -s -X PUT "http://localhost:1337/api/v1/agents/$AGENT_ID/speed-status" \
     -H "Content-Type: application/json" \
     -d '{"speed": 5000, "status": "online"}')
@@ -82,7 +82,7 @@ else
 fi
 
 # Test speed-reset endpoint
-echo "🔄 Testing speed-reset endpoint..."
+echo "Testing speed-reset endpoint..."
 SPEED_RESET_RESPONSE=$(curl -s -X PUT "http://localhost:1337/api/v1/agents/$AGENT_ID/speed-reset" \
     -H "Content-Type: application/json")
 

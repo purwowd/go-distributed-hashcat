@@ -422,6 +422,7 @@ class DashboardApplication {
             distributedJobForm: { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', auto_distribute: true },
             fileForm: { file: null },
             wordlistForm: { file: null },
+            showValidationErrors: false,
             
             // Command template for job creation
             commandTemplate: '',
@@ -658,7 +659,7 @@ class DashboardApplication {
 
             // Methods
             async init() {
-                // console.log('🔄 Initializing Alpine.js dashboard data...')
+                // console.log('Initializing Alpine.js dashboard data...')
                 this.isAlpineInitialized = true
                 
                 // Setup router listener
@@ -715,7 +716,7 @@ class DashboardApplication {
                     this.reactiveAgents = [...stableSortedAgents]
                     // Also update agentKeys with agents that have no IP address (these are just keys)
                     this.reactiveAgentKeys = [...stableSortedAgents].filter(agent => !agent.ip_address || agent.ip_address === '')
-                    console.log('🔄 Agent store updated:', this.reactiveAgents.length, 'agents')
+                    console.log('Agent store updated:', this.reactiveAgents.length, 'agents')
 
                     // Sync pagination (if available)
                     if (state.pagination) {
@@ -735,7 +736,7 @@ class DashboardApplication {
                     const state = jobStore.getState()
                     // ✅ Force Alpine.js reactivity by creating new array reference
                     this.reactiveJobs = [...(state.jobs || [])]
-                    console.log('🔄 Job store updated:', this.reactiveJobs.length, 'jobs')
+                    console.log('Job store updated:', this.reactiveJobs.length, 'jobs')
                     
                     // Sync pagination (if available)
                     // Note: This would need to be updated when we implement job pagination in the backend
@@ -1492,6 +1493,9 @@ class DashboardApplication {
                 // Clear command template
                 this.commandTemplate = 'hashcat command will appear here...'
                 
+                // Reset validation errors
+                this.showValidationErrors = false
+                
                 // Force UI update
                 setTimeout(() => {
                     console.log('Job modal closed and form reset successfully')
@@ -1501,9 +1505,11 @@ class DashboardApplication {
             // Step management functions
             goToStep(step: number) {
                 if (step === 2 && !this.canProceedToStep2()) {
+                    this.showValidationErrors = true
                     this.showNotification('Please complete all required fields before proceeding', 'warning')
                     return
                 }
+                this.showValidationErrors = false
                 this.currentStep = step
                 if (step === 2) {
                     this.updateCommandTemplate()
