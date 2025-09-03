@@ -28,6 +28,8 @@ type AgentUsecase interface {
 	GetAllAgents(ctx context.Context) ([]domain.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error
+	UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error
+	ResetAgentSpeedOnOffline(ctx context.Context, id uuid.UUID) error
 	DeleteAgent(ctx context.Context, id uuid.UUID) error
 	GetAvailableAgent(ctx context.Context) (*domain.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error
@@ -279,6 +281,63 @@ func (u *agentUsecase) UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed
 		log.Printf("Real-time agent speed broadcast: %s -> %d H/s", agent.Name, speed)
 	} else {
 		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+// UpdateAgentSpeedWithStatus updates agent speed and status simultaneously with comprehensive logging
+// This method is used for real-time monitoring and comprehensive agent state updates
+func (u *agentUsecase) UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error {
+	// Update speed and status in database using new repository method
+	if err := u.agentRepo.UpdateSpeedWithStatus(ctx, id, speed, status); err != nil {
+		log.Printf("❌ [REAL-TIME UPDATE FAILED] Agent %s: speed=%d H/s, status=%s, error=%v",
+			id.String(), speed, status, err)
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the update if broadcast fails
+	}
+
+	// Broadcast real-time speed and status update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentSpeed(agent.ID.String(), agent.Speed)
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("🔄 [REAL-TIME BROADCAST] Agent %s: speed=%d H/s, status=%s",
+			agent.Name, speed, status)
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+// ResetAgentSpeedOnOffline resets agent speed to 0 when agent goes offline
+// This method ensures speed data is cleared when agent is not actively processing
+func (u *agentUsecase) ResetAgentSpeedOnOffline(ctx context.Context, id uuid.UUID) error {
+	// Reset speed to 0 in database
+	if err := u.agentRepo.ResetSpeedOnOffline(ctx, id); err != nil {
+		log.Printf("❌ [SPEED RESET FAILED] Agent %s: error=%v", id.String(), err)
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the reset if broadcast fails
+	}
+
+	// Broadcast speed reset via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentSpeed(agent.ID.String(), 0)
+		log.Printf("🔄 [SPEED RESET BROADCAST] Agent %s: speed reset to 0 (offline)", agent.Name)
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for speed reset broadcast")
 	}
 
 	return nil

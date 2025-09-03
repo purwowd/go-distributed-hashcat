@@ -18,6 +18,8 @@ type AgentRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateLastSeen(ctx context.Context, id uuid.UUID) error
 	UpdateSpeed(ctx context.Context, id uuid.UUID, speed int64) error
+	UpdateSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error
+	ResetSpeedOnOffline(ctx context.Context, id uuid.UUID) error
 	GetByIPAddress(ctx context.Context, ip string) (*Agent, error)
 	GetByAgentKey(ctx context.Context, agentKey string) (*Agent, error)
 	CreateAgent(ctx context.Context, agent *Agent) error // bisa panggil Create

@@ -361,6 +361,104 @@ func (h *AgentHandler) UpdateAgentSpeed(c *gin.Context) {
 	})
 }
 
+// UpdateAgentSpeedWithStatus updates both agent speed and status simultaneously
+// This method is used for real-time monitoring and comprehensive agent state updates
+func (h *AgentHandler) UpdateAgentSpeedWithStatus(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid agent ID",
+			"code":    "INVALID_AGENT_ID",
+			"message": "The provided agent ID is not valid.",
+		})
+		return
+	}
+
+	var req struct {
+		Speed   int64  `json:"speed" binding:"required,gte=0"`
+		Status  string `json:"status" binding:"required,oneof=online offline busy"`
+		Message string `json:"message,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request body",
+			"code":    "INVALID_REQUEST",
+			"message": "The request body is invalid.",
+		})
+		return
+	}
+
+	// Log real-time update request
+	log.Printf("🔄 [REAL-TIME UPDATE REQUEST] Agent %s: speed=%d H/s, status=%s",
+		id.String(), req.Speed, req.Status)
+
+	// Update agent speed and status simultaneously
+	if err := h.agentUsecase.UpdateAgentSpeedWithStatus(c.Request.Context(), id, req.Speed, req.Status); err != nil {
+		log.Printf("❌ [REAL-TIME UPDATE FAILED] Agent %s: error=%v", id.String(), err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update agent speed and status",
+			"code":    "UPDATE_SPEED_STATUS_FAILED",
+			"message": "Failed to update agent speed and status.",
+		})
+		return
+	}
+
+	// Log successful update
+	log.Printf("✅ [REAL-TIME UPDATE SUCCESS] Agent %s: speed=%d H/s, status=%s",
+		id.String(), req.Speed, req.Status)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Agent speed and status updated successfully",
+		"data": gin.H{
+			"id":     id.String(),
+			"speed":  req.Speed,
+			"status": req.Status,
+		},
+	})
+}
+
+// ResetAgentSpeedOnOffline resets agent speed to 0 when agent goes offline
+// This method ensures speed data is cleared when agent is not actively processing
+func (h *AgentHandler) ResetAgentSpeedOnOffline(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid agent ID",
+			"code":    "INVALID_AGENT_ID",
+			"message": "The provided agent ID is not valid.",
+		})
+		return
+	}
+
+	// Log speed reset request
+	log.Printf("🔄 [SPEED RESET REQUEST] Agent %s: resetting speed to 0 (offline)", id.String())
+
+	// Reset agent speed to 0
+	if err := h.agentUsecase.ResetAgentSpeedOnOffline(c.Request.Context(), id); err != nil {
+		log.Printf("❌ [SPEED RESET FAILED] Agent %s: error=%v", id.String(), err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to reset agent speed",
+			"code":    "RESET_SPEED_FAILED",
+			"message": "Failed to reset agent speed.",
+		})
+		return
+	}
+
+	// Log successful reset
+	log.Printf("✅ [SPEED RESET SUCCESS] Agent %s: speed reset to 0", id.String())
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Agent speed reset successfully",
+		"data": gin.H{
+			"id":    id.String(),
+			"speed": 0,
+		},
+	})
+}
+
 // UpdateAgentData updates only the data fields (ip_address, port, capabilities) without changing status
 func (h *AgentHandler) UpdateAgentData(c *gin.Context) {
 	type updateAgentDataDTO struct {

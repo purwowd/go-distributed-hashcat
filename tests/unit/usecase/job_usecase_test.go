@@ -166,6 +166,17 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 
 				// Mock job creation
 				jobRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
+
+				// Mock job retrieval for StartJob (called internally when agent is assigned)
+				createdJob := &domain.Job{
+					ID:       uuid.New(),
+					Name:     "test-job",
+					Status:   "pending",
+					AgentID:  &agentID,
+					HashType: 0,
+				}
+				jobRepo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(createdJob, nil)
+				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
 			},
 			expectedError: false,
 		},
@@ -419,7 +430,7 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 				}
 				jobRepo.On("GetByID", mock.Anything, jobID).Return(job, nil)
 				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
-				agentRepo.On("UpdateStatus", mock.Anything, agentID, "online").Return(nil)
+				// Note: CompleteJob does not call UpdateStatus on agent repository
 			},
 			expectedError: false,
 		},

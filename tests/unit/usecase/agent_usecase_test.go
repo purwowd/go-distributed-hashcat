@@ -112,6 +112,16 @@ func (m *MockAgentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, spe
 	return args.Error(0)
 }
 
+func (m *MockAgentRepository) UpdateSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error {
+	args := m.Called(ctx, id, speed, status)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) ResetSpeedOnOffline(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func TestAgentUsecase_RegisterAgent(t *testing.T) {
 	existingAgentID := uuid.New()
 
