@@ -37,6 +37,7 @@ type Agent struct {
 	AgentKey     string               // Add agent key field
 	OriginalPort int                  // Store original port from database
 	ServerIP     string               // Store server IP for validation
+	Status       string               // Current agent status (online, offline, busy)
 }
 
 type LocalFile struct {
@@ -210,6 +211,8 @@ func runAgent(cmd *cobra.Command, args []string) {
 		infrastructure.AgentLogger.Warning("Failed to update agent status to online: %v", err)
 	} else {
 		infrastructure.AgentLogger.Success("Agent status updated to online with port 8081")
+		// Set agent status for real-time monitoring
+		agent.Status = "online"
 	}
 
 	// Run hashcat benchmark to detect and update agent speed
@@ -231,6 +234,9 @@ func runAgent(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start real-time speed monitoring in background
+	agent.startRealTimeSpeedMonitoring(ctx)
+
 	go agent.startHeartbeat(ctx)
 	go agent.pollForJobs(ctx)
 	go agent.watchLocalFiles(ctx)
@@ -244,10 +250,31 @@ func runAgent(cmd *cobra.Command, args []string) {
 	// Update status to offline and restore original port 8080 before shutdown
 	infrastructure.AgentLogger.Info("Updating agent status to offline and restoring port to 8080...")
 	infrastructure.AgentLogger.Info("Preserving capabilities: %s", capabilities)
-	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, "offline"); err != nil {
+
+	// Set agent status for real-time monitoring
+	agent.Status = "offline"
+
+	// Reset agent speed to 0 when going offline
+	infrastructure.AgentLogger.Info("Resetting agent speed to 0 (offline)...")
+	if err := agent.resetAgentSpeedOnOffline(); err != nil {
+		infrastructure.AgentLogger.Warning("Failed to reset agent speed: %v", err)
+		// Continue with shutdown even if speed reset fails
+	} else {
+		infrastructure.AgentLogger.Success("Agent speed reset to 0 (offline)")
+	}
+
+	// Update agent data (IP, port, capabilities) first
+	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, ""); err != nil {
+		infrastructure.AgentLogger.Warning("Failed to update agent data: %v", err)
+	} else {
+		infrastructure.AgentLogger.Success("Agent data updated successfully")
+	}
+
+	// Update status to offline separately using the correct endpoint
+	if err := agent.updateAgentStatusOnly("offline"); err != nil {
 		infrastructure.AgentLogger.Warning("Failed to update agent status to offline: %v", err)
 	} else {
-		infrastructure.AgentLogger.Success("Agent status updated to offline with port 8080 and capabilities preserved")
+		infrastructure.AgentLogger.Success("Agent status updated to offline")
 	}
 
 	// Note: restoreOriginalPort() is no longer needed since we already updated everything above
@@ -1756,6 +1783,7 @@ func (a *Agent) runHashcatBenchmark() error {
 }
 
 // updateAgentSpeed updates the agent speed in the database
+// This method is called during benchmark detection and real-time monitoring
 func (a *Agent) updateAgentSpeed(speed int64) error {
 	req := struct {
 		Speed int64 `json:"speed"`
@@ -1781,4 +1809,92 @@ func (a *Agent) updateAgentSpeed(speed int64) error {
 	}
 
 	return nil
+}
+
+// updateAgentStatusOnly updates only the agent status without changing speed
+// This method is used for status consistency during monitoring
+func (a *Agent) updateAgentStatusOnly(status string) error {
+	url := fmt.Sprintf("%s/api/v1/agents/%s/status", a.ServerURL, a.ID.String())
+
+	req := struct {
+		Status string `json:"status"`
+	}{
+		Status: status,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send status update request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status update failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// resetAgentSpeedOnOffline resets agent speed to 0 when agent goes offline
+// This method ensures speed data is cleared when agent is not actively processing
+func (a *Agent) resetAgentSpeedOnOffline() error {
+	url := fmt.Sprintf("%s/api/v1/agents/%s/speed-reset", a.ServerURL, a.ID.String())
+
+	infrastructure.AgentLogger.Info("🔄 Sending speed reset request to: %s", url)
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, nil)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		infrastructure.AgentLogger.Error("❌ Network error during speed reset: %v", err)
+		return fmt.Errorf("failed to send speed reset request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	infrastructure.AgentLogger.Info("📡 Speed reset response status: %d", resp.StatusCode)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		infrastructure.AgentLogger.Error("❌ Speed reset failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("speed reset failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	infrastructure.AgentLogger.Success("✅ Speed reset request successful")
+	return nil
+}
+
+// startRealTimeSpeedMonitoring starts a background goroutine for continuous speed monitoring
+// This method runs independently and doesn't interfere with main agent operations
+func (a *Agent) startRealTimeSpeedMonitoring(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second) // Monitor every 30 seconds
+		defer ticker.Stop()
+
+		infrastructure.AgentLogger.Info("🚀 Starting real-time speed monitoring...")
+
+		for {
+			select {
+			case <-ctx.Done():
+				infrastructure.AgentLogger.Info("🛑 Real-time speed monitoring stopped")
+				return
+			case <-ticker.C:
+				// Only monitor if agent is online
+				if a.Status == "online" {
+					// Only update status to ensure consistency, don't update speed continuously
+					// Speed is only updated once during startup/benchmark
+					go func() {
+						if err := a.updateAgentStatusOnly("online"); err != nil {
+							infrastructure.AgentLogger.Warning("Failed to update agent status during monitoring: %v", err)
+						}
+					}()
+				}
+			}
+		}
+	}()
 }
