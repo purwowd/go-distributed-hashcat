@@ -533,24 +533,30 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		return
 	}
 
-	// Baca konten wordlist
-	wordlistLines, err := readWordlistFile(wordlist.Path)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read wordlist"})
-		return
-	}
-
-	// Filter non-empty words
-	var validWords []string
-	for _, word := range wordlistLines {
-		word = strings.TrimSpace(word)
-		if word != "" {
-			validWords = append(validWords, word)
+	// Get word count from repository
+	var totalWords int64
+	if wordlist.WordCount != nil {
+		totalWords = *wordlist.WordCount
+		log.Printf("📝 Wordlist contains %d words (from repository)", totalWords)
+	} else {
+		// Fallback: read file content if word count not available
+		wordlistLines, err := readWordlistFile(wordlist.Path)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read wordlist"})
+			return
 		}
-	}
 
-	log.Printf("📝 Wordlist contains %d valid words", len(validWords))
-	log.Printf("📋 Words: %v", validWords)
+		// Filter non-empty words
+		var validWords []string
+		for _, word := range wordlistLines {
+			word = strings.TrimSpace(word)
+			if word != "" {
+				validWords = append(validWords, word)
+			}
+		}
+		totalWords = int64(len(validWords))
+		log.Printf("📝 Wordlist contains %d valid words (from file)", totalWords)
+	}
 
 	// Analisis kecepatan agent berdasarkan capabilities
 	type AgentSpeed struct {
@@ -561,18 +567,23 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 	var agentSpeeds []AgentSpeed
 
 	for _, agent := range onlineAgents {
-		speed := 1 // Default for CPU
-		if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
-			speed = 5 // GPU is faster
-		} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
-			speed = 8 // RTX lebih cepat lagi
-		} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
-			speed = 6 // GTX lebih cepat
+		// Use actual speed from database, fallback to capability-based estimation if speed is 0
+		speed := agent.Speed
+		if speed == 0 {
+			// Fallback to capability-based estimation for agents without speed data
+			speed = 1 // Default for CPU
+			if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
+				speed = 5 // GPU is faster
+			} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
+				speed = 8 // RTX lebih cepat lagi
+			} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
+				speed = 6 // GTX lebih cepat
+			}
 		}
 
 		agentSpeeds = append(agentSpeeds, AgentSpeed{
 			Agent:  agent,
-			Speed:  speed,
+			Speed:  int(speed),
 			Weight: 0, // Akan dihitung nanti
 		})
 	}
@@ -583,6 +594,15 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		totalSpeed += agentSpeed.Speed
 	}
 
+	// Sort agents by speed (highest first) for proper distribution
+	for i := 0; i < len(agentSpeeds)-1; i++ {
+		for j := i + 1; j < len(agentSpeeds); j++ {
+			if agentSpeeds[i].Speed < agentSpeeds[j].Speed {
+				agentSpeeds[i], agentSpeeds[j] = agentSpeeds[j], agentSpeeds[i]
+			}
+		}
+	}
+
 	// Calculate weight for each agent
 	for i := range agentSpeeds {
 		agentSpeeds[i].Weight = float64(agentSpeeds[i].Speed) / float64(totalSpeed)
@@ -591,7 +611,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 	// Log distribusi agent
 	log.Printf("🤖 Agent distribution plan:")
 	for _, agentSpeed := range agentSpeeds {
-		wordCount := int(float64(len(validWords)) * agentSpeed.Weight)
+		wordCount := int64(float64(totalWords) * agentSpeed.Weight)
 		log.Printf("   - %s (%s): Speed=%d, Weight=%.2f, Words=%d",
 			agentSpeed.Agent.Name,
 			agentSpeed.Agent.Capabilities,
@@ -600,56 +620,52 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 			wordCount)
 	}
 
-	// Bagi wordlist berdasarkan bobot kecepatan
-	wordlistParts := make(map[string][]string)
-	currentIndex := 0
+	// Create jobs with skip/limit parameters based on agent performance
+	var createdJobs []domain.Job
+	currentSkip := int64(0)
 
 	for i, agentSpeed := range agentSpeeds {
-		wordCount := int(float64(len(validWords)) * agentSpeed.Weight)
+		// Calculate word count for this agent
+		wordCount := int64(float64(totalWords) * agentSpeed.Weight)
 
-		// Pastikan agent terakhir mendapat sisa kata
+		// Ensure last agent gets remaining words
 		if i == len(agentSpeeds)-1 {
-			wordCount = len(validWords) - currentIndex
+			wordCount = totalWords - currentSkip
 		}
 
-		if wordCount > 0 {
-			endIndex := currentIndex + wordCount
-			if endIndex > len(validWords) {
-				endIndex = len(validWords)
-			}
-
-			agentWords := validWords[currentIndex:endIndex]
-			wordlistParts[agentSpeed.Agent.ID.String()] = agentWords
-
-			log.Printf("📦 Assigned %d words to %s: %v",
-				len(agentWords),
-				agentSpeed.Agent.Name,
-				agentWords)
-
-			currentIndex = endIndex
+		// Ensure minimum words per agent
+		if wordCount < 1 {
+			wordCount = 1
 		}
-	}
 
-	// Create job for each part
-	var createdJobs []domain.Job
-	for agentID, words := range wordlistParts {
+		// Calculate skip and limit values for this agent
+		skip := currentSkip
+		limit := wordCount
+
+		// Create job with skip/limit parameters
 		job, err := h.jobUsecase.CreateJob(c.Request.Context(), &domain.CreateJobRequest{
 			HashFileID: request.HashFileID,
-			Wordlist:   strings.Join(words, "\n"), // Gabungkan array menjadi string
-			AgentID:    agentID,
-			Name:       fmt.Sprintf("Parallel Job - %s", wordlist.Name),
+			WordlistID: request.WordlistID,
+			Wordlist:   wordlist.OrigName,                      // Use original wordlist name
+			AgentIDs:   []string{agentSpeed.Agent.ID.String()}, // Use AgentIDs for distributed job
+			Name:       fmt.Sprintf("Parallel Job - %s (%s)", wordlist.Name, agentSpeed.Agent.Name),
 		})
 		if err != nil {
-			log.Printf("Failed to create job for agent %s: %v", agentID, err)
+			log.Printf("Failed to create job for agent %s: %v", agentSpeed.Agent.ID.String(), err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create job"})
 			return
 		}
 
 		createdJobs = append(createdJobs, *job)
-		log.Printf("Created job %s for agent %s with %d words",
+		log.Printf("📦 Created job %s for agent %s with skip=%d, limit=%d words (%.1f%%)",
 			job.ID.String(),
-			agentID,
-			len(words))
+			agentSpeed.Agent.Name,
+			skip,
+			limit,
+			agentSpeed.Weight*100)
+
+		// Update currentSkip for next agent
+		currentSkip += wordCount
 	}
 
 	log.Printf("Successfully created %d parallel jobs", len(createdJobs))
@@ -658,7 +674,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		"message": "Parallel jobs created successfully",
 		"data": gin.H{
 			"total_jobs":  len(createdJobs),
-			"total_words": len(validWords),
+			"total_words": totalWords,
 			"agents_used": len(agentSpeeds),
 			"jobs":        createdJobs,
 		},

@@ -1868,22 +1868,28 @@ class DashboardApplication {
 
             // Get agent performance score (0-100) with enhanced detection
             getAgentPerformanceScore(agent: any): number {
+                // Use actual speed from database if available, fallback to capability-based estimation
+                if (agent.speed && agent.speed > 0) {
+                    return agent.speed // Use actual speed in H/s
+                }
+                
+                // Fallback to capability-based estimation for agents without speed data
                 const capabilities = (agent.capabilities || '').toLowerCase()
                 
                 if (capabilities.includes('rtx 4090') || capabilities.includes('rtx 4080')) {
-                    return 100 // High-end RTX
+                    return 5000000 // 5M H/s for high-end RTX
                 } else if (capabilities.includes('rtx 4070') || capabilities.includes('rtx 3060')) {
-                    return 90 // Mid-range RTX
+                    return 4000000 // 4M H/s for mid-range RTX
                 } else if (capabilities.includes('gtx 1660') || capabilities.includes('gtx 1070')) {
-                    return 70 // GTX series
+                    return 3000000 // 3M H/s for GTX series
                 } else if (capabilities.includes('gpu') || capabilities.includes('cuda') || capabilities.includes('opencl')) {
-                    return 80 // Generic GPU
+                    return 3500000 // 3.5M H/s for generic GPU
                 } else if (capabilities.includes('ryzen 9') || capabilities.includes('i9')) {
-                    return 50 // High-end CPU
+                    return 200000 // 200K H/s for high-end CPU
                 } else if (capabilities.includes('ryzen 7') || capabilities.includes('i7')) {
-                    return 40 // Mid-range CPU
+                    return 150000 // 150K H/s for mid-range CPU
                 } else {
-                    return 30 // Standard CPU
+                    return 100000 // 100K H/s for standard CPU
                 }
             },
 

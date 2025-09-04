@@ -218,7 +218,7 @@ func (u *distributedJobUsecase) filterOnlineAgents(agents []domain.Agent) []doma
 	return onlineAgents
 }
 
-// calculateAgentPerformance calculates performance scores for agents based on their capabilities
+// calculateAgentPerformance calculates performance scores for agents based on their actual speed data
 func (u *distributedJobUsecase) calculateAgentPerformance(agents []domain.Agent) []domain.AgentPerformance {
 	var performances []domain.AgentPerformance
 
@@ -228,50 +228,69 @@ func (u *distributedJobUsecase) calculateAgentPerformance(agents []domain.Agent)
 			Name:         agent.Name,
 			Capabilities: agent.Capabilities,
 			ResourceType: "CPU",
-			Performance:  0.3,    // Default CPU performance
-			Speed:        100000, // Default 100K H/s
+			Performance:  0.3,         // Default CPU performance
+			Speed:        agent.Speed, // Use actual speed from database
 		}
 
-		// Enhanced performance detection based on capabilities
-		capabilities := strings.ToLower(agent.Capabilities)
+		// Use actual speed from database, fallback to capability-based estimation if speed is 0
+		if agent.Speed == 0 {
+			// Enhanced performance detection based on capabilities as fallback
+			capabilities := strings.ToLower(agent.Capabilities)
 
-		if strings.Contains(capabilities, "rtx 4090") || strings.Contains(capabilities, "rtx 4080") {
-			performance.ResourceType = "GPU"
-			performance.Performance = 1.0
-			performance.Speed = 5000000 // 5M H/s for high-end RTX
-		} else if strings.Contains(capabilities, "rtx 4070") || strings.Contains(capabilities, "rtx 3060") {
-			performance.ResourceType = "GPU"
-			performance.Performance = 0.9
-			performance.Speed = 4000000 // 4M H/s for mid-range RTX
-		} else if strings.Contains(capabilities, "gtx 1660") || strings.Contains(capabilities, "gtx 1070") {
-			performance.ResourceType = "GPU"
-			performance.Performance = 0.7
-			performance.Speed = 3000000 // 3M H/s for GTX series
-		} else if strings.Contains(capabilities, "gpu") || strings.Contains(capabilities, "cuda") || strings.Contains(capabilities, "opencl") {
-			performance.ResourceType = "GPU"
-			performance.Performance = 0.8
-			performance.Speed = 3500000 // 3.5M H/s for generic GPU
-		} else if strings.Contains(capabilities, "ryzen 9") || strings.Contains(capabilities, "i9") {
-			performance.ResourceType = "CPU"
-			performance.Performance = 0.5
-			performance.Speed = 200000 // 200K H/s for high-end CPU
-		} else if strings.Contains(capabilities, "ryzen 7") || strings.Contains(capabilities, "i7") {
-			performance.ResourceType = "CPU"
-			performance.Performance = 0.4
-			performance.Speed = 150000 // 150K H/s for mid-range CPU
+			if strings.Contains(capabilities, "rtx 4090") || strings.Contains(capabilities, "rtx 4080") {
+				performance.ResourceType = "GPU"
+				performance.Performance = 1.0
+				performance.Speed = 5000000 // 5M H/s for high-end RTX
+			} else if strings.Contains(capabilities, "rtx 4070") || strings.Contains(capabilities, "rtx 3060") {
+				performance.ResourceType = "GPU"
+				performance.Performance = 0.9
+				performance.Speed = 4000000 // 4M H/s for mid-range RTX
+			} else if strings.Contains(capabilities, "gtx 1660") || strings.Contains(capabilities, "gtx 1070") {
+				performance.ResourceType = "GPU"
+				performance.Performance = 0.7
+				performance.Speed = 3000000 // 3M H/s for GTX series
+			} else if strings.Contains(capabilities, "gpu") || strings.Contains(capabilities, "cuda") || strings.Contains(capabilities, "opencl") {
+				performance.ResourceType = "GPU"
+				performance.Performance = 0.8
+				performance.Speed = 3500000 // 3.5M H/s for generic GPU
+			} else if strings.Contains(capabilities, "ryzen 9") || strings.Contains(capabilities, "i9") {
+				performance.ResourceType = "CPU"
+				performance.Performance = 0.5
+				performance.Speed = 200000 // 200K H/s for high-end CPU
+			} else if strings.Contains(capabilities, "ryzen 7") || strings.Contains(capabilities, "i7") {
+				performance.ResourceType = "CPU"
+				performance.Performance = 0.4
+				performance.Speed = 150000 // 150K H/s for mid-range CPU
+			} else {
+				// Default CPU performance
+				performance.ResourceType = "CPU"
+				performance.Performance = 0.3
+				performance.Speed = 100000 // 100K H/s for standard CPU
+			}
 		} else {
-			// Default CPU performance
-			performance.ResourceType = "CPU"
-			performance.Performance = 0.3
-			performance.Speed = 100000 // 100K H/s for standard CPU
+			// Use actual speed data to determine resource type and performance
+			if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") ||
+				strings.Contains(strings.ToLower(agent.Capabilities), "cuda") ||
+				strings.Contains(strings.ToLower(agent.Capabilities), "opencl") {
+				performance.ResourceType = "GPU"
+			} else {
+				performance.ResourceType = "CPU"
+			}
+
+			// Calculate performance score based on actual speed (normalize to 0-1 scale)
+			// Assuming max speed of 10M H/s for normalization
+			performance.Performance = float64(agent.Speed) / 10000000.0
+			if performance.Performance > 1.0 {
+				performance.Performance = 1.0
+			}
 		}
 
 		performances = append(performances, performance)
 	}
 
-	// Sort by performance (highest first)
+	// Sort by actual speed (highest first)
 	sort.Slice(performances, func(i, j int) bool {
-		return performances[i].Performance > performances[j].Performance
+		return performances[i].Speed > performances[j].Speed
 	})
 
 	return performances

@@ -33,13 +33,15 @@ type jobUsecase struct {
 	jobRepo      domain.JobRepository
 	agentRepo    domain.AgentRepository
 	hashFileRepo domain.HashFileRepository
+	wordlistRepo domain.WordlistRepository
 }
 
-func NewJobUsecase(jobRepo domain.JobRepository, agentRepo domain.AgentRepository, hashFileRepo domain.HashFileRepository) JobUsecase {
+func NewJobUsecase(jobRepo domain.JobRepository, agentRepo domain.AgentRepository, hashFileRepo domain.HashFileRepository, wordlistRepo domain.WordlistRepository) JobUsecase {
 	return &jobUsecase{
 		jobRepo:      jobRepo,
 		agentRepo:    agentRepo,
 		hashFileRepo: hashFileRepo,
+		wordlistRepo: wordlistRepo,
 	}
 }
 
@@ -72,12 +74,14 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 	}
 
 	// Handle wordlist ID if provided
+	var wordlistID *uuid.UUID
 	if req.WordlistID != "" {
-		wordlistID, err := uuid.Parse(req.WordlistID)
+		parsedWordlistID, err := uuid.Parse(req.WordlistID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid wordlist ID: %w", err)
 		}
-		job.WordlistID = &wordlistID
+		wordlistID = &parsedWordlistID
+		job.WordlistID = wordlistID
 	}
 
 	// Handle agent assignment (single or multiple)
@@ -107,27 +111,29 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		// Create separate job for each agent (distributed job creation)
 		if len(agentIDs) > 1 {
 			// Get wordlist details for distribution
-			var wordlistContent []string
 			var totalWords int64
 
 			if req.WordlistID != "" {
-				_, err := uuid.Parse(req.WordlistID)
+				wordlistID, err := uuid.Parse(req.WordlistID)
 				if err == nil {
-					// Try to get wordlist from repository if available
-					// For now, we'll use the wordlist content from request
-					if req.Wordlist != "" {
-						// Parse wordlist content (assuming it's newline-separated)
-						wordlistContent = strings.Split(req.Wordlist, "\n")
-						// Filter empty lines
-						var validWords []string
-						for _, word := range wordlistContent {
-							word = strings.TrimSpace(word)
-							if word != "" {
-								validWords = append(validWords, word)
+					// Get wordlist from repository to get accurate word count
+					wordlist, err := u.wordlistRepo.GetByID(ctx, wordlistID)
+					if err == nil && wordlist.WordCount != nil {
+						totalWords = *wordlist.WordCount
+					} else {
+						// Fallback: parse wordlist content from request if repository fails
+						if req.Wordlist != "" {
+							wordlistContent := strings.Split(req.Wordlist, "\n")
+							// Filter empty lines
+							var validWords []string
+							for _, word := range wordlistContent {
+								word = strings.TrimSpace(word)
+								if word != "" {
+									validWords = append(validWords, word)
+								}
 							}
+							totalWords = int64(len(validWords))
 						}
-						wordlistContent = validWords
-						totalWords = int64(len(wordlistContent))
 					}
 				}
 			}
@@ -150,24 +156,38 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					continue
 				}
 
-				speed := 1 // Default for CPU
-				if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
-					speed = 5 // GPU is faster
-				} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
-					speed = 8 // RTX lebih cepat lagi
-				} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
-					speed = 6 // GTX lebih cepat
+				// Use actual speed from database, fallback to capability-based estimation if speed is 0
+				speed := agent.Speed
+				if speed == 0 {
+					// Fallback to capability-based estimation for agents without speed data
+					speed = 1 // Default for CPU
+					if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
+						speed = 5 // GPU is faster
+					} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
+						speed = 8 // RTX lebih cepat lagi
+					} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
+						speed = 6 // GTX lebih cepat
+					}
 				}
 
-				totalSpeed += speed
+				totalSpeed += int(speed)
 
 				agentPerformances = append(agentPerformances, AgentPerformance{
 					AgentID:      agent.ID,
 					Name:         agent.Name,
 					Capabilities: agent.Capabilities,
-					Speed:        speed,
+					Speed:        int(speed),
 					Weight:       0, // Will be calculated below
 				})
+			}
+
+			// Sort agents by speed (highest first) for proper distribution
+			for i := 0; i < len(agentPerformances)-1; i++ {
+				for j := i + 1; j < len(agentPerformances); j++ {
+					if agentPerformances[i].Speed < agentPerformances[j].Speed {
+						agentPerformances[i], agentPerformances[j] = agentPerformances[j], agentPerformances[i]
+					}
+				}
 			}
 
 			// Calculate weights
@@ -175,17 +195,17 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 				agentPerformances[i].Weight = float64(agentPerformances[i].Speed) / float64(totalSpeed)
 			}
 
-			// Create sub-jobs for each agent with distributed wordlist
+			// Create sub-jobs for each agent with skip/limit parameters
 			var subJobs []*domain.Job
-			currentIndex := 0
+			currentSkip := int64(0)
 
 			for i, agentPerf := range agentPerformances {
 				// Calculate word count for this agent
-				wordCount := int(float64(totalWords) * agentPerf.Weight)
+				wordCount := int64(float64(totalWords) * agentPerf.Weight)
 
 				// Ensure last agent gets remaining words
 				if i == len(agentPerformances)-1 {
-					wordCount = int(totalWords) - currentIndex
+					wordCount = totalWords - currentSkip
 				}
 
 				// Ensure minimum words per agent
@@ -193,21 +213,9 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					wordCount = 1
 				}
 
-				// Get agent's wordlist segment
-				var agentWordlist string
-				if len(wordlistContent) > 0 {
-					endIndex := currentIndex + wordCount
-					if endIndex > len(wordlistContent) {
-						endIndex = len(wordlistContent)
-					}
-
-					agentWords := wordlistContent[currentIndex:endIndex]
-					agentWordlist = strings.Join(agentWords, "\n")
-					currentIndex = endIndex
-				} else {
-					// Fallback to original wordlist if we can't parse it
-					agentWordlist = req.Wordlist
-				}
+				// Calculate skip and limit values for this agent
+				skip := currentSkip
+				limit := wordCount
 
 				subJob := &domain.Job{
 					ID:             uuid.New(),
@@ -217,13 +225,16 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 					AttackMode:     req.AttackMode,
 					HashFile:       hashFile.Path,
 					HashFileID:     &hashFileID,
-					Wordlist:       agentWordlist, // Use distributed wordlist
+					Wordlist:       req.Wordlist, // Use original wordlist for all agents
+					WordlistID:     wordlistID,   // Reference to original wordlist
 					Rules:          req.Rules,
 					Progress:       0,
 					Speed:          0,
-					TotalWords:     int64(wordCount),
+					TotalWords:     wordCount,
 					ProcessedWords: 0,
 					AgentID:        &agentPerf.AgentID,
+					Skip:           &skip,  // Hashcat --skip parameter
+					WordLimit:      &limit, // Hashcat --limit parameter
 					CreatedAt:      time.Now(),
 					UpdatedAt:      time.Now(),
 				}
@@ -243,8 +254,11 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 				subJobs = append(subJobs, subJob)
 
 				// Log distribution info
-				fmt.Printf("✅ Created job \"%s\" for agent %s with %d words (%.1f%%)\n",
-					subJob.Name, agentPerf.Name, wordCount, agentPerf.Weight*100)
+				fmt.Printf("✅ Created job \"%s\" for agent %s with skip=%d, limit=%d words (%.1f%%)\n",
+					subJob.Name, agentPerf.Name, skip, limit, agentPerf.Weight*100)
+
+				// Update currentSkip for next agent
+				currentSkip += wordCount
 			}
 
 			// Return the first sub-job as the primary result

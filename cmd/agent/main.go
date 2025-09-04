@@ -892,7 +892,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	}
 
 	// Add skip and limit parameters for distributed cracking
-	if job.Skip != nil && *job.Skip > 0 {
+	if job.Skip != nil && *job.Skip >= 0 {
 		args = append(args, "--skip", strconv.FormatInt(*job.Skip, 10))
 		infrastructure.AgentLogger.Info("Using --skip parameter: %d", *job.Skip)
 	}
