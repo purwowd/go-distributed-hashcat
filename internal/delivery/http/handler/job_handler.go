@@ -264,7 +264,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 
 	// Log job completion with agent details
 	if req.Result != "" && req.Result != "Password not found - exhausted" {
-		log.Printf("🎉SUCCESS: Agent %s found password for job %s", agentName, job.Name)
+		log.Printf("🎯 PASSWORD FOUND: Agent %s found password for job %s (Status: FAILED)", agentName, job.Name)
 		log.Printf("   Result: %s", req.Result)
 		log.Printf("   Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
@@ -272,10 +272,10 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 
 		// Check if this is a distributed job and log coordination info
 		if strings.Contains(job.Name, " (Part ") || strings.Contains(job.Name, " (") {
-			log.Printf("COORDINATION: This is a distributed job - checking for related running jobs...")
+			log.Printf("COORDINATION: This is a distributed job - stopping other agents...")
 		}
 	} else {
-		log.Printf("FAILED: Agent %s did not find password for job %s", agentName, job.Name)
+		log.Printf("✅ COMPLETED: Agent %s completed job %s (no password found)", agentName, job.Name)
 		log.Printf("   🔍 Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
 		log.Printf("   📊 Progress: %.2f%%", job.Progress)
@@ -299,8 +299,16 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 		}
 	}
 
-	// Broadcast job completion with result
-	Hub.BroadcastJobStatus(id.String(), "completed", req.Result)
+	// Broadcast job completion with result - status will be determined by the usecase
+	// Get the updated job to get the correct status
+	updatedJob, err := h.jobUsecase.GetJob(c.Request.Context(), id)
+	if err != nil {
+		log.Printf("Failed to get updated job status for broadcasting: %v", err)
+		// Fallback to completed status
+		Hub.BroadcastJobStatus(id.String(), "completed", req.Result)
+	} else {
+		Hub.BroadcastJobStatus(id.String(), updatedJob.Status, req.Result)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Job completed successfully"})
 }

@@ -390,19 +390,25 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 	}
 
 	now := time.Now()
-	job.Status = "completed"
-	job.Result = result
 	job.Speed = speed
 	job.Progress = 100
 	job.CompletedAt = &now
 
 	// Check if password was found
 	if result != "" && result != "Password not found - exhausted" {
-		// Password found! Stop other related running jobs
+		// Password found! Set status to failed and stop other related running jobs
+		job.Status = "failed"
+		job.Result = result
+
+		// Stop other related running jobs
 		if err := u.stopRelatedRunningJobs(ctx, job); err != nil {
 			// Log error but don't fail the job completion
 			fmt.Printf("Warning: failed to stop related running jobs: %v\n", err)
 		}
+	} else {
+		// Password not found - set status to completed
+		job.Status = "completed"
+		job.Result = result
 	}
 
 	if err := u.jobRepo.Update(ctx, job); err != nil {
@@ -552,10 +558,25 @@ func (u *jobUsecase) stopRelatedRunningJobs(ctx context.Context, completedJob *d
 
 	// Stop all related running jobs
 	for _, job := range jobsToStop {
-		if err := u.FailJob(ctx, job.ID, "Password found by another agent - stopping"); err != nil {
+		// Set progress to 100% and status to failed
+		job.Progress = 100.0
+		job.Status = "failed"
+		job.Result = "Password found by another agent - stopping"
+		now := time.Now()
+		job.CompletedAt = &now
+
+		if err := u.jobRepo.Update(ctx, job); err != nil {
 			fmt.Printf("Warning: failed to stop related job %s: %v\n", job.Name, err)
 			continue
 		}
+
+		// Update agent status to online
+		if job.AgentID != nil {
+			if err := u.agentRepo.UpdateStatus(ctx, *job.AgentID, "online"); err != nil {
+				fmt.Printf("Warning: failed to update agent status for job %s: %v\n", job.Name, err)
+			}
+		}
+
 		fmt.Printf("✅ Stopped related job %s because password was found by %s\n",
 			job.Name, completedJob.Name)
 	}

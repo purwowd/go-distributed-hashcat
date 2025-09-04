@@ -1271,7 +1271,7 @@ func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec
 					infrastructure.AgentLogger.Info("Job stopped due to password found by another agent - updating progress to 100%%")
 					// Update progress to 100% and send final status
 					a.updateJobProgress(jobID, 100.0, 0)
-					a.failJob(jobID, "Password not found - stopped due to password found by another agent")
+					a.failJob(jobID, "Password found by another agent - stopping")
 				}
 				return
 			case "cancelled":
@@ -1312,7 +1312,8 @@ func (a *Agent) isCoordinationStop(jobID uuid.UUID) bool {
 	}
 
 	// Check if the failure reason indicates coordination stop
-	return strings.Contains(jobResp.Data.Result, "Password found by another agent")
+	return strings.Contains(jobResp.Data.Result, "Password found by another agent") || 
+		   strings.Contains(jobResp.Data.Result, "Password found by another agent - stopping")
 }
 
 func (a *Agent) checkJobStatus(jobID uuid.UUID) (string, error) {

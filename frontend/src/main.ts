@@ -1184,6 +1184,8 @@ class DashboardApplication {
             },
 
             showNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
+                console.log(`🔔 Showing notification: [${type.toUpperCase()}] ${message}`)
+                
                 const notification = {
                     id: Date.now(),
                     message,
@@ -1475,32 +1477,44 @@ class DashboardApplication {
             closeJobModal() {
                 console.log('🔒 Closing job modal...')
                 
-                // Close the modal
-                this.showJobModal = false
-                
-                // Reset step to first step
-                this.currentStep = 1
-                
-                // Reset form to initial state
-                this.jobForm = { 
-                    name: '', 
-                    hash_file_id: '', 
-                    wordlist_id: '', 
-                    agent_ids: [], 
-                    hash_type: '2500', 
-                    attack_mode: '0' 
+                try {
+                    // Close the modal
+                    this.showJobModal = false
+                    
+                    // Reset step to first step
+                    this.currentStep = 1
+                    
+                    // Reset form to initial state
+                    this.jobForm = { 
+                        name: '', 
+                        hash_file_id: '', 
+                        wordlist_id: '', 
+                        agent_ids: [], 
+                        hash_type: '2500', 
+                        attack_mode: '0' 
+                    }
+                    
+                    // Clear command template
+                    this.commandTemplate = 'hashcat command will appear here...'
+                    
+                    // Reset validation errors
+                    this.showValidationErrors = false
+                    
+                    // Clear distribution data
+                    this.agentDistributionData = []
+                    
+                    // Clear loading state
+                    this.isLoading = false
+                    
+                    // Force UI update
+                    setTimeout(() => {
+                        console.log('✅ Job modal closed and form reset successfully')
+                    }, 0)
+                } catch (error) {
+                    console.error('Error closing job modal:', error)
+                    // Force close even if there's an error
+                    this.showJobModal = false
                 }
-                
-                // Clear command template
-                this.commandTemplate = 'hashcat command will appear here...'
-                
-                // Reset validation errors
-                this.showValidationErrors = false
-                
-                // Force UI update
-                setTimeout(() => {
-                    console.log('Job modal closed and form reset successfully')
-                }, 0)
             },
 
             // Step management functions
@@ -1617,23 +1631,28 @@ class DashboardApplication {
                     // Always check job state for success/warning messages
                     const jobState = jobStore.getState()
                     
-                    // Check if jobs were actually created (for distributed jobs, check if we have new jobs)
-                    const jobsCreated = result || (jobState.jobs && jobState.jobs.length > 0)
+                    console.log('📊 Job creation result:', { result, jobState })
                     
-                    if (jobsCreated && !jobState.error?.includes('failed to create any sub-jobs')) {
+                    // Simplified success check - if we get a result or no error, consider it successful
+                    const isSuccess = result !== null || (!jobState.error || jobState.error.includes('Warning:'))
+                    
+                    if (isSuccess) {
                         // Job creation successful (either single or distributed)
                         if (jobState.error && jobState.error.includes('Warning:')) {
                             // Distributed job with some failed agents
                             this.showNotification('Jobs created with warnings - some agents failed', 'warning')
                         } else {
                             // Full success
-                            this.showNotification('Job created successfully! Agents are now running the job.', 'success')
+                            this.showNotification('Distributed jobs created successfully', 'success')
                         }
                         
                         console.log('✅ Job creation successful, closing modal...')
                         
                         // Always close modal and reset form on success
-                        this.closeJobModal()
+                        // Use setTimeout to ensure notification is shown before modal closes
+                        setTimeout(() => {
+                            this.closeJobModal()
+                        }, 100)
                         
                         // Refresh jobs list to show the new job
                         await this.refreshJobsTable()
@@ -1655,6 +1674,15 @@ class DashboardApplication {
                 } finally {
                     this.isLoading = false
                     console.log('🏁 Job creation process finished')
+                    
+                    // Fallback: If modal is still open after 3 seconds, close it anyway
+                    // This ensures the modal doesn't get stuck open
+                    setTimeout(() => {
+                        if (this.showJobModal) {
+                            console.log('⚠️ Modal still open after 3 seconds, forcing close...')
+                            this.closeJobModal()
+                        }
+                    }, 3000)
                 }
             },
             
