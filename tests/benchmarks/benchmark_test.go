@@ -82,6 +82,7 @@ func BenchmarkJobCreation(b *testing.B) {
 	agentRepo := repository.NewAgentRepository(db)
 	jobRepo := repository.NewJobRepository(db)
 	hashFileRepo := repository.NewHashFileRepository(db)
+	wordlistRepo := repository.NewWordlistRepository(db)
 
 	// Create a test hash file first to avoid errors
 	testHashFile := &domain.HashFile{
@@ -98,7 +99,7 @@ func BenchmarkJobCreation(b *testing.B) {
 		b.Fatalf("Failed to create test hash file: %v", err)
 	}
 
-	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 	jobHandler := handler.NewJobHandler(jobUsecase, nil, nil, nil)
 
 	gin.SetMode(gin.TestMode)

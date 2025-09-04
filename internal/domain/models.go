@@ -16,6 +16,7 @@ type Agent struct {
 	Status       string    `json:"status" db:"status"` // online, offline, busy
 	Capabilities string    `json:"capabilities" db:"capabilities"`
 	AgentKey     string    `json:"agent_key" db:"agent_key"`
+	Speed        int64     `json:"speed" db:"speed"` // Hash rate dalam H/s dari benchmark
 	LastSeen     time.Time `json:"last_seen" db:"last_seen"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
@@ -32,10 +33,10 @@ type Job struct {
 	HashFileID     *uuid.UUID  `json:"hash_file_id" db:"hash_file_id"`
 	Wordlist       string      `json:"wordlist" db:"wordlist"`
 	WordlistID     *uuid.UUID  `json:"wordlist_id" db:"wordlist_id"`
-	Rules          string      `json:"rules" db:"rules"`           // Password hasil cracking atau hashcat rules
-	AgentID        *uuid.UUID  `json:"agent_id" db:"agent_id"`     // Single agent (legacy)
-	AgentIDs       []uuid.UUID `json:"agent_ids,omitempty" db:"-"` // Multiple agents (not stored in DB, computed)
-	Skip           *int64      `json:"skip,omitempty" db:"skip"`         // Hashcat --skip parameter for distributed cracking
+	Rules          string      `json:"rules" db:"rules"`                     // Password hasil cracking atau hashcat rules
+	AgentID        *uuid.UUID  `json:"agent_id" db:"agent_id"`               // Single agent (legacy)
+	AgentIDs       []uuid.UUID `json:"agent_ids,omitempty" db:"-"`           // Multiple agents (not stored in DB, computed)
+	Skip           *int64      `json:"skip,omitempty" db:"skip"`             // Hashcat --skip parameter for distributed cracking
 	WordLimit      *int64      `json:"word_limit,omitempty" db:"word_limit"` // Hashcat --limit parameter for distributed cracking
 	Progress       float64     `json:"progress" db:"progress"`
 	Speed          int64       `json:"speed" db:"speed"` // Hash rate dalam H/s
@@ -117,13 +118,14 @@ type AgentPerformance struct {
 
 // DistributedJobRequest represents request to create distributed jobs
 type DistributedJobRequest struct {
-	Name           string `json:"name" binding:"required"`
-	HashType       int    `json:"hash_type" binding:"gte=0"`
-	AttackMode     int    `json:"attack_mode" binding:"gte=0"`
-	HashFileID     string `json:"hash_file_id" binding:"required"`
-	WordlistID     string `json:"wordlist_id" binding:"required"`
-	Rules          string `json:"rules,omitempty"`
-	AutoDistribute bool   `json:"auto_distribute"` // Whether to auto-distribute to all agents
+	Name           string   `json:"name" binding:"required"`
+	HashType       int      `json:"hash_type" binding:"gte=0"`
+	AttackMode     int      `json:"attack_mode" binding:"gte=0"`
+	HashFileID     string   `json:"hash_file_id" binding:"required"`
+	WordlistID     string   `json:"wordlist_id" binding:"required"`
+	Rules          string   `json:"rules,omitempty"`
+	AutoDistribute bool     `json:"auto_distribute"`     // Whether to auto-distribute to all agents
+	AgentIDs       []string `json:"agent_ids,omitempty"` // Specific agents to use (if not auto-distribute)
 }
 
 // WordlistSegment represents a segment of wordlist for distribution

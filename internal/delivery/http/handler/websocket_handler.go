@@ -146,6 +146,22 @@ func (h *WebSocketHub) BroadcastAgentStatus(agentID string, status string, lastS
 	}
 }
 
+func (h *WebSocketHub) BroadcastAgentSpeed(agentID string, speed int64) {
+	message := WebSocketMessage{
+		Type: "agent_speed",
+		Data: map[string]interface{}{
+			"agent_id": agentID,
+			"speed":    speed,
+		},
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	select {
+	case h.broadcast <- message:
+	default:
+		log.Println("Failed to broadcast agent speed - channel full")
+	}
+}
+
 func (c *WebSocketClient) readPump() {
 	defer func() {
 		c.hub.unregister <- c

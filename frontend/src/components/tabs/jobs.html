@@ -40,7 +40,7 @@
         <!-- Mobile Jobs View - Compact -->
     <div class="block sm:hidden space-y-3">
         <template x-for="job in jobs" :key="job.id">
-            <div class="card-modern p-4">
+            <div class="card-modern p-4" x-show="!['paused', 'pending'].includes(job.status)">
                 <div class="flex justify-between items-start mb-3">
                     <div class="flex items-center space-x-3">
                         <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white">
@@ -190,10 +190,10 @@
                                         <div class="text-gray-800 font-mono bg-yellow-50 px-2 py-1 rounded text-xs break-all max-w-32"
                                              x-text="extractPassword(job.result)"></div>
                                     </div>
-                                    <div x-show="job.result && !hasFoundPassword(job.result)" class="text-xs text-gray-600">
+                                    <div x-show="job.result && !hasFoundPassword(job.result) && job.status !== 'paused'" class="text-xs text-gray-600">
                                         <div class="truncate max-w-32" x-text="job.result || 'No result yet'" :title="job.result">Result</div>
                                     </div>
-                                    <div x-show="!job.result" class="text-xs text-gray-400">
+                                    <div x-show="(!job.result && job.status !== 'paused') || job.status === 'paused'" class="text-xs text-gray-400">
                                         <i class="fas fa-clock mr-1"></i>
                                         Pending...
                                     </div>

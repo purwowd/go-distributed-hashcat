@@ -37,6 +37,7 @@ type Agent struct {
 	AgentKey     string               // Add agent key field
 	OriginalPort int                  // Store original port from database
 	ServerIP     string               // Store server IP for validation
+	Status       string               // Current agent status (online, offline, busy)
 }
 
 type LocalFile struct {
@@ -210,6 +211,18 @@ func runAgent(cmd *cobra.Command, args []string) {
 		infrastructure.AgentLogger.Warning("Failed to update agent status to online: %v", err)
 	} else {
 		infrastructure.AgentLogger.Success("Agent status updated to online with port 8081")
+		// Set agent status for real-time monitoring
+		agent.Status = "online"
+	}
+
+	// Run hashcat benchmark to detect and update agent speed
+	// This should run after status is set to online to ensure proper speed update
+	infrastructure.AgentLogger.Info("Running hashcat benchmark to detect agent speed...")
+	if err := agent.runHashcatBenchmark(); err != nil {
+		infrastructure.AgentLogger.Warning("Failed to run hashcat benchmark: %v", err)
+		infrastructure.AgentLogger.Info("Agent will continue without speed information")
+	} else {
+		infrastructure.AgentLogger.Success("Hashcat benchmark completed and speed updated")
 	}
 
 	infrastructure.AgentLogger.Info("Upload Directory: %s", agent.UploadDir)
@@ -221,6 +234,9 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Start real-time speed monitoring in background
+	agent.startRealTimeSpeedMonitoring(ctx)
 
 	go agent.startHeartbeat(ctx)
 	go agent.pollForJobs(ctx)
@@ -235,15 +251,26 @@ func runAgent(cmd *cobra.Command, args []string) {
 	// Update status to offline and restore original port 8080 before shutdown
 	infrastructure.AgentLogger.Info("Updating agent status to offline and restoring port to 8080...")
 	infrastructure.AgentLogger.Info("Preserving capabilities: %s", capabilities)
-	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, "offline"); err != nil {
-		infrastructure.AgentLogger.Warning("Failed to update agent status to offline: %v", err)
+
+	// Set agent status for real-time monitoring
+	agent.Status = "offline"
+
+	// Note: Speed is no longer reset to 0 during shutdown to preserve speed data
+	// Speed will be updated when agent comes back online
+
+	// Update agent data (IP, port, capabilities) first
+	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, ""); err != nil {
+		infrastructure.AgentLogger.Warning("Failed to update agent data: %v", err)
 	} else {
-		infrastructure.AgentLogger.Success("Agent status updated to offline with port 8080 and capabilities preserved")
+		infrastructure.AgentLogger.Success("Agent data updated successfully")
 	}
 
-	// Note: restoreOriginalPort() is no longer needed since we already updated everything above
-	// The single updateAgentInfo call above handles both status and port updates
-	infrastructure.AgentLogger.Info("Skipping restoreOriginalPort() to avoid capabilities override")
+	// Update status to offline without resetting speed using the new endpoint
+	if err := agent.updateAgentStatusOffline(); err != nil {
+		infrastructure.AgentLogger.Warning("Failed to update agent status to offline: %v", err)
+	} else {
+		infrastructure.AgentLogger.Success("Agent status updated to offline (speed preserved)")
+	}
 
 	infrastructure.AgentLogger.Info("Agent exited")
 }
@@ -815,12 +842,12 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			if err := os.MkdirAll(tempDir, 0755); err != nil {
 				return fmt.Errorf("failed to create temp directory: %w", err)
 			}
-			
+
 			wordlistFile := filepath.Join(tempDir, fmt.Sprintf("wordlist-%s.txt", job.ID.String()))
 			if err := os.WriteFile(wordlistFile, []byte(job.Wordlist), 0644); err != nil {
 				return fmt.Errorf("failed to create wordlist file: %w", err)
 			}
-			
+
 			localWordlist = wordlistFile
 			infrastructure.AgentLogger.Info("Created wordlist file from content: %s", localWordlist)
 			infrastructure.AgentLogger.Info("Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
@@ -865,11 +892,11 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 	}
 
 	// Add skip and limit parameters for distributed cracking
-	if job.Skip != nil && *job.Skip > 0 {
+	if job.Skip != nil && *job.Skip >= 0 {
 		args = append(args, "--skip", strconv.FormatInt(*job.Skip, 10))
 		infrastructure.AgentLogger.Info("Using --skip parameter: %d", *job.Skip)
 	}
-	
+
 	if job.WordLimit != nil && *job.WordLimit > 0 {
 		args = append(args, "--limit", strconv.FormatInt(*job.WordLimit, 10))
 		infrastructure.AgentLogger.Info("Using --limit parameter: %d", *job.WordLimit)
@@ -1227,15 +1254,75 @@ func (a *Agent) monitorJobStatus(ctx context.Context, jobID uuid.UUID, cmd *exec
 
 			// Handle status changes
 			switch status {
-			case "paused", "failed", "cancelled":
+			case "paused":
+				infrastructure.AgentLogger.Warning("Job %s status changed to %s, pausing hashcat", jobID, status)
+				if cmd.Process != nil {
+					cmd.Process.Signal(syscall.SIGSTOP)
+				}
+				return
+			case "failed":
 				infrastructure.AgentLogger.Warning("Job %s status changed to %s, terminating hashcat", jobID, status)
 				if cmd.Process != nil {
 					cmd.Process.Kill()
+				}
+
+				// Check if this is a coordination stop (password found by another agent)
+				if a.isCoordinationStop(jobID) {
+					infrastructure.AgentLogger.Info("Job stopped due to password found by another agent - updating progress to 100%%")
+					// Update progress to 100% and send final status
+					a.updateJobProgress(jobID, 100.0, 0)
+					a.failJob(jobID, "Password found by another agent - stopping")
+				}
+				return
+			case "cancelled":
+				infrastructure.AgentLogger.Warning("Job %s status changed to %s, terminating hashcat", jobID, status)
+				if cmd.Process != nil {
+					cmd.Process.Kill()
+				}
+
+				// Check if this is a coordination stop (password found by another agent)
+				if a.isCoordinationStop(jobID) {
+					infrastructure.AgentLogger.Info("Job cancelled due to password found by another agent - updating progress to 100%%")
+					// Update progress to 100% and send final status
+					a.updateJobProgress(jobID, 100.0, 0)
+					a.failJob(jobID, "Password found by another agent - job cancelled")
 				}
 				return
 			}
 		}
 	}
+}
+
+// isCoordinationStop checks if the job was stopped due to password being found by another agent
+func (a *Agent) isCoordinationStop(jobID uuid.UUID) bool {
+	// Get job details to check the failure reason
+	url := fmt.Sprintf("%s/api/v1/jobs/%s", a.ServerURL, jobID.String())
+	resp, err := a.Client.Get(url)
+	if err != nil {
+		infrastructure.AgentLogger.Error("Failed to get job details for coordination check: %v", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	var jobResp struct {
+		Data struct {
+			Result string `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
+		infrastructure.AgentLogger.Error("Failed to decode job response: %v", err)
+		return false
+	}
+
+	// Check if the failure reason indicates coordination stop
+	return strings.Contains(jobResp.Data.Result, "Password found by another agent") ||
+		strings.Contains(jobResp.Data.Result, "Password found by another agent - stopping") ||
+		strings.Contains(jobResp.Data.Result, "Password found by another agent - job cancelled")
 }
 
 func (a *Agent) checkJobStatus(jobID uuid.UUID) (string, error) {
@@ -1583,4 +1670,232 @@ func formatFileSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// updateJobProgress updates job progress and speed
+func (a *Agent) updateJobProgress(jobID uuid.UUID, progress float64, speed int64) {
+	req := struct {
+		Progress float64 `json:"progress"`
+		Speed    int64   `json:"speed"`
+	}{
+		Progress: progress,
+		Speed:    speed,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/jobs/%s/progress", a.ServerURL, jobID.String())
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		infrastructure.AgentLogger.Error("Failed to send job progress update to server: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		infrastructure.AgentLogger.Error("Job progress update failed with status %d: %s", resp.StatusCode, string(body))
+	} else {
+		infrastructure.AgentLogger.Info("Job progress update sent successfully (Progress: %.2f%%, Speed: %d H/s)", progress, speed)
+	}
+}
+
+// runHashcatBenchmark runs hashcat benchmark and updates agent speed
+func (a *Agent) runHashcatBenchmark() error {
+	infrastructure.AgentLogger.Info("Starting hashcat benchmark to detect agent speed...")
+
+	// Check if hashcat is available
+	if _, err := exec.LookPath("hashcat"); err != nil {
+		infrastructure.AgentLogger.Warning("hashcat not found in PATH: %v", err)
+		infrastructure.AgentLogger.Info("Skipping automatic speed detection. You can manually set speed via API:")
+		infrastructure.AgentLogger.Info("PUT /api/v1/agents/%s/speed", a.ID.String())
+		return nil
+	}
+
+	// Run hashcat -b -m 2500 for WPA benchmark
+	cmd := exec.Command("hashcat", "-b", "-m", "2500")
+
+	// Capture stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start hashcat benchmark: %w", err)
+	}
+
+	// Parse output for speed
+	speedRegex := regexp.MustCompile(`Speed\.#\d+\.+:\s*(\d+)\s*H/s`)
+	var detectedSpeed int64
+
+	scanner := func(reader io.Reader) {
+		buf := make([]byte, 1024)
+		for {
+			n, err := reader.Read(buf)
+			if err != nil {
+				return
+			}
+
+			output := string(buf[:n])
+
+			// Parse speed from output
+			if matches := speedRegex.FindStringSubmatch(output); len(matches) > 1 {
+				if speed, err := strconv.ParseInt(matches[1], 10, 64); err == nil {
+					detectedSpeed = speed
+					infrastructure.AgentLogger.Info("Detected hashcat speed: %d H/s", detectedSpeed)
+				}
+			}
+		}
+	}
+
+	go scanner(stdout)
+	go scanner(stderr)
+
+	// Wait for command to complete
+	if err := cmd.Wait(); err != nil {
+		infrastructure.AgentLogger.Warning("Hashcat benchmark completed with error: %v", err)
+		// Continue anyway to use detected speed if available
+	}
+
+	// Update agent speed in database if speed was detected
+	if detectedSpeed > 0 {
+		if err := a.updateAgentSpeed(detectedSpeed); err != nil {
+			infrastructure.AgentLogger.Error("Failed to update agent speed: %v", err)
+			return err
+		}
+		infrastructure.AgentLogger.Success("Agent speed updated successfully: %d H/s", detectedSpeed)
+	} else {
+		infrastructure.AgentLogger.Warning("No speed detected from hashcat benchmark")
+		infrastructure.AgentLogger.Info("You can manually set speed via API:")
+		infrastructure.AgentLogger.Info("PUT /api/v1/agents/%s/speed", a.ID.String())
+	}
+
+	return nil
+}
+
+// updateAgentSpeed updates the agent speed in the database
+// This method is called during benchmark detection and real-time monitoring
+func (a *Agent) updateAgentSpeed(speed int64) error {
+	req := struct {
+		Speed int64 `json:"speed"`
+	}{
+		Speed: speed,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	url := fmt.Sprintf("%s/api/v1/agents/%s/speed", a.ServerURL, a.ID.String())
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send speed update request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("speed update failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// updateAgentStatusOnly updates only the agent status without changing speed
+// This method is used for status consistency during monitoring
+func (a *Agent) updateAgentStatusOnly(status string) error {
+	url := fmt.Sprintf("%s/api/v1/agents/%s/status", a.ServerURL, a.ID.String())
+
+	req := struct {
+		Status string `json:"status"`
+	}{
+		Status: status,
+	}
+
+	jsonData, _ := json.Marshal(req)
+	httpReq, _ := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send status update request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status update failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// updateAgentStatusOffline updates agent status to offline without resetting speed
+// This method is used for normal shutdown scenarios to preserve speed data
+func (a *Agent) updateAgentStatusOffline() error {
+	url := fmt.Sprintf("%s/api/v1/agents/%s/status-offline", a.ServerURL, a.ID.String())
+
+	infrastructure.AgentLogger.Info("Sending status offline request to: %s", url)
+
+	httpReq, _ := http.NewRequest(http.MethodPut, url, nil)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.Client.Do(httpReq)
+	if err != nil {
+		infrastructure.AgentLogger.Error("❌ Network error during status offline update: %v", err)
+		return fmt.Errorf("failed to send status offline request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	infrastructure.AgentLogger.Info("📡 Status offline response status: %d", resp.StatusCode)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		infrastructure.AgentLogger.Error("❌ Status offline update failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("status offline update failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	infrastructure.AgentLogger.Success("✅ Status offline request successful")
+	return nil
+}
+
+// startRealTimeSpeedMonitoring starts a background goroutine for continuous speed monitoring
+// This method runs independently and doesn't interfere with main agent operations
+func (a *Agent) startRealTimeSpeedMonitoring(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second) // Monitor every 30 seconds
+		defer ticker.Stop()
+
+		infrastructure.AgentLogger.Info("🚀 Starting real-time speed monitoring...")
+
+		for {
+			select {
+			case <-ctx.Done():
+				infrastructure.AgentLogger.Info("🛑 Real-time speed monitoring stopped")
+				return
+			case <-ticker.C:
+				// Only monitor if agent is online
+				if a.Status == "online" {
+					// Only update status to ensure consistency, don't update speed continuously
+					// Speed is only updated once during startup/benchmark
+					go func() {
+						if err := a.updateAgentStatusOnly("online"); err != nil {
+							infrastructure.AgentLogger.Warning("Failed to update agent status during monitoring: %v", err)
+						}
+					}()
+				}
+			}
+		}
+	}()
 }

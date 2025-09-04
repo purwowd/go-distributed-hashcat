@@ -99,7 +99,7 @@ class WebSocketService {
         this.reconnectAttempts++
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
         
-        // console.log(`🔄 Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
+        // console.log(`Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
         
         setTimeout(() => {
             if (this.shouldReconnect) {

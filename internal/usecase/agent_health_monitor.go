@@ -48,6 +48,7 @@ type HealthConfig struct {
 
 type WebSocketHub interface {
 	BroadcastAgentStatus(agentID string, status string, lastSeen string)
+	BroadcastAgentSpeed(agentID string, speed int64)
 }
 
 func NewAgentHealthMonitor(
@@ -179,9 +180,9 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 		infrastructure.ServerLogger.Warning("Agent %s (%s) has no IP address, forcing offline status",
 			agent.Name, agent.ID.String()[:8])
 		*offlineCount++
-		// Update status ke offline jika belum
+		// Update status ke offline tanpa reset speed
 		if agent.Status != "offline" {
-			if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "offline"); err != nil {
+			if err := h.agentUsecase.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
 				infrastructure.ServerLogger.Error("Failed to update agent %s status to offline: %v", agent.Name, err)
 			} else if h.wsHub != nil {
 				h.wsHub.BroadcastAgentStatus(agent.ID.String(), "offline", agent.LastSeen.Format(time.RFC3339))
@@ -213,8 +214,8 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 		infrastructure.ServerLogger.Warning("Agent %s (%s) timeout detected - last seen %v ago",
 			agent.Name, agent.ID.String()[:8], timeSinceLastSeen)
 
-		// Update status to offline
-		if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "offline"); err != nil {
+		// Update status to offline without resetting speed
+		if err := h.agentUsecase.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
 			infrastructure.ServerLogger.Error("Failed to update agent %s status to offline: %v", agent.Name, err)
 			return
 		}

@@ -68,7 +68,7 @@ func (suite *APITestSuite) SetupTest() {
 
 	// Initialize use cases
 	agentUsecase := usecase.NewAgentUsecase(agentRepo)
-	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
 	// Initialize enrichment service for integration tests
 	jobEnrichmentService := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)

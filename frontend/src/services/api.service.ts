@@ -293,7 +293,19 @@ class ApiService {
 
     // Distributed Job Creation - for multiple agents with H/s-based distribution
     public async createDistributedJob(jobData: any): Promise<any | null> {
-        const response = await this.post<any>('/api/v1/distributed-jobs/', jobData)
+        // Prepare distributed job request with specific agents
+        const distributedJobData = {
+            name: jobData.name,
+            hash_type: jobData.hash_type,
+            attack_mode: jobData.attack_mode,
+            hash_file_id: jobData.hash_file_id,
+            wordlist_id: jobData.wordlist_id,
+            rules: jobData.rules || '',
+            auto_distribute: false, // Use specific agents, not all online agents
+            agent_ids: jobData.agent_ids || [] // Use the selected agents
+        }
+        
+        const response = await this.post<any>('/api/v1/distributed-jobs/', distributedJobData)
         return response.success ? response.data! : null
     }
 

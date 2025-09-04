@@ -5,6 +5,7 @@ export interface Agent {
     port: number
     status: 'online' | 'offline' | 'busy'
     capabilities: string
+    agent_key: string
     last_seen: string
     created_at: string
     updated_at: string
@@ -51,7 +52,7 @@ export interface Stats {
 export interface Notification {
     show: boolean
     message: string
-    type: 'success' | 'error'
+    type: 'success' | 'error' | 'info' | 'warning'
 }
 
 export interface ApiResponse<T> {

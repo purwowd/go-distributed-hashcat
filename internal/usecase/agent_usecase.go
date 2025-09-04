@@ -27,6 +27,9 @@ type AgentUsecase interface {
 	GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error)
 	GetAllAgents(ctx context.Context) ([]domain.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error
+	UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error
+	UpdateAgentStatusOffline(ctx context.Context, id uuid.UUID) error
 	DeleteAgent(ctx context.Context, id uuid.UUID) error
 	GetAvailableAgent(ctx context.Context) (*domain.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error
@@ -252,6 +255,84 @@ func (u *agentUsecase) UpdateAgentLastSeen(ctx context.Context, id uuid.UUID) er
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
 		log.Printf("Real-time agent last seen broadcast: %s -> %s", agent.Name, agent.LastSeen.Format(time.RFC3339))
+	} else {
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+func (u *agentUsecase) UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error {
+	// Update speed in database
+	if err := u.agentRepo.UpdateSpeed(ctx, id, speed); err != nil {
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the speed update if broadcast fails
+	}
+
+	// Broadcast real-time speed update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentSpeed(agent.ID.String(), agent.Speed)
+		log.Printf("Real-time agent speed broadcast: %s -> %d H/s", agent.Name, speed)
+	} else {
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+// UpdateAgentSpeedWithStatus updates agent speed and status simultaneously with comprehensive logging
+// This method is used for real-time monitoring and comprehensive agent state updates
+func (u *agentUsecase) UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error {
+	// Update speed and status in database using new repository method
+	if err := u.agentRepo.UpdateSpeedWithStatus(ctx, id, speed, status); err != nil {
+		log.Printf("❌ [REAL-TIME UPDATE FAILED] Agent %s: speed=%d H/s, status=%s, error=%v",
+			id.String(), speed, status, err)
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the update if broadcast fails
+	}
+
+	// Broadcast real-time speed and status update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentSpeed(agent.ID.String(), agent.Speed)
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("[REAL-TIME BROADCAST] Agent %s: speed=%d H/s, status=%s",
+			agent.Name, speed, status)
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+func (u *agentUsecase) UpdateAgentStatusOffline(ctx context.Context, id uuid.UUID) error {
+	// Update status in database
+	if err := u.agentRepo.UpdateStatus(ctx, id, "offline"); err != nil {
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the status update if broadcast fails
+	}
+
+	// Broadcast real-time status update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("Real-time agent status broadcast: %s -> %s (offline)", agent.Name, agent.Status)
 	} else {
 		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
 	}

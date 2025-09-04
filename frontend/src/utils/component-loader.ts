@@ -38,7 +38,7 @@ export class ComponentLoader {
 
         if (path) {
             try {
-                // console.log(`🔄 Fetching component ${name} from: ${path}`)
+                // console.log(`Fetching component ${name} from: ${path}`)
                 const response = await fetch(path)
                 // console.log(`📡 Response for ${name}: ${response.status} ${response.statusText}`)
                 

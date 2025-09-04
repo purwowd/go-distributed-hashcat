@@ -94,6 +94,10 @@ func NewRouter(
 			agents.GET("/", agentHandler.GetAllAgents)
 			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
+			agents.PUT("/:id/speed", agentHandler.UpdateAgentSpeed)
+			agents.PUT("/:id/speed-status", agentHandler.UpdateAgentSpeedWithStatus) // Real-time speed and status update
+
+			agents.PUT("/:id/status-offline", agentHandler.UpdateAgentStatusOffline) // Update status to offline without resetting speed
 			agents.PUT("/:id/heartbeat", agentHandler.UpdateAgentHeartbeat)
 			agents.POST("/:id/files", agentHandler.RegisterAgentFiles)
 			agents.GET("/:id/jobs", jobHandler.GetJobsByAgentID)

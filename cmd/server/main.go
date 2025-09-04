@@ -302,7 +302,7 @@ func startServer() {
 
 	// Initialize use cases
 	agentUsecase := usecase.NewAgentUsecase(agentRepo)
-	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 	hashFileUsecase := usecase.NewHashFileUsecase(hashFileRepo, config.Upload.Directory)
 	wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
 	distributedJobUsecase := usecase.NewDistributedJobUsecase(agentRepo, jobRepo, wordlistRepo, hashFileRepo, config.Upload.Directory)
