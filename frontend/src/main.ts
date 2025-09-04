@@ -1425,9 +1425,8 @@ class DashboardApplication {
                 if (result) {
                     this.showNotification('Agent Key Generated Successfully!', 'success')
                     this.createdAgentKey = result
-                    if (result.agent_key) {
-                        this.agentKeyForm.agent_key = result.agent_key
-                    }
+                    // Always update the form with the server-generated key
+                    this.agentKeyForm.agent_key = result.agent_key
                     // Auto-close modal after short delay
                     setTimeout(() => {
                         this.closeAgentKeyModal()

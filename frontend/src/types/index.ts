@@ -5,6 +5,7 @@ export interface Agent {
     port: number
     status: 'online' | 'offline' | 'busy'
     capabilities: string
+    agent_key: string
     last_seen: string
     created_at: string
     updated_at: string
