@@ -51,7 +51,7 @@ export interface Stats {
 export interface Notification {
     show: boolean
     message: string
-    type: 'success' | 'error'
+    type: 'success' | 'error' | 'info' | 'warning'
 }
 
 export interface ApiResponse<T> {

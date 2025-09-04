@@ -362,7 +362,7 @@ func (u *distributedJobUsecase) divideWordlistByPerformance(wordlist *domain.Wor
 
 			// Update indices for next iteration
 			currentIndex = endIndex
-			remainingWords -= (endIndex - currentIndex)
+			remainingWords -= wordsForAgent
 		}
 	}
 
@@ -396,13 +396,13 @@ func (u *distributedJobUsecase) HandleDistributedJobCompletion(ctx context.Conte
 		}
 	}
 
-	// Mark all other running/pending sub-jobs as failed
+	// Mark all other running/pending sub-jobs as cancelled
 	for _, subJob := range subJobs {
 		if subJob.ID != successfulJobID && (subJob.Status == "running" || subJob.Status == "pending") {
-			// Update job status to failed with 100% progress
-			subJob.Status = "failed"
+			// Update job status to cancelled with 100% progress
+			subJob.Status = "cancelled"
 			subJob.Progress = 100
-			subJob.Result = "Password not found - Job cancelled due to success in another agent"
+			subJob.Result = "Password found by another agent - job cancelled"
 			subJob.CompletedAt = &time.Time{}
 
 			if err := u.jobRepo.Update(ctx, &subJob); err != nil {

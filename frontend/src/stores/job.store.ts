@@ -31,6 +31,12 @@ class JobStore {
         this.listeners.forEach(listener => listener())
     }
 
+    private emit(event: string, data: any): void {
+        // Emit custom events for external listeners
+        const customEvent = new CustomEvent(`jobStore:${event}`, { detail: data })
+        window.dispatchEvent(customEvent)
+    }
+
     private setState(updates: Partial<JobState>): void {
         this.state = { ...this.state, ...updates }
         this.notify()
@@ -258,7 +264,7 @@ class JobStore {
         },
 
         // Real-time update methods
-        updateJobProgress: (jobId: string, progress: number, speed?: number, eta?: string, status?: string): void => {
+        updateJobProgress: async (jobId: string, progress: number, speed?: number, eta?: string, status?: string): Promise<void> => {
             const jobs = this.state.jobs
             const jobIndex = jobs.findIndex(job => job.id === jobId)
             if (jobIndex !== -1) {
@@ -273,10 +279,30 @@ class JobStore {
                 const newJobs = [...jobs]
                 newJobs[jobIndex] = updatedJob
                 this.setState({ jobs: newJobs })
+
+                // Auto-fetch job result when progress reaches 100% and job is completed
+                if (progress >= 100 && (status === 'completed' || updatedJob.status === 'completed')) {
+                    try {
+                        // Fetch the complete job data including result
+                        const completeJob = await apiService.getJob(jobId)
+                        if (completeJob && completeJob.result) {
+                            // Update the job with the fetched result
+                            const updatedJobsWithResult = this.state.jobs.map(job => 
+                                job.id === jobId ? { ...job, result: completeJob.result, status: 'completed' as Job['status'] } : job
+                            )
+                            this.setState({ jobs: updatedJobsWithResult })
+                            
+                            // Emit event for notification
+                            this.emit('jobResultFetched', { jobId, result: completeJob.result })
+                        }
+                    } catch (error) {
+                        console.error('Failed to auto-fetch job result:', error)
+                    }
+                }
             }
         },
 
-        updateJobStatus: (jobId: string, status: string, result?: string): void => {
+        updateJobStatus: async (jobId: string, status: string, result?: string): Promise<void> => {
             const jobs = this.state.jobs
             const jobIndex = jobs.findIndex(job => job.id === jobId)
             if (jobIndex !== -1) {
@@ -285,11 +311,31 @@ class JobStore {
                     ...jobs[jobIndex], 
                     status: validStatuses.includes(status) ? status as Job['status'] : jobs[jobIndex].status,
                     result: result || jobs[jobIndex].result,
-                    progress: status === 'completed' ? 100 : jobs[jobIndex].progress
+                    progress: (status === 'completed' || status === 'failed' || status === 'cancelled') ? 100 : jobs[jobIndex].progress
                 }
                 const newJobs = [...jobs]
                 newJobs[jobIndex] = updatedJob
                 this.setState({ jobs: newJobs })
+
+                // Auto-fetch job result when status is completed but no result is provided
+                if (status === 'completed' && !result) {
+                    try {
+                        // Fetch the complete job data including result
+                        const completeJob = await apiService.getJob(jobId)
+                        if (completeJob && completeJob.result) {
+                            // Update the job with the fetched result
+                            const updatedJobsWithResult = this.state.jobs.map(job => 
+                                job.id === jobId ? { ...job, result: completeJob.result } : job
+                            )
+                            this.setState({ jobs: updatedJobsWithResult })
+                            
+                            // Emit event for notification
+                            this.emit('jobResultFetched', { jobId, result: completeJob.result })
+                        }
+                    } catch (error) {
+                        console.error('Failed to auto-fetch job result:', error)
+                    }
+                }
             }
         }
     }

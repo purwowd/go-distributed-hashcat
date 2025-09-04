@@ -909,21 +909,30 @@ class DashboardApplication {
                     this.showNotification(notification.message, notification.type || 'info')
                 })
                 
+                // Listen for auto-fetched job results
+                window.addEventListener('jobStore:jobResultFetched', (event: any) => {
+                    const { jobId, result } = event.detail
+                    const job = this.jobs.find(j => j.id === jobId)
+                    if (job) {
+                        this.showNotification(`🎉 Job "${job.name}" result automatically retrieved!`, 'success')
+                    }
+                })
+                
                 // console.log('🌐 WebSocket subscriptions setup for real-time updates')
             },
 
             // Real-time job updates
-            updateJobProgress(update: any) {
+            async updateJobProgress(update: any) {
                 // Update individual job via store action
                 if (update.job_id) {
-                    jobStore.actions.updateJobProgress(update.job_id, update.progress, update.speed, update.eta, update.status)
+                    await jobStore.actions.updateJobProgress(update.job_id, update.progress, update.speed, update.eta, update.status)
                 }
             },
 
-            updateJobStatus(update: any) {
+            async updateJobStatus(update: any) {
                 // Update individual job via store action
                 if (update.job_id) {
-                    jobStore.actions.updateJobStatus(update.job_id, update.status, update.result)
+                    await jobStore.actions.updateJobStatus(update.job_id, update.status, update.result)
                     
                     // Show notification for important status changes
                     const job = this.jobs.find(j => j.id === update.job_id)

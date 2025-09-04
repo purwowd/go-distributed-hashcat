@@ -396,8 +396,8 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 
 	// Check if password was found
 	if result != "" && result != "Password not found - exhausted" {
-		// Password found! Set status to failed and stop other related running jobs
-		job.Status = "failed"
+		// Password found! Set status to completed and stop other related running jobs
+		job.Status = "completed"
 		job.Result = result
 
 		// Stop other related running jobs
@@ -406,9 +406,10 @@ func (u *jobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result strin
 			fmt.Printf("Warning: failed to stop related running jobs: %v\n", err)
 		}
 	} else {
-		// Password not found - set status to completed
-		job.Status = "completed"
+		// Password not found - set status to failed
+		job.Status = "failed"
 		job.Result = result
+		// Progress is already set to 100 above at line 394
 	}
 
 	if err := u.jobRepo.Update(ctx, job); err != nil {
@@ -428,11 +429,7 @@ func (u *jobUsecase) FailJob(ctx context.Context, id uuid.UUID, reason string) e
 	job.Status = "failed"
 	job.Result = reason
 	job.CompletedAt = &now
-
-	// If the failure reason indicates password not found, set progress to 100%
-	if reason == "Password not found" || strings.Contains(reason, "Password not found") {
-		job.Progress = 100.0
-	}
+	job.Progress = 100.0 // All failed jobs should show 100% progress since they are completed
 
 	if err := u.jobRepo.Update(ctx, job); err != nil {
 		return fmt.Errorf("failed to update job: %w", err)
@@ -558,10 +555,10 @@ func (u *jobUsecase) stopRelatedRunningJobs(ctx context.Context, completedJob *d
 
 	// Stop all related running jobs
 	for _, job := range jobsToStop {
-		// Set progress to 100% and status to failed
+		// Set progress to 100% and status to cancelled
 		job.Progress = 100.0
-		job.Status = "failed"
-		job.Result = "Password found by another agent - stopping"
+		job.Status = "cancelled"
+		job.Result = "Password found by another agent - job cancelled"
 		now := time.Now()
 		job.CompletedAt = &now
 

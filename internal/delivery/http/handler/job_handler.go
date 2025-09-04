@@ -264,7 +264,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 
 	// Log job completion with agent details
 	if req.Result != "" && req.Result != "Password not found - exhausted" {
-		log.Printf("🎯 PASSWORD FOUND: Agent %s found password for job %s (Status: FAILED)", agentName, job.Name)
+		log.Printf("🎯 PASSWORD FOUND: Agent %s found password for job %s (Status: COMPLETED)", agentName, job.Name)
 		log.Printf("   Result: %s", req.Result)
 		log.Printf("   Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
@@ -275,7 +275,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 			log.Printf("COORDINATION: This is a distributed job - stopping other agents...")
 		}
 	} else {
-		log.Printf("✅ COMPLETED: Agent %s completed job %s (no password found)", agentName, job.Name)
+		log.Printf("❌ FAILED: Agent %s failed job %s (no password found)", agentName, job.Name)
 		log.Printf("   🔍 Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
 		log.Printf("   📊 Progress: %.2f%%", job.Progress)

@@ -508,11 +508,32 @@
 
   /* Modern notification styling */
   .notification-modern {
-    @apply bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/30 
+    @apply backdrop-blur-xl rounded-2xl shadow-2xl 
            transform transition-all duration-300 hover:scale-105
            before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/20 
            before:to-transparent before:pointer-events-none before:rounded-2xl;
     box-shadow: var(--shadow-elevation);
+  }
+
+  /* Force notification colors with higher specificity */
+  .notification-modern.border-green-400 {
+    border-left-color: #4ade80 !important;
+    background-color: #f0fdf4 !important;
+  }
+  
+  .notification-modern.border-red-400 {
+    border-left-color: #f87171 !important;
+    background-color: rgba(254, 242, 242, 0.9) !important;
+  }
+  
+  .notification-modern.border-yellow-400 {
+    border-left-color: #facc15 !important;
+    background-color: rgba(254, 252, 232, 0.9) !important;
+  }
+  
+  .notification-modern.border-blue-400 {
+    border-left-color: #60a5fa !important;
+    background-color: rgba(239, 246, 255, 0.9) !important;
   }
   
   /* Enhanced empty state styling */
