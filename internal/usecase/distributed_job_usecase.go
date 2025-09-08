@@ -108,21 +108,28 @@ func (u *distributedJobUsecase) CreateDistributedJobs(ctx context.Context, req *
 	// Divide wordlist based on agent performance
 	wordlistSegments := u.divideWordlistByPerformance(wordlist, agentPerformances)
 
-	// Create master job record
-	masterJobID := uuid.New()
-	masterJob := &domain.Job{
-		ID:         masterJobID,
-		Name:       fmt.Sprintf("%s (Master)", req.Name),
-		Status:     "distributed",
-		HashType:   req.HashType,
-		AttackMode: req.AttackMode,
-		HashFile:   hashFile.OrigName,
-		HashFileID: &hashFileID,
-		Wordlist:   wordlist.OrigName,
-		WordlistID: &wordlistID,
-		Rules:      req.Rules,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+	// Create master job record (optional - only for coordination tracking)
+	var masterJobID uuid.UUID
+	var masterJob *domain.Job
+
+	// Only create master job if explicitly requested or for complex coordination
+	// For simple distributed jobs, we skip the master job to avoid clutter
+	if req.CreateMasterJob {
+		masterJobID = uuid.New()
+		masterJob = &domain.Job{
+			ID:         masterJobID,
+			Name:       fmt.Sprintf("%s (Master)", req.Name),
+			Status:     "distributed",
+			HashType:   req.HashType,
+			AttackMode: req.AttackMode,
+			HashFile:   hashFile.OrigName,
+			HashFileID: &hashFileID,
+			Wordlist:   wordlist.OrigName,
+			WordlistID: &wordlistID,
+			Rules:      req.Rules,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		}
 	}
 
 	// Create sub-jobs for each agent using skip/limit ranges
@@ -180,9 +187,11 @@ func (u *distributedJobUsecase) CreateDistributedJobs(ctx context.Context, req *
 		return nil, fmt.Errorf("failed to create any sub-jobs - all agents failed")
 	}
 
-	// Save master job
-	if err := u.jobRepo.Create(ctx, masterJob); err != nil {
-		return nil, fmt.Errorf("failed to create master job: %w", err)
+	// Save master job only if it was created
+	if masterJob != nil {
+		if err := u.jobRepo.Create(ctx, masterJob); err != nil {
+			return nil, fmt.Errorf("failed to create master job: %w", err)
+		}
 	}
 
 	// Calculate total distributed words
@@ -197,8 +206,14 @@ func (u *distributedJobUsecase) CreateDistributedJobs(ctx context.Context, req *
 		message += fmt.Sprintf(" (Warning: failed to create jobs for agents: %s)", strings.Join(failedAgents, ", "))
 	}
 
+	// Only return master job ID if master job was actually created
+	var resultMasterJobID uuid.UUID
+	if masterJob != nil {
+		resultMasterJobID = masterJobID
+	}
+
 	return &domain.DistributedJobResult{
-		MasterJobID:      masterJobID,
+		MasterJobID:      resultMasterJobID,
 		SubJobs:          subJobs,
 		AgentAssignments: agentAssignments,
 		TotalWords:       *wordlist.WordCount,

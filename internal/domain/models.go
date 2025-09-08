@@ -118,14 +118,15 @@ type AgentPerformance struct {
 
 // DistributedJobRequest represents request to create distributed jobs
 type DistributedJobRequest struct {
-	Name           string   `json:"name" binding:"required"`
-	HashType       int      `json:"hash_type" binding:"gte=0"`
-	AttackMode     int      `json:"attack_mode" binding:"gte=0"`
-	HashFileID     string   `json:"hash_file_id" binding:"required"`
-	WordlistID     string   `json:"wordlist_id" binding:"required"`
-	Rules          string   `json:"rules,omitempty"`
-	AutoDistribute bool     `json:"auto_distribute"`     // Whether to auto-distribute to all agents
-	AgentIDs       []string `json:"agent_ids,omitempty"` // Specific agents to use (if not auto-distribute)
+	Name            string   `json:"name" binding:"required"`
+	HashType        int      `json:"hash_type" binding:"gte=0"`
+	AttackMode      int      `json:"attack_mode" binding:"gte=0"`
+	HashFileID      string   `json:"hash_file_id" binding:"required"`
+	WordlistID      string   `json:"wordlist_id" binding:"required"`
+	Rules           string   `json:"rules,omitempty"`
+	AutoDistribute  bool     `json:"auto_distribute"`     // Whether to auto-distribute to all agents
+	AgentIDs        []string `json:"agent_ids,omitempty"` // Specific agents to use (if not auto-distribute)
+	CreateMasterJob bool     `json:"create_master_job"`   // Whether to create a master job for coordination
 }
 
 // WordlistSegment represents a segment of wordlist for distribution
