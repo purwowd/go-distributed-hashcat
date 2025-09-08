@@ -302,7 +302,8 @@ class ApiService {
             wordlist_id: jobData.wordlist_id,
             rules: jobData.rules || '',
             auto_distribute: false, // Use specific agents, not all online agents
-            agent_ids: jobData.agent_ids || [] // Use the selected agents
+            agent_ids: jobData.agent_ids || [], // Use the selected agents
+            create_master_job: false // Don't create master job to avoid clutter
         }
         
         const response = await this.post<any>('/api/v1/distributed-jobs/', distributedJobData)

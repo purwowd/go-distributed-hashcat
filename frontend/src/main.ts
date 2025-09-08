@@ -476,8 +476,14 @@ class DashboardApplication {
                 return this.reactiveAgentKeys || []
             },
             get jobs() {
-                // Filter out master jobs (distributed coordinators) from UI display
-                return (this.reactiveJobs || []).filter(job => job.status !== 'distributed')
+                // Filter out master jobs (distributed coordinators) and invalid jobs from UI display
+                return (this.reactiveJobs || []).filter(job => 
+                    job.status !== 'distributed' && 
+                    job.name && 
+                    job.name.trim() !== '' && 
+                    job.name !== '-' &&
+                    job.name !== 'null'
+                )
             },
             get hashFiles() {
                 return this.reactiveHashFiles || []

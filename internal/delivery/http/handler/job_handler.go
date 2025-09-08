@@ -99,6 +99,10 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 	// Normalize response to ensure all fields are populated with sensible defaults
 	normalized := make([]gin.H, 0, len(enrichedJobs))
 	for _, ej := range enrichedJobs {
+		// Skip jobs with invalid or empty names
+		if ej.Name == "" || ej.Name == "-" || ej.Name == "null" || strings.TrimSpace(ej.Name) == "" {
+			continue
+		}
 		var (
 			hashFileID     string
 			wordlistID     string
