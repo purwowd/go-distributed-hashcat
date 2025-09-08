@@ -15,7 +15,32 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		// Allow connections from localhost in development
 		origin := r.Header.Get("Origin")
-		return origin == "http://localhost:3000" || origin == "http://localhost:5173" || origin == ""
+		host := r.Host
+		
+		// Allow connections from various localhost origins
+		allowedOrigins := []string{
+			"http://localhost:3000",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:5173",
+			"http://[::1]:3000",
+			"http://[::1]:5173",
+			"", // Empty origin for direct connections
+		}
+		
+		// Check if origin is in allowed list
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+		
+		// Allow connections from same host (for direct access)
+		if origin == "" && (host == "localhost:1337" || host == "127.0.0.1:1337" || host == "[::1]:1337") {
+			return true
+		}
+		
+		return false
 	},
 }
 

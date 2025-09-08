@@ -4,7 +4,9 @@
 -- Date: 2025-09-02
 
 -- +migrate Up
-ALTER TABLE agents ADD COLUMN speed INTEGER DEFAULT 0;
+-- Note: speed column already exists in current schema, this migration is a no-op
+-- ALTER TABLE agents ADD COLUMN speed INTEGER DEFAULT 0;
 
 -- +migrate Down
-ALTER TABLE agents DROP COLUMN speed;
+-- Note: speed column should not be dropped as it's part of the base schema
+-- ALTER TABLE agents DROP COLUMN speed;
