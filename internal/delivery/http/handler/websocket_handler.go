@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,12 +18,6 @@ var upgrader = websocket.Upgrader{
 		origin := r.Header.Get("Origin")
 		host := r.Host
 		
-		// Get server host from environment variable
-		serverHost := os.Getenv("HASHCAT_SERVER_HOST")
-		if serverHost == "" {
-			serverHost = "localhost"
-		}
-		
 		// Allow connections from various localhost origins
 		allowedOrigins := []string{
 			"http://localhost:3000",
@@ -36,12 +29,9 @@ var upgrader = websocket.Upgrader{
 			"", // Empty origin for direct connections
 		}
 		
-		// Add server host to allowed origins if it's not localhost
-		if serverHost != "localhost" && serverHost != "127.0.0.1" && serverHost != "0.0.0.0" {
-			allowedOrigins = append(allowedOrigins, 
-				"http://"+serverHost+":3000",
-				"http://"+serverHost+":5173",
-			)
+		// Add frontend URL from environment variable
+		if frontendURL := os.Getenv("HASHCAT_FRONTEND_URL"); frontendURL != "" {
+			allowedOrigins = append(allowedOrigins, frontendURL)
 		}
 		
 		// Check if origin is in allowed list
@@ -52,13 +42,33 @@ var upgrader = websocket.Upgrader{
 		}
 		
 		// Allow connections from same host (for direct access)
-		if origin == "" && (host == "localhost:1337" || host == "127.0.0.1:1337" || host == "[::1]:1337" || strings.HasPrefix(host, serverHost+":1337")) {
-			return true
+		serverHost := os.Getenv("HASHCAT_SERVER_HOST")
+		serverPort := os.Getenv("HASHCAT_SERVER_PORT")
+		if serverHost == "" {
+			serverHost = "0.0.0.0"
+		}
+		if serverPort == "" {
+			serverPort = "1337"
+		}
+		
+		allowedHosts := []string{
+			"localhost:1337",
+			"127.0.0.1:1337",
+			"[::1]:1337",
+			serverHost + ":" + serverPort,
+		}
+		
+		if origin == "" {
+			for _, allowedHost := range allowedHosts {
+				if host == allowedHost {
+					return true
+				}
+			}
 		}
 		
 		// In development mode, be more permissive with CORS
 		// Allow any origin that starts with http:// (for development only)
-		if origin != "" && (strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://")) {
+		if origin != "" && (origin[:7] == "http://" || origin[:8] == "https://") {
 			return true
 		}
 		
