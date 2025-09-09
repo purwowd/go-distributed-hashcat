@@ -98,6 +98,10 @@ curl -X POST -H "Content-Type: application/json" \
 | [`docs/04-architecture.md`](docs/04-architecture.md) | System design | 15 min |
 | [`docs/05-database-migrations.md`](docs/05-database-migrations.md) | Database schema | 20 min |
 | [`docs/06-wireguard-deployment.md`](docs/06-wireguard-deployment.md) | Secure VPN setup | 45 min |
+| [`docs/07-agent-speed-feature.md`](docs/07-agent-speed-feature.md) | Agent speed detection | 15 min |
+| [`docs/09-realtime-speed-monitoring.md`](docs/09-realtime-speed-monitoring.md) | Real-time monitoring | 20 min |
+| [`docs/11-speed-based-distribution.md`](docs/11-speed-based-distribution.md) | Smart job distribution | 15 min |
+| [`docs/ENVIRONMENT_SETUP.md`](docs/ENVIRONMENT_SETUP.md) | Environment configuration | 10 min |
 | [`docs/99-performance.md`](docs/99-performance.md) | Benchmarks | 10 min |
 
 ## 🧪 Testing
