@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,7 +17,52 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		// Allow connections from localhost in development
 		origin := r.Header.Get("Origin")
-		return origin == "http://localhost:3000" || origin == "http://localhost:5173" || origin == ""
+		host := r.Host
+		
+		// Get server host from environment variable
+		serverHost := os.Getenv("HASHCAT_SERVER_HOST")
+		if serverHost == "" {
+			serverHost = "localhost"
+		}
+		
+		// Allow connections from various localhost origins
+		allowedOrigins := []string{
+			"http://localhost:3000",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:5173",
+			"http://[::1]:3000",
+			"http://[::1]:5173",
+			"", // Empty origin for direct connections
+		}
+		
+		// Add server host to allowed origins if it's not localhost
+		if serverHost != "localhost" && serverHost != "127.0.0.1" && serverHost != "0.0.0.0" {
+			allowedOrigins = append(allowedOrigins, 
+				"http://"+serverHost+":3000",
+				"http://"+serverHost+":5173",
+			)
+		}
+		
+		// Check if origin is in allowed list
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+		
+		// Allow connections from same host (for direct access)
+		if origin == "" && (host == "localhost:1337" || host == "127.0.0.1:1337" || host == "[::1]:1337" || strings.HasPrefix(host, serverHost+":1337")) {
+			return true
+		}
+		
+		// In development mode, be more permissive with CORS
+		// Allow any origin that starts with http:// (for development only)
+		if origin != "" && (strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://")) {
+			return true
+		}
+		
+		return false
 	},
 }
 
