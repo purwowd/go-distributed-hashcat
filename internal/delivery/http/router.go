@@ -28,7 +28,14 @@ func NewRouter(
 	// CORS middleware (must be first to handle preflight requests)
 	// In development, allow frontend origin specifically
 	if env := os.Getenv("GIN_MODE"); env == "debug" {
-		router.Use(middleware.CORSWithSpecificOrigin("http://localhost:3000"))
+		// Get server host from environment variable for CORS
+		serverHost := os.Getenv("HASHCAT_SERVER_HOST")
+		if serverHost == "" {
+			serverHost = "localhost"
+		}
+		// Allow both localhost and server host for development
+		allowedOrigin := "http://" + serverHost + ":3000"
+		router.Use(middleware.CORSWithSpecificOrigin(allowedOrigin))
 	} else {
 		router.Use(middleware.CORS())
 	}
