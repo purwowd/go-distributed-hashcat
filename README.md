@@ -18,6 +18,42 @@
 
 ## ⚡ Quick Start
 
+### 🏗️ Build from Source (Local Development)
+
+```bash
+# Clone repository
+git clone https://github.com/purwowd/go-distributed-hashcat.git
+cd go-distributed-hashcat
+
+# Build server and agent binaries
+go build -o server cmd/server/main.go
+go build -o agent cmd/agent/main.go
+
+# Or build to bin/ directory
+go build -o bin/server cmd/server/main.go
+go build -o bin/agent cmd/agent/main.go
+
+# Create symlinks (optional)
+ln -sf bin/server server
+ln -sf bin/agent agent
+```
+
+### 🚀 Run Locally
+
+```bash
+# Start server
+./server
+# or
+./bin/server
+
+# In another terminal, start agent
+./agent --server http://localhost:1337 --agent-key YOUR_AGENT_KEY
+# or  
+./bin/agent --server http://localhost:1337 --agent-key YOUR_AGENT_KEY
+```
+
+### 📦 Production Build (Ubuntu)
+
 ```bash
 # Install dependencies (Ubuntu)
 sudo apt update && sudo apt install git nodejs npm golang-go hashcat sqlite3 -y
