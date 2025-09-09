@@ -102,3 +102,7 @@ cpu.prof
 hot-reload.*
 
 distribute.txt
+
+# Binary symlinks
+agent
+server
