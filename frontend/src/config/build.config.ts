@@ -43,16 +43,16 @@ export const configs: Record<string, BuildConfig> = {
             { name: 'loading', path: '/components/ui/loading.html', preload: true }
         ],
         features: {
-            hotReload: true,
-            lazyLoading: false,
-            componentCaching: true,
-            performanceMonitoring: true
+            hotReload: import.meta.env.VITE_ENABLE_HOT_RELOAD === 'true',
+            lazyLoading: import.meta.env.VITE_ENABLE_LAZY_LOADING === 'true',
+            componentCaching: import.meta.env.VITE_ENABLE_COMPONENT_CACHING === 'true',
+            performanceMonitoring: import.meta.env.VITE_ENABLE_PERFORMANCE_MONITORING === 'true'
         },
         optimization: {
-            bundleSplitting: false,
-            treeshaking: false,
-            minification: false,
-            compression: false
+            bundleSplitting: import.meta.env.VITE_ENABLE_BUNDLE_SPLITTING === 'true',
+            treeshaking: import.meta.env.VITE_ENABLE_TREESHAKING === 'true',
+            minification: import.meta.env.VITE_ENABLE_MINIFICATION === 'true',
+            compression: import.meta.env.VITE_ENABLE_COMPRESSION === 'true'
         }
     },
     production: {
@@ -71,16 +71,16 @@ export const configs: Record<string, BuildConfig> = {
             { name: 'loading', path: '/components/ui/loading.html', preload: true }
         ],
         features: {
-            hotReload: false,
-            lazyLoading: true,
-            componentCaching: true,
-            performanceMonitoring: false
+            hotReload: import.meta.env.VITE_ENABLE_HOT_RELOAD === 'true',
+            lazyLoading: import.meta.env.VITE_ENABLE_LAZY_LOADING === 'true',
+            componentCaching: import.meta.env.VITE_ENABLE_COMPONENT_CACHING === 'true',
+            performanceMonitoring: import.meta.env.VITE_ENABLE_PERFORMANCE_MONITORING === 'true'
         },
         optimization: {
-            bundleSplitting: true,
-            treeshaking: true,
-            minification: true,
-            compression: true
+            bundleSplitting: import.meta.env.VITE_ENABLE_BUNDLE_SPLITTING === 'true',
+            treeshaking: import.meta.env.VITE_ENABLE_TREESHAKING === 'true',
+            minification: import.meta.env.VITE_ENABLE_MINIFICATION === 'true',
+            compression: import.meta.env.VITE_ENABLE_COMPRESSION === 'true'
         }
     }
 }

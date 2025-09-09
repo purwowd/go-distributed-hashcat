@@ -65,7 +65,7 @@ func main() {
 		Run:   runAgent,
 	}
 
-	rootCmd.Flags().String("server", "", "Server URL")
+	rootCmd.Flags().String("server", "http://localhost:1337", "Server URL")
 	rootCmd.Flags().String("name", "", "Agent name")
 	rootCmd.Flags().String("ip", "", "Agent IP address")
 	rootCmd.Flags().Int("port", 8081, "Agent port")
@@ -81,15 +81,7 @@ func main() {
 }
 
 func runAgent(cmd *cobra.Command, args []string) {
-	// Load environment variables
-	viper.AutomaticEnv()
-	viper.BindEnv("server", "HASHCAT_SERVER_URL", "SERVER_URL")
-	
 	serverURL := viper.GetString("server")
-	if serverURL == "" {
-		serverURL = "http://localhost:1337" // Default fallback
-	}
-	
 	name := viper.GetString("name")
 	ip := viper.GetString("ip")
 	port := viper.GetInt("port")

@@ -88,8 +88,8 @@ export default defineConfig(({ command, mode }) => {
     root: path.resolve(__dirname, 'src'),
     // Development server configuration
     server: {
-      port: 3000,
-      host: true, // Allow external connections
+      port: parseInt(env.VITE_DEV_PORT || '3000'),
+      host: env.VITE_DEV_HOST === 'true', // Allow external connections
       cors: true,
       proxy: {
         // Proxy API calls to backend during development
@@ -146,8 +146,8 @@ export default defineConfig(({ command, mode }) => {
     
     // Preview server (for production builds)
     preview: {
-      port: 3000,
-      host: true,
+      port: parseInt(env.VITE_DEV_PORT || '3000'),
+      host: env.VITE_DEV_HOST === 'true',
       cors: true
     },
     
