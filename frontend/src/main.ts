@@ -5,9 +5,11 @@ import { router } from './utils/router'
 
 // Import all services and stores
 import { apiService } from './services/api.service'
+import { authService } from './services/auth.service'
 import { webSocketService } from './services/websocket.service'
 // import './services/websocket-mock.service' // Auto-start mock in development (DISABLED)
 import { agentStore } from './stores/agent.store'
+import { authStore } from './stores/auth.store'
 import { jobStore } from './stores/job.store'
 import { fileStore } from './stores/file.store'
 import { wordlistStore } from './stores/wordlist.store'
@@ -185,6 +187,8 @@ class DashboardApplication {
             const componentMap = [
                 { name: 'layout/navigation', path: '/components/layout/navigation.html' },
                 { name: 'ui/breadcrumb', path: '/components/ui/breadcrumb.html' },
+                { name: 'auth/login', path: '/components/auth/login.html' },
+                { name: 'auth/logout', path: '/components/auth/logout.html' },
                 { name: 'tabs/overview', path: '/components/tabs/overview.html' },
                 { name: 'tabs/agents', path: '/components/tabs/agents.html' },
                 { name: 'tabs/agent-keys', path: '/components/tabs/agent-keys.html' },
@@ -237,63 +241,84 @@ class DashboardApplication {
             console.log('📦 Found existing main container')
         }
 
-        // Load navigation
-        // console.log('🧭 Loading navigation component...')
-        const navigation = await componentLoader.loadComponent('layout/navigation')
-        // console.log('✅ Navigation loaded:', navigation.length, 'characters')
-        
-        const navigationContainer = document.createElement('div')
-        navigationContainer.innerHTML = navigation
-        
-        // Find the actual nav element (skip script tags)
-        const navElement = navigationContainer.querySelector('nav')
-        if (navElement) {
-            document.body.insertBefore(navElement, mainContainer)
-            // console.log('✅ Navigation injected into DOM')
-        } else {
-            console.error('❌ Failed to find nav element in navigation component')
-            // console.log('📝 Navigation content preview:', navigation.substring(0, 200) + '...')
-        }
-
-        // Load breadcrumb component
-        // console.log('🗂️ Loading breadcrumb component...')
-        const breadcrumb = await componentLoader.loadComponent('ui/breadcrumb')
-        // console.log('✅ Breadcrumb loaded:', breadcrumb.length, 'characters')
-        
-        const breadcrumbContainer = document.createElement('div')
-        breadcrumbContainer.innerHTML = breadcrumb
-        
-        // Find the actual nav element for breadcrumb
-        const breadcrumbElement = breadcrumbContainer.querySelector('nav')
-        if (breadcrumbElement) {
-            document.body.insertBefore(breadcrumbElement, mainContainer)
-            // console.log('✅ Breadcrumb injected into DOM')
-        } else {
-            console.error('❌ Failed to find nav element in breadcrumb component')
-        }
-
-        // Load tab content
-        const tabComponents = [
-            'tabs/overview',
-            'tabs/agents',
-            'tabs/agent-keys',
-            'tabs/jobs',
-            'tabs/files',
-            'tabs/wordlists',
-            'tabs/docs'
-        ]
-
-        for (const component of tabComponents) {
-            const html = await componentLoader.loadComponent(component)
-            const container = document.createElement('div')
-            container.innerHTML = html
-            // Find actual content element (skip script tags)
-            const element = container.querySelector('section, div, article') || container.firstElementChild
-            if (element && element.tagName !== 'SCRIPT') {
-                mainContainer.appendChild(element)
-                // console.log(`✅ Injected ${component} component`)
+        // Load navigation (only if not on login page)
+        const currentRoute = router.getCurrentRoute()
+        if (currentRoute !== 'login') {
+            // console.log('🧭 Loading navigation component...')
+            const navigation = await componentLoader.loadComponent('layout/navigation')
+            // console.log('✅ Navigation loaded:', navigation.length, 'characters')
+            
+            const navigationContainer = document.createElement('div')
+            navigationContainer.innerHTML = navigation
+            
+            // Find the actual nav element (skip script tags)
+            const navElement = navigationContainer.querySelector('nav')
+            if (navElement) {
+                document.body.insertBefore(navElement, mainContainer)
+                // console.log('✅ Navigation injected into DOM')
             } else {
-                console.warn(`❌ Failed to inject ${component} component`)
+                console.error('❌ Failed to find nav element in navigation component')
+                // console.log('📝 Navigation content preview:', navigation.substring(0, 200) + '...')
+            }
+
+            // Load breadcrumb component (only if not on login page)
+            // console.log('🗂️ Loading breadcrumb component...')
+            const breadcrumb = await componentLoader.loadComponent('ui/breadcrumb')
+            // console.log('✅ Breadcrumb loaded:', breadcrumb.length, 'characters')
+            
+            const breadcrumbContainer = document.createElement('div')
+            breadcrumbContainer.innerHTML = breadcrumb
+            
+            // Find the actual nav element for breadcrumb
+            const breadcrumbElement = breadcrumbContainer.querySelector('nav')
+            if (breadcrumbElement) {
+                document.body.insertBefore(breadcrumbElement, mainContainer)
+                // console.log('✅ Breadcrumb injected into DOM')
+            } else {
+                console.error('❌ Failed to find nav element in breadcrumb component')
+            }
+        }
+
+        // Load content based on current route
+        if (currentRoute === 'login') {
+            // Load login page
+            const loginHtml = await componentLoader.loadComponent('auth/login')
+            const loginContainer = document.createElement('div')
+            loginContainer.innerHTML = loginHtml
+            // Find actual content element (skip script tags)
+            const loginElement = loginContainer.querySelector('div') || loginContainer.firstElementChild
+            if (loginElement && loginElement.tagName !== 'SCRIPT') {
+                // Add x-data directive to connect with Alpine.js
+                loginElement.setAttribute('x-data', 'dashboardApp')
+                mainContainer.appendChild(loginElement)
+                // console.log('✅ Injected login component with x-data')
+            } else {
+                console.warn('❌ Failed to inject login component')
+            }
+        } else {
+            // Load tab content for other routes
+            const tabComponents = [
+                'tabs/overview',
+                'tabs/agents',
+                'tabs/agent-keys',
+                'tabs/jobs',
+                'tabs/files',
+                'tabs/wordlists',
+                'tabs/docs'
+            ]
+
+            for (const component of tabComponents) {
+                const html = await componentLoader.loadComponent(component)
+                const container = document.createElement('div')
+                container.innerHTML = html
+                // Find actual content element (skip script tags)
+                const element = container.querySelector('section, div, article') || container.firstElementChild
+                if (element && element.tagName !== 'SCRIPT') {
+                    mainContainer.appendChild(element)
+                    // console.log(`✅ Injected ${component} component`)
+                } else {
+                    console.warn(`❌ Failed to inject ${component} component`)
+                }
             }
         }
 
@@ -397,6 +422,12 @@ class DashboardApplication {
             isAlpineInitialized: false,
             notifications: [] as any[],
             
+            // Authentication state
+            isAuthenticated: authStore.isAuthenticated(),
+            user: authStore.getUser(),
+            authError: authStore.getError(),
+            authLoading: authStore.isLoading(),
+            
             // Modal states
             showAgentModal: false,
             showAgentKeyModal: false,
@@ -422,6 +453,10 @@ class DashboardApplication {
             distributedJobForm: { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', auto_distribute: true },
             fileForm: { file: null },
             wordlistForm: { file: null },
+            loginForm: { username: '', password: '' },
+            showPassword: false,
+            usernameError: null as string | null,
+            passwordError: null as string | null,
             showValidationErrors: false,
             agentDistributionData: [] as Array<{agent: any, wordLimit: number, percentage: number, speed: number}>,
             
@@ -672,10 +707,17 @@ class DashboardApplication {
                 // Setup router listener
                 router.subscribe((route: string) => {
                     this.currentTab = route
+                    // Only clear login form when navigating away from login page
+                    if (this.currentTab !== 'login' && route !== 'login') {
+                        this.clearLoginForm()
+                    }
                 })
                 
                 // Setup store subscriptions for reactivity
                 this.setupStoreSubscriptions()
+                
+                // Don't clear login form if currently on login page to preserve user input
+                // Only clear on successful login or when navigating away
                 
                 // Setup WebSocket for real-time updates
                 this.setupWebSocketSubscriptions()
@@ -702,6 +744,17 @@ class DashboardApplication {
 
             // NEW: Setup store subscriptions for reactive updates
             setupStoreSubscriptions() {
+                // Subscribe to auth store changes
+                authStore.subscribe((state) => {
+                    this.isAuthenticated = state.isAuthenticated
+                    this.user = state.user
+                    this.authError = state.error
+                    this.authLoading = state.isLoading
+                    
+                    // Refresh router when auth state changes
+                    router.refresh()
+                })
+                
                 // Subscribe to agent store changes
                 agentStore.subscribe(() => {
                     const state = agentStore.getState()
@@ -763,7 +816,124 @@ class DashboardApplication {
                 
                 // console.log('📡 Store subscriptions setup for reactive UI updates')
             },
-
+            
+            // Authentication methods
+            clearLoginForm() {
+                this.loginForm = { username: '', password: '' }
+                this.usernameError = null
+                this.passwordError = null
+                this.authError = null
+                this.showPassword = false
+            },
+            
+            // Clear only errors, keep form data
+            clearLoginErrors() {
+                this.usernameError = null
+                this.passwordError = null
+                this.authError = null
+            },
+            
+            async handleLogin() {
+                // Prevent multiple clicks
+                if (this.isLoading) {
+                    console.log('🛑 Login already in progress, ignoring click')
+                    return
+                }
+                
+                console.log('🔍 handleLogin called')
+                console.log('📝 Username:', this.loginForm.username)
+                console.log('🔐 Password:', this.loginForm.password)
+                
+                // Clear previous errors first, but keep form data
+                this.clearLoginErrors()
+                
+                // Validate fields - only show errors when button is clicked
+                let hasErrors = false
+                
+                // Check username/email
+                if (!this.loginForm.username || this.loginForm.username.trim() === '') {
+                    console.log('❌ Username validation failed')
+                    this.usernameError = 'Username or email is required'
+                    hasErrors = true
+                }
+                
+                // Check password
+                if (!this.loginForm.password || this.loginForm.password.trim() === '') {
+                    console.log('❌ Password validation failed')
+                    this.passwordError = 'Password is required'
+                    hasErrors = true
+                }
+                
+                // If there are validation errors, don't proceed with login
+                if (hasErrors) {
+                    console.log('🛑 Form validation failed, stopping login process')
+                    return
+                }
+                
+                console.log('🔍 Has errors:', hasErrors)
+                console.log('📝 Username error:', this.usernameError)
+                console.log('🔐 Password error:', this.passwordError)
+                
+                // If validation passes, proceed with login
+                try {
+                    const success = await authStore.login({
+                        username: this.loginForm.username.trim(),
+                        password: this.loginForm.password
+                    })
+                    
+                    if (success) {
+                        // Clear form and navigate on successful login
+                        this.clearLoginForm()
+                        router.navigate('overview')
+                    } else {
+                        // Show specific error messages based on the error type
+                        // Don't clear form data when login fails
+                        const error = authStore.getError()
+                        if (error && error.includes('Invalid username or password')) {
+                            // Check if username exists to provide more specific error
+                            try {
+                                const usernameCheck = await authService.checkUsernameExists(this.loginForm.username.trim())
+                                if (usernameCheck.success) {
+                                    if (!usernameCheck.exists) {
+                                        this.usernameError = 'Username or email not found'
+                                    } else {
+                                        this.passwordError = 'Incorrect password'
+                                    }
+                                } else {
+                                    this.authError = 'Invalid username or password'
+                                }
+                            } catch (checkError) {
+                                this.authError = 'Invalid username or password'
+                            }
+                        } else {
+                            this.authError = error || 'Login failed. Please try again.'
+                        }
+                    }
+                } catch (error) {
+                    // Handle network or other errors
+                    this.authError = 'Login failed. Please check your connection and try again.'
+                }
+            },
+            
+            // Clear error methods (only used when user types)
+            clearUsernameError() {
+                this.usernameError = null
+            },
+            
+            clearPasswordError() {
+                this.passwordError = null
+            },
+            
+            async handleLogout() {
+                await authStore.logout()
+                router.navigate('login')
+            },
+            
+            clearAuthError() {
+                this.authError = null
+                authStore.clearError()
+            },
+            
             // Server-side table helpers
             async refreshAgentsTable() {
                 await agentStore.actions.fetchAgents({

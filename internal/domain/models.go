@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -180,4 +181,96 @@ type AlreadyRegisteredAgentError struct {
 func (e *AlreadyRegisteredAgentError) Error() string {
 	return fmt.Sprintf("agent '%s' is already registered with IP address '%s', port '%d', and capabilities '%s'",
 		e.Name, e.IPAddress, e.Port, e.Capabilities)
+}
+
+// User represents a system user for authentication
+type User struct {
+	ID        uuid.UUID  `json:"id" db:"id"`
+	Username  string     `json:"username" db:"username"`
+	Email     string     `json:"email" db:"email"`
+	Password  string     `json:"-" db:"password"` // Password tidak dikembalikan dalam JSON
+	Role      string     `json:"role" db:"role"`  // admin, user, guest
+	IsActive  bool       `json:"is_active" db:"is_active"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	LastLogin *time.Time `json:"last_login,omitempty" db:"last_login"`
+}
+
+// LoginRequest represents the request to login
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+// LoginResponse represents the response after successful login
+type LoginResponse struct {
+	Token     string    `json:"token"`
+	User      User      `json:"user"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// LogoutRequest represents the request to logout
+type LogoutRequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+// CreateUserRequest represents the request to create a new user
+type CreateUserRequest struct {
+	Username string `json:"username" binding:"required,min=3,max=50"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
+	Role     string `json:"role" binding:"omitempty,oneof=admin user guest"`
+}
+
+// UpdateUserRequest represents the request to update a user
+type UpdateUserRequest struct {
+	Username *string `json:"username,omitempty" binding:"omitempty,min=3,max=50"`
+	Email    *string `json:"email,omitempty" binding:"omitempty,email"`
+	Password *string `json:"password,omitempty" binding:"omitempty,min=6"`
+	Role     *string `json:"role,omitempty" binding:"omitempty,oneof=admin user guest"`
+	IsActive *bool   `json:"is_active,omitempty"`
+}
+
+// JWTClaims represents the JWT token claims
+type JWTClaims struct {
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
+	jwt.RegisteredClaims
+}
+
+// AuthenticationError represents an authentication error
+type AuthenticationError struct {
+	Message string
+}
+
+func (e *AuthenticationError) Error() string {
+	return e.Message
+}
+
+// InvalidCredentialsError represents invalid login credentials
+type InvalidCredentialsError struct{}
+
+func (e *InvalidCredentialsError) Error() string {
+	return "invalid username or password"
+}
+
+// UserNotFoundError represents when user is not found
+type UserNotFoundError struct {
+	Username string
+}
+
+func (e *UserNotFoundError) Error() string {
+	return fmt.Sprintf("user with username '%s' not found", e.Username)
+}
+
+// UserAlreadyExistsError represents when trying to create a user that already exists
+type UserAlreadyExistsError struct {
+	Username string
+	Email    string
+}
+
+func (e *UserAlreadyExistsError) Error() string {
+	return fmt.Sprintf("user with username '%s' or email '%s' already exists", e.Username, e.Email)
 }

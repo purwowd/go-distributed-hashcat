@@ -98,3 +98,29 @@ type DistributedJobUsecase interface {
 	CreateDistributedJobs(ctx context.Context, req *DistributedJobRequest) (*DistributedJobResult, error)
 	GetDistributedJobStatus(ctx context.Context, masterJobID uuid.UUID) (*DistributedJobResult, error)
 }
+
+// UserRepository defines the interface for user data operations
+type UserRepository interface {
+	Create(ctx context.Context, user *User) error
+	GetByID(ctx context.Context, id uuid.UUID) (*User, error)
+	GetByUsername(ctx context.Context, username string) (*User, error)
+	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetAll(ctx context.Context) ([]User, error)
+	Update(ctx context.Context, user *User) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	UpdateLastLogin(ctx context.Context, id uuid.UUID) error
+}
+
+// AuthUsecase defines the interface for authentication business logic operations
+type AuthUsecase interface {
+	Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error)
+	Logout(ctx context.Context, token string) error
+	ValidateToken(ctx context.Context, token string) (*JWTClaims, error)
+	RefreshToken(ctx context.Context, token string) (*LoginResponse, error)
+	CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error)
+	GetUser(ctx context.Context, id uuid.UUID) (*User, error)
+	UpdateUser(ctx context.Context, id uuid.UUID, req *UpdateUserRequest) (*User, error)
+	DeleteUser(ctx context.Context, id uuid.UUID) error
+	GetAllUsers(ctx context.Context) ([]User, error)
+	CheckUsernameExists(ctx context.Context, username string) (bool, error)
+}
