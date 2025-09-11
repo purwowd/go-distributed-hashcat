@@ -299,6 +299,10 @@ func startServer() {
 	jobRepo := repository.NewJobRepository(db)
 	hashFileRepo := repository.NewHashFileRepository(db)
 	wordlistRepo := repository.NewWordlistRepository(db)
+	userRepo := repository.NewUserRepository(db.DB())
+
+	// Initialize JWT service
+	jwtService := infrastructure.NewJWTService()
 
 	// Initialize use cases
 	agentUsecase := usecase.NewAgentUsecase(agentRepo)
@@ -306,6 +310,7 @@ func startServer() {
 	hashFileUsecase := usecase.NewHashFileUsecase(hashFileRepo, config.Upload.Directory)
 	wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)
 	distributedJobUsecase := usecase.NewDistributedJobUsecase(agentRepo, jobRepo, wordlistRepo, hashFileRepo, config.Upload.Directory)
+	authUsecase := usecase.NewAuthUsecase(userRepo, jwtService)
 
 	// Initialize enrichment service
 	jobEnrichmentService := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)
@@ -318,7 +323,7 @@ func startServer() {
 	infrastructure.ServerLogger.Info("WebSocket hub connected to agent usecase")
 
 	// Initialize HTTP router
-	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase, jobEnrichmentService, distributedJobUsecase)
+	router := httpDelivery.NewRouter(agentUsecase, jobUsecase, hashFileUsecase, wordlistUsecase, jobEnrichmentService, distributedJobUsecase, authUsecase)
 
 	// Create HTTP server
 	server := &http.Server{

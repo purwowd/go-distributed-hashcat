@@ -1,5 +1,6 @@
 // API Service for Distributed Hashcat Dashboard
 import { getConfig } from '@/config/build.config'
+import { authService } from './auth.service'
 
 // Types for API responses
 export interface Agent {
@@ -91,6 +92,7 @@ class ApiService {
             const response = await fetch(url, {
                 headers: {
                     'Content-Type': 'application/json',
+                    ...authService.getAuthHeader(),
                     ...options.headers
                 },
                 ...options

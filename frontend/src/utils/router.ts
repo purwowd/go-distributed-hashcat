@@ -1,6 +1,8 @@
 // Client-side Router for Dashboard
-type RouteKey = '' | 'overview' | 'agents' | 'agent-keys' | 'jobs' | 'files' | 'wordlists' | 'docs'
-type RouteValue = 'overview' | 'agents' | 'agent-keys' | 'jobs' | 'files' | 'wordlists' | 'docs'
+import { authStore } from '@/stores/auth.store'
+
+type RouteKey = '' | 'login' | 'overview' | 'agents' | 'agent-keys' | 'jobs' | 'files' | 'wordlists' | 'docs'
+type RouteValue = 'login' | 'overview' | 'agents' | 'agent-keys' | 'jobs' | 'files' | 'wordlists' | 'docs'
 
 export class Router {
     private static instance: Router
@@ -10,6 +12,7 @@ export class Router {
     // Route definitions
     private routes: Record<RouteKey, RouteValue> = {
         '': 'overview',
+        'login': 'login',
         'overview': 'overview', 
         'agents': 'agents',
         'agent-keys': 'agent-keys',
@@ -18,6 +21,11 @@ export class Router {
         'wordlists': 'wordlists',
         'docs': 'docs'
     }
+
+    // Protected routes (require authentication)
+    private protectedRoutes: Set<RouteValue> = new Set([
+        'overview', 'agents', 'agent-keys', 'jobs', 'files', 'wordlists', 'docs'
+    ])
 
     private constructor() {
         this.init()
@@ -44,6 +52,21 @@ export class Router {
         const hash = window.location.hash.slice(1) // Remove #
         const route = this.routes[hash as RouteKey] || 'overview'
         
+        // Check if route requires authentication
+        if (this.protectedRoutes.has(route) && !authStore.isAuthenticated()) {
+            // Redirect to login if not authenticated
+            this.currentRoute = 'login'
+            this.notifyListeners('login')
+            return
+        }
+        
+        // Redirect to overview if trying to access login while authenticated
+        if (route === 'login' && authStore.isAuthenticated()) {
+            this.currentRoute = 'overview'
+            this.notifyListeners('overview')
+            return
+        }
+        
         if (route !== this.currentRoute) {
             this.currentRoute = route
             this.notifyListeners(route)
@@ -52,6 +75,20 @@ export class Router {
 
     public navigate(route: string): void {
         const validRoute = this.routes[route as RouteKey] || 'overview'
+        
+        // Check if route requires authentication
+        if (this.protectedRoutes.has(validRoute) && !authStore.isAuthenticated()) {
+            // Redirect to login if not authenticated
+            this.navigate('login')
+            return
+        }
+        
+        // Redirect to overview if trying to access login while authenticated
+        if (validRoute === 'login' && authStore.isAuthenticated()) {
+            this.navigate('overview')
+            return
+        }
+        
         const hash = route === 'overview' ? '' : route
         
         // Update URL without page reload
@@ -84,6 +121,16 @@ export class Router {
 
     public isCurrentRoute(route: string): boolean {
         return this.currentRoute === route
+    }
+
+    // Check if route is protected
+    public isProtectedRoute(route: string): boolean {
+        return this.protectedRoutes.has(route as RouteValue)
+    }
+
+    // Force refresh current route (useful after login/logout)
+    public refresh(): void {
+        this.handleRouteChange()
     }
 }
 
