@@ -23,6 +23,7 @@ declare global {
         alpineReady: boolean
         alpineStarted: boolean
         alpineManuallyStarted: boolean
+        alpineStartCount: number
     }
 }
 
@@ -121,17 +122,16 @@ class DashboardApplication {
             // 4. Start Alpine.js BEFORE component injection
             if (!window.alpineManuallyStarted && window.Alpine && typeof window.Alpine.start === 'function') {
                 try {
-                    window.alpineManuallyStarted = true
                     // console.log('🚀 Starting Alpine.js manually...')
                     window.Alpine.start()
+                    window.alpineManuallyStarted = true
                     // console.log('✅ Alpine.js started successfully')
                 } catch (error) {
-                    window.alpineManuallyStarted = false
                     // console.error('❌ Alpine start failed:', error instanceof Error ? error.message : String(error))
                     throw error
                 }
             } else {
-                console.log('ℹ️ Alpine already manually started or not available')
+                // console.log('ℹ️ Alpine already manually started or not available')
             }
 
             // 5. Initialize services and data stores
@@ -420,13 +420,13 @@ class DashboardApplication {
             currentTab: router.getCurrentRoute(),
             isLoading: false,
             isAlpineInitialized: false,
-            notifications: [] as any[],
+            notifications: [] as Array<{id: number, message: string, type: 'success' | 'error' | 'info' | 'warning', timestamp: Date}>,
             
             // Authentication state
             isAuthenticated: authStore.isAuthenticated(),
             user: authStore.getUser(),
-            authError: authStore.getError(),
             authLoading: authStore.isLoading(),
+            showLoginSuccessNotification: false,
             
             // Modal states
             showAgentModal: false,
@@ -472,10 +472,12 @@ class DashboardApplication {
             
             // Cache stats (if needed)
             cacheStats: null as any,
+            showCacheStatsNotification: false,
             
             // WebSocket connection status
             wsConnected: false,
             wsConnectionAttempts: 0,
+            wsSubscriptionsSetup: false,
             
             // Track agent status changes to prevent duplicate notifications
             lastAgentStatuses: new Map(),
@@ -486,6 +488,13 @@ class DashboardApplication {
             reactiveJobs: [] as any[],
             reactiveHashFiles: [] as any[],
             reactiveWordlists: [] as any[],
+
+            // Store references for Alpine.js expressions
+            agentStore: agentStore,
+            jobStore: jobStore,
+            fileStore: fileStore,
+            wordlistStore: wordlistStore,
+            authStore: authStore,
 
             // Server-side table state for Agents/Agent-Keys
             agentTable: {
@@ -704,12 +713,46 @@ class DashboardApplication {
                 // console.log('Initializing Alpine.js dashboard data...')
                 this.isAlpineInitialized = true
                 
+                // Check authentication status on init
+                const currentRoute = router.getCurrentRoute()
+                console.log('🔍 Initial route:', currentRoute)
+                console.log('🔍 Authentication status:', this.isAuthenticated)
+                console.log('🔍 Auth store state:', authStore.getState())
+                console.log('🔍 Current URL:', window.location.href)
+                console.log('🔍 Current hash:', window.location.hash)
+                
+                // STRICT AUTHENTICATION: If not authenticated, redirect to login for ANY route except login
+                if (!this.isAuthenticated && currentRoute !== 'login') {
+                    console.log('🔒 STRICT AUTH: Unauthenticated access to', currentRoute, '- redirecting to login')
+                    this.showNotification('Please login to access this page', 'warning')
+                    // Force redirect to login with URL change
+                    window.location.replace('/login')
+                    return
+                }
+                
                 // Setup router listener
-                router.subscribe((route: string) => {
+                router.subscribe(async (route: string) => {
                     this.currentTab = route
                     // Only clear login form when navigating away from login page
-                    if (this.currentTab !== 'login' && route !== 'login') {
+                    // But don't clear if we're in loading state (successful login)
+                    if (this.currentTab !== 'login' && route !== 'login' && !this.isLoading) {
                         this.clearLoginForm()
+                    }
+                    
+                    // Load content based on route
+                    await this.loadContentForRoute(route)
+                })
+                
+                // Additional protection: Listen for direct URL changes
+                window.addEventListener('popstate', () => {
+                    const currentRoute = router.getCurrentRoute()
+                    console.log('🔍 URL changed to:', currentRoute)
+                    
+                    // STRICT AUTHENTICATION: If not authenticated, redirect to login for ANY route except login
+                    if (!this.isAuthenticated && currentRoute !== 'login') {
+                        console.log('🔒 STRICT AUTH: Direct URL access to', currentRoute, '- redirecting to login')
+                        this.showNotification('Please login to access this page', 'warning')
+                        window.location.replace('/login')
                     }
                 })
                 
@@ -719,11 +762,18 @@ class DashboardApplication {
                 // Don't clear login form if currently on login page to preserve user input
                 // Only clear on successful login or when navigating away
                 
-                // Setup WebSocket for real-time updates
-                this.setupWebSocketSubscriptions()
+                // Setup WebSocket for real-time updates (only if not on login page)
+                if (this.currentTab !== 'login') {
+                    this.setupWebSocketSubscriptions()
+                }
                 
                 try {
                     await this.loadInitialData()
+                    
+                    // Load content for current route
+                    const currentRoute = router.getCurrentRoute()
+                    await this.loadContentForRoute(currentRoute)
+                    
                     // console.log('🎉 Dashboard initialization complete')
                 } catch (error) {
                     console.error('❌ Dashboard initialization failed:', error)
@@ -748,58 +798,73 @@ class DashboardApplication {
                 authStore.subscribe((state) => {
                     this.isAuthenticated = state.isAuthenticated
                     this.user = state.user
-                    this.authError = state.error
                     this.authLoading = state.isLoading
                     
                     // Refresh router when auth state changes
                     router.refresh()
                 })
                 
-                // Subscribe to agent store changes
+                // Subscribe to agent store changes with throttling
+                let agentUpdateTimeout: number | null = null
                 agentStore.subscribe(() => {
-                    const state = agentStore.getState()
-                    
-                    // ✅ Implement stable sorting to maintain card positions
-                    const agents = state.agents || []
-                    // Sort by created_at DESC, then by ID ASC for stable ordering
-                    const stableSortedAgents = agents.sort((a, b) => {
-                        // First sort by created_at DESC (newest first)
-                        const dateComparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                        if (dateComparison !== 0) {
-                            return dateComparison
-                        }
-                        // If dates are equal, sort by ID ASC for stable ordering
-                        return a.id.localeCompare(b.id)
-                    })
-                    
-                    // ✅ Force Alpine.js reactivity by creating new array reference
-                    this.reactiveAgents = [...stableSortedAgents]
-                    // Also update agentKeys with agents that have no IP address (these are just keys)
-                    this.reactiveAgentKeys = [...stableSortedAgents].filter(agent => !agent.ip_address || agent.ip_address === '')
-                    console.log('Agent store updated:', this.reactiveAgents.length, 'agents')
-
-                    // Sync pagination (if available)
-                    if (state.pagination) {
-                        this.agentTable.total = state.pagination.total
-                        // Keep page size and page if already set
-                        if (state.pagination.pageSize && this.agentTable.pageSize !== state.pagination.pageSize) {
-                            this.agentTable.pageSize = state.pagination.pageSize
-                        }
-                        if (state.pagination.page && this.agentTable.page !== state.pagination.page) {
-                            this.agentTable.page = state.pagination.page
-                        }
+                    // Throttle updates to prevent excessive re-renders
+                    if (agentUpdateTimeout) {
+                        clearTimeout(agentUpdateTimeout)
                     }
+                    
+                    agentUpdateTimeout = setTimeout(() => {
+                        const state = agentStore.getState()
+                        
+                        // ✅ Implement stable sorting to maintain card positions
+                        const agents = state.agents || []
+                        // Sort by created_at DESC, then by ID ASC for stable ordering
+                        const stableSortedAgents = agents.sort((a, b) => {
+                            // First sort by created_at DESC (newest first)
+                            const dateComparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                            if (dateComparison !== 0) {
+                                return dateComparison
+                            }
+                            // If dates are equal, sort by ID ASC for stable ordering
+                            return a.id.localeCompare(b.id)
+                        })
+                        
+                        // ✅ Force Alpine.js reactivity by creating new array reference
+                        this.reactiveAgents = [...stableSortedAgents]
+                        // Also update agentKeys with agents that have no IP address (these are just keys)
+                        this.reactiveAgentKeys = [...stableSortedAgents].filter(agent => !agent.ip_address || agent.ip_address === '')
+                        // console.log('Agent store updated:', this.reactiveAgents.length, 'agents')
+
+                        // Sync pagination (if available)
+                        if (state.pagination) {
+                            this.agentTable.total = state.pagination.total
+                            // Keep page size and page if already set
+                            if (state.pagination.pageSize && this.agentTable.pageSize !== state.pagination.pageSize) {
+                                this.agentTable.pageSize = state.pagination.pageSize
+                            }
+                            if (state.pagination.page && this.agentTable.page !== state.pagination.page) {
+                                this.agentTable.page = state.pagination.page
+                            }
+                        }
+                    }, 100) // Throttle to 100ms
                 })
                 
-                // Subscribe to job store changes
+                // Subscribe to job store changes with throttling
+                let jobUpdateTimeout: number | null = null
                 jobStore.subscribe(() => {
-                    const state = jobStore.getState()
-                    // ✅ Force Alpine.js reactivity by creating new array reference
-                    this.reactiveJobs = [...(state.jobs || [])]
-                    console.log('Job store updated:', this.reactiveJobs.length, 'jobs')
+                    // Throttle updates to prevent excessive re-renders
+                    if (jobUpdateTimeout) {
+                        clearTimeout(jobUpdateTimeout)
+                    }
                     
-                    // Sync pagination (if available)
-                    // Note: This would need to be updated when we implement job pagination in the backend
+                    jobUpdateTimeout = setTimeout(() => {
+                        const state = jobStore.getState()
+                        // ✅ Force Alpine.js reactivity by creating new array reference
+                        this.reactiveJobs = [...(state.jobs || [])]
+                        // console.log('Job store updated:', this.reactiveJobs.length, 'jobs')
+                        
+                        // Sync pagination (if available)
+                        // Note: This would need to be updated when we implement job pagination in the backend
+                    }, 100) // Throttle to 100ms
                 })
                 
                 // Subscribe to file store changes
@@ -817,12 +882,155 @@ class DashboardApplication {
                 // console.log('📡 Store subscriptions setup for reactive UI updates')
             },
             
+            // Wait for modal to close and then show notification
+            waitForModalClose(modalElement: Element) {
+                console.log('⏳ Waiting for modal to close...')
+                
+                let checkCount = 0
+                const maxChecks = 100 // Maximum 10 seconds (100 * 100ms)
+                
+                const checkModal = () => {
+                    checkCount++
+                    
+                    // Check if modal is still present
+                    const isModalPresent = document.contains(modalElement) && 
+                                         ((modalElement as HTMLElement).offsetParent !== null || 
+                                          (modalElement as HTMLElement).style.display !== 'none')
+                    
+                    if (!isModalPresent || checkCount >= maxChecks) {
+                        console.log('✅ Modal closed or timeout reached, showing notification...')
+                        // Add small delay to ensure modal is completely gone
+                        setTimeout(() => {
+                            this.showLoginSuccessNotificationNow()
+                        }, 500)
+                    } else {
+                        // Check again in 100ms
+                        setTimeout(checkModal, 100)
+                    }
+                }
+                
+                // Start checking
+                setTimeout(checkModal, 100)
+            },
+
+            // Show notification immediately
+            showLoginSuccessNotificationNow() {
+                console.log('🚀 ===== SHOWING LOGIN SUCCESS NOTIFICATION NOW =====')
+                
+                // Check if notification has already been shown for this session
+                const notificationShown = sessionStorage.getItem('loginSuccessNotificationShown')
+                if (notificationShown === 'true') {
+                    console.log('🚫 Login success notification already shown in this session, skipping...')
+                    return
+                }
+                
+                // Mark notification as shown
+                sessionStorage.setItem('loginSuccessNotificationShown', 'true')
+                
+                this.showLoginSuccessNotification = true
+                console.log('🚀 State set to:', this.showLoginSuccessNotification)
+                
+                // Force Alpine reactivity
+                if (window.Alpine) {
+                    window.Alpine.nextTick(() => {
+                        console.log('🚀 After nextTick, state is:', this.showLoginSuccessNotification)
+                    })
+                }
+                
+                // Show notifications
+                this.showNotification('🎉 Welcome to Hashcat Dashboard!', 'success')
+                setTimeout(() => {
+                    this.showNotification('✅ Login successful! You are now logged in.', 'success')
+                }, 1000)
+                setTimeout(() => {
+                    this.showNotification('🚀 Ready to start cracking passwords!', 'info')
+                }, 2000)
+                
+                console.log('🚀 =====================================================')
+            },
+
+
+            // Check for login success notification
+            checkLoginSuccessNotification() {
+                console.log('🔍 ===== CHECKING LOGIN SUCCESS NOTIFICATION =====')
+                console.log('🔍 Current tab in checkLoginSuccessNotification:', this.currentTab)
+                console.log('🔍 Current route:', window.location.pathname)
+                console.log('🔍 Alpine available:', !!window.Alpine)
+                console.log('🔍 Dashboard app available:', !!(window as any).Alpine?.data('dashboardApp'))
+                
+                const showLoginSuccess = sessionStorage.getItem('showLoginSuccess')
+                const loginSuccessTime = sessionStorage.getItem('loginSuccessTime')
+                console.log('📝 showLoginSuccess flag:', showLoginSuccess)
+                console.log('⏰ loginSuccessTime:', loginSuccessTime)
+                console.log('🔍 showLoginSuccess === "true"?', showLoginSuccess === 'true')
+                console.log('🔍 SessionStorage keys:', Object.keys(sessionStorage))
+                console.log('🔍 ================================================')
+                
+                // Check if Google Password Manager modal is present
+                const googleModal = document.querySelector('[role="dialog"]') || 
+                                 document.querySelector('.modal') || 
+                                 document.querySelector('[data-testid="modal"]') ||
+                                 document.querySelector('[aria-modal="true"]') ||
+                                 document.querySelector('[class*="modal"]') ||
+                                 document.querySelector('[class*="dialog"]') ||
+                                 document.querySelector('[class*="overlay"]')
+                
+                if (googleModal) {
+                    console.log('⚠️ Google Password Manager modal detected, delaying notification...')
+                    console.log('⚠️ Modal element:', googleModal)
+                    // Wait for modal to be closed
+                    this.waitForModalClose(googleModal)
+                    return
+                } else {
+                    console.log('✅ No modal detected, showing notification immediately')
+                }
+                
+                // Make this method globally accessible
+                if (typeof window !== 'undefined') {
+                    (window as any).checkLoginSuccessNotification = this.checkLoginSuccessNotification.bind(this)
+                }
+                
+                if (showLoginSuccess === 'true') {
+                    console.log('✅ Showing login success notification!')
+                    console.log('🔍 About to call showNotification...')
+                    
+                    // Check if notification has already been shown for this session
+                    const notificationShown = sessionStorage.getItem('loginSuccessNotificationShown')
+                    if (notificationShown === 'true') {
+                        console.log('🚫 Login success notification already shown in this session, skipping...')
+                        // Clear the flags since we're not showing notification
+                        sessionStorage.removeItem('showLoginSuccess')
+                        sessionStorage.removeItem('loginSuccessTime')
+                        return
+                    }
+                    
+                    // Show notification immediately
+                    this.showLoginSuccessNotificationNow()
+                    
+                    // Clear the flags after a delay to ensure notification is shown
+                    setTimeout(() => {
+                        sessionStorage.removeItem('showLoginSuccess')
+                        sessionStorage.removeItem('loginSuccessTime')
+                        console.log('🧹 Cleared login success flags from sessionStorage')
+                    }, 5000) // Clear after 5 seconds
+                    
+                    // Auto-hide notification after 8 seconds
+                    setTimeout(() => {
+                        console.log('⏰ Auto-hiding login success notification')
+                        this.showLoginSuccessNotification = false
+                    }, 8000)
+                } else {
+                    console.log('❌ No login success flag found')
+                    console.log('❌ showLoginSuccess value:', showLoginSuccess)
+                    console.log('❌ typeof showLoginSuccess:', typeof showLoginSuccess)
+                }
+            },
+
             // Authentication methods
             clearLoginForm() {
                 this.loginForm = { username: '', password: '' }
                 this.usernameError = null
                 this.passwordError = null
-                this.authError = null
                 this.showPassword = false
             },
             
@@ -830,7 +1038,6 @@ class DashboardApplication {
             clearLoginErrors() {
                 this.usernameError = null
                 this.passwordError = null
-                this.authError = null
             },
             
             async handleLogin() {
@@ -839,6 +1046,9 @@ class DashboardApplication {
                     console.log('🛑 Login already in progress, ignoring click')
                     return
                 }
+                
+                // Set loading state immediately for instant feedback
+                this.isLoading = true
                 
                 console.log('🔍 handleLogin called')
                 console.log('📝 Username:', this.loginForm.username)
@@ -867,6 +1077,7 @@ class DashboardApplication {
                 // If there are validation errors, don't proceed with login
                 if (hasErrors) {
                     console.log('🛑 Form validation failed, stopping login process')
+                    this.isLoading = false // Reset loading state
                     return
                 }
                 
@@ -875,43 +1086,91 @@ class DashboardApplication {
                 console.log('🔐 Password error:', this.passwordError)
                 
                 // If validation passes, proceed with login
+                let loginSuccessful = false
                 try {
+                    console.log('🚀 Proceeding with login...')
                     const success = await authStore.login({
                         username: this.loginForm.username.trim(),
                         password: this.loginForm.password
                     })
                     
                     if (success) {
-                        // Clear form and navigate on successful login
-                        this.clearLoginForm()
-                        router.navigate('overview')
+                        loginSuccessful = true
+                        console.log('🎉 ===== LOGIN SUCCESSFUL! =====')
+                        console.log('🎉 Setting notification flag...')
+                        console.log('📝 Form data before loading:', { username: this.loginForm.username, password: this.loginForm.password })
+                        
+                        // Set loading state to show loading component instead of form
+                        this.isLoading = true
+                        console.log('📝 Form data after loading set:', { username: this.loginForm.username, password: this.loginForm.password })
+                        
+                        // Set multiple flags for success notification
+                        sessionStorage.setItem('showLoginSuccess', 'true')
+                        sessionStorage.setItem('loginSuccessTime', Date.now().toString())
+                        console.log('💾 showLoginSuccess flag set in sessionStorage')
+                        console.log('💾 SessionStorage contents:', {
+                            showLoginSuccess: sessionStorage.getItem('showLoginSuccess'),
+                            loginSuccessTime: sessionStorage.getItem('loginSuccessTime')
+                        })
+                        console.log('💾 All sessionStorage keys:', Object.keys(sessionStorage))
+                        console.log('🎉 ================================')
+                        
+                        // Force trigger notification check immediately
+                        setTimeout(() => {
+                            console.log('🔄 Triggering immediate notification check...')
+                            this.checkLoginSuccessNotification()
+                        }, 100)
+                        
+                        // Also trigger after redirect
+                        setTimeout(() => {
+                            console.log('🔄 Triggering notification after redirect...')
+                            this.showLoginSuccessNotificationNow()
+                        }, 1000)
+                        
+                        // Clear form and redirect to dashboard
+                        setTimeout(() => {
+                            console.log('🔄 Redirecting to dashboard...')
+                            console.log('📝 Form data before clear:', { username: this.loginForm.username, password: this.loginForm.password })
+                            // Clear form before redirect
+                            this.clearLoginForm()
+                            // Use router navigation instead of reload to preserve sessionStorage
+                            router.navigate('overview')
+                            
+                            // Trigger notification after navigation
+                            setTimeout(() => {
+                                console.log('🔄 Triggering notification after navigation...')
+                                this.showLoginSuccessNotificationNow()
+                            }, 500)
+                        }, 800) // Reduced delay for faster redirect
                     } else {
-                        // Show specific error messages based on the error type
-                        // Don't clear form data when login fails
+                        // Show authentication errors as notifications instead of form errors
                         const error = authStore.getError()
                         if (error && error.includes('Invalid username or password')) {
-                            // Check if username exists to provide more specific error
-                            try {
-                                const usernameCheck = await authService.checkUsernameExists(this.loginForm.username.trim())
-                                if (usernameCheck.success) {
-                                    if (!usernameCheck.exists) {
-                                        this.usernameError = 'Username or email not found'
-                                    } else {
-                                        this.passwordError = 'Incorrect password'
-                                    }
-                                } else {
-                                    this.authError = 'Invalid username or password'
-                                }
-                            } catch (checkError) {
-                                this.authError = 'Invalid username or password'
-                            }
+                            // Show error messages on both fields for wrong credentials
+                            this.usernameError = 'Invalid username or email'
+                            this.passwordError = 'Invalid password'
+                            // Also show notification for authentication failure
+                            this.showNotification('Authentication Failed: Invalid username or password', 'error')
                         } else {
-                            this.authError = error || 'Login failed. Please try again.'
+                            // Show other errors as notifications
+                            this.showNotification(error || 'Login failed. Please try again.', 'error')
                         }
+                        
+                        // Reset loading state when login fails
+                        this.isLoading = false
                     }
                 } catch (error) {
                     // Handle network or other errors
-                    this.authError = 'Login failed. Please check your connection and try again.'
+                    console.error('❌ Login error:', error)
+                    this.showNotification('Login failed. Please check your connection and try again.', 'error')
+                    this.isLoading = false
+                } finally {
+                    // Only reset loading state if login failed (not successful)
+                    // For successful login, keep loading state until redirect
+                    if (this.isLoading && !loginSuccessful) {
+                        this.isLoading = false
+                    }
+                    console.log('🏁 Login process completed')
                 }
             },
             
@@ -924,13 +1183,59 @@ class DashboardApplication {
                 this.passwordError = null
             },
             
+            // Logout functionality
             async handleLogout() {
-                await authStore.logout()
-                router.navigate('login')
+                try {
+                    // Show loading state
+                    this.isLoading = true
+                    
+                    // Set logout flag to allow navigation to login page
+                    router.setLoggingOut(true)
+                    
+                    // Call auth store logout
+                    await authStore.logout()
+                    
+                    // Clear all form data
+                    this.clearLoginForm()
+                    
+                    // Clear all reactive data
+                    this.reactiveAgents = []
+                    this.reactiveJobs = []
+                    this.reactiveHashFiles = []
+                    this.reactiveWordlists = []
+                    
+                    // Clear login success notification flag to allow it to show again on next login
+                    sessionStorage.removeItem('loginSuccessNotificationShown')
+                    
+                    // Reset user info
+                    this.user = null
+                    this.isAuthenticated = false
+                    
+                    // Show success notification
+                    this.showNotification('Successfully logged out', 'success')
+                    
+                    // Redirect to login page
+                    router.navigate('login')
+                    
+                    // Auto reload after logout to ensure complete state reset
+                    setTimeout(() => {
+                        window.location.reload()
+                    }, 1000) // 1 second delay to show notification
+                    
+                } catch (error) {
+                    console.error('Logout error:', error)
+                    this.showNotification('Logout failed. Please try again.', 'error')
+                    this.isLoading = false
+                } finally {
+                    // Don't reset loading state here - let it stay until page reload
+                    // Reset logout flag after navigation
+                    setTimeout(() => {
+                        router.setLoggingOut(false)
+                    }, 100)
+                }
             },
             
             clearAuthError() {
-                this.authError = null
                 authStore.clearError()
             },
             
@@ -1021,16 +1326,36 @@ class DashboardApplication {
 
             // NEW: Setup WebSocket subscriptions for real-time updates
             setupWebSocketSubscriptions() {
+                // Don't setup WebSocket on login page
+                if (this.currentTab === 'login') {
+                    return
+                }
+                
+                // Prevent multiple subscriptions
+                if (this.wsSubscriptionsSetup) {
+                    return
+                }
+                this.wsSubscriptionsSetup = true
+                
                 // Connection status monitoring
                 webSocketService.onConnection((status) => {
                     this.wsConnected = status.connected
                     if (status.connected) {
-                        this.showNotification('🔗 Real-time updates connected', 'success')
+                        // Only show notification if not on login page
+                        if (this.currentTab !== 'login') {
+                            // Add delay to ensure login success notification shows first
+                            setTimeout(() => {
+                                this.showNotification('🔗 Real-time updates connected', 'success')
+                            }, 1500) // 1.5 second delay after login success
+                        }
                         // Subscribe to all updates when connected
                         webSocketService.subscribeToJobs()
                         webSocketService.subscribeToAgents()
                     } else {
-                        this.showNotification('🔌 Real-time updates disconnected', 'warning')
+                        // Only show notification if not on login page
+                        if (this.currentTab !== 'login') {
+                            this.showNotification('🔌 Real-time updates disconnected', 'warning')
+                        }
                     }
                 })
                 
@@ -1186,9 +1511,99 @@ class DashboardApplication {
                 }
             },
 
+            // Load content based on route
+            async loadContentForRoute(route: string) {
+                console.log('🔄 loadContentForRoute called with route:', route)
+                const mainContainer = document.getElementById('main-content')
+                if (!mainContainer) return
+                
+                // STRICT AUTHENTICATION: If not authenticated, redirect to login for ANY route except login
+                if (!this.isAuthenticated && route !== 'login') {
+                    console.log('🔒 STRICT AUTH: Unauthenticated access to', route, '- redirecting to login')
+                    this.showNotification('Please login to access this page', 'warning')
+                    // Force redirect to login with URL change
+                    window.location.replace('/login')
+                    return
+                }
+                
+                // If already authenticated and trying to access login page, redirect to overview
+                if (route === 'login' && this.isAuthenticated) {
+                    console.log('🔒 Already authenticated, redirecting to overview')
+                    router.navigate('overview')
+                    return
+                }
+                
+                // Clear existing content
+                mainContainer.innerHTML = ''
+                
+                if (route === 'login') {
+                    // Load login page
+                    const loginHtml = await componentLoader.loadComponent('auth/login')
+                    const loginContainer = document.createElement('div')
+                    loginContainer.innerHTML = loginHtml
+                    // Find actual content element (skip script tags)
+                    const loginElement = loginContainer.querySelector('div') || loginContainer.firstElementChild
+                    if (loginElement && loginElement.tagName !== 'SCRIPT') {
+                        // Add x-data directive to connect with Alpine.js
+                        loginElement.setAttribute('x-data', 'dashboardApp')
+                        mainContainer.appendChild(loginElement)
+                        // console.log('✅ Injected login component with x-data')
+                    } else {
+                        console.warn('❌ Failed to inject login component')
+                    }
+                } else {
+                    console.log('🔍 Entering else block for non-login routes')
+                    // Load tab content for other routes
+                    const tabComponents = [
+                        'tabs/overview',
+                        'tabs/agents', 
+                        'tabs/agent-keys',
+                        'tabs/jobs',
+                        'tabs/files',
+                        'tabs/wordlists',
+                        'tabs/docs'
+                    ]
+                    
+                    for (const componentName of tabComponents) {
+                        const componentHtml = await componentLoader.loadComponent(componentName)
+                        const componentContainer = document.createElement('div')
+                        componentContainer.innerHTML = componentHtml
+                        const componentElement = componentContainer.querySelector('div') || componentContainer.firstElementChild
+                        if (componentElement && componentElement.tagName !== 'SCRIPT') {
+                            componentElement.setAttribute('x-data', 'dashboardApp')
+                            mainContainer.appendChild(componentElement)
+                        }
+                    }
+                    
+                    console.log('🔍 About to check for login success notification...')
+                    // Check for login success notification after loading overview
+                    console.log('🔍 Checking route for login success notification:', route)
+                    console.log('🔍 Route === overview?', route === 'overview')
+                    if (route === 'overview') {
+                        console.log('🏠 Overview loaded, checking for login success notification...')
+                        console.log('🔍 Current tab when checking:', this.currentTab)
+                        console.log('🔍 Route when checking:', route)
+                        console.log('🔍 About to call checkLoginSuccessNotification...')
+                        this.checkLoginSuccessNotification()
+                        console.log('🔍 checkLoginSuccessNotification called')
+                    } else {
+                        console.log('❌ Not overview route, skipping login success check. Route:', route)
+                    }
+                }
+            },
+
             // Tab management with router integration
             async switchTab(tab: string) {
                 if (this.currentTab === tab) return
+                
+                // STRICT AUTHENTICATION: If not authenticated, redirect to login for ANY tab except login
+                if (!this.isAuthenticated && tab !== 'login') {
+                    console.log('🔒 STRICT AUTH: Unauthenticated access to', tab, '- redirecting to login')
+                    this.showNotification('Please login to access this page', 'warning')
+                    // Force redirect to login with URL change
+                    window.location.replace('/login')
+                    return
+                }
                 
                 perf.startTimer(`tab-switch-${tab}`)
                 
@@ -1368,18 +1783,50 @@ class DashboardApplication {
                 return 'fas fa-play'
             },
 
-            showNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
+            showNotification(
+                message: string,
+                type: 'success' | 'error' | 'info' | 'warning' = 'info'
+            ) {
+                console.log(`🔔 showNotification called: [${type.toUpperCase()}] ${message}`)
+                console.log(`🔔 Current tab: ${this.currentTab}`)
+            
+                const isLoginSuccess = message.includes('Login successful')
+                const isLoginError =
+                    message.includes('Authentication Failed') ||
+                    message.includes('Login failed')
+            
+                // Jika login sukses → paksa jadi success
+                if (isLoginSuccess) {
+                    type = 'success'
+                }
+            
+                // Jangan tampilkan notifikasi di halaman login kecuali login error
+                if (this.currentTab === 'login' && !isLoginError) {
+                    console.log(`🔔 Notification blocked on login page: [${type.toUpperCase()}] ${message}`)
+                    return
+                }
+            
+                // Hindari duplikat notif dengan pesan & type yang sama
+                const exists = this.notifications.some(
+                    (n) => n.message === message && n.type === type
+                )
+                if (exists) {
+                    console.log(`🔔 Duplicate notification blocked: [${type.toUpperCase()}] ${message}`)
+                    return
+                }
+            
                 console.log(`🔔 Showing notification: [${type.toUpperCase()}] ${message}`)
-                
+            
                 const notification = {
                     id: Date.now(),
                     message,
                     type,
                     timestamp: new Date()
                 }
+            
                 this.notifications.unshift(notification)
-                
-                // Auto-remove after 5 seconds
+            
+                // Auto-remove setelah 5 detik
                 setTimeout(() => {
                     this.removeNotification(notification.id)
                 }, 5000)
@@ -2861,7 +3308,11 @@ class DashboardApplication {
                     if (stats) {
                         this.cacheStats = stats
                         // console.log('📊 Cache stats refreshed:', stats)
-                        this.showNotification('Cache stats refreshed', 'info')
+                        // Only show notification if explicitly requested, not on auto-refresh
+                        if (this.showCacheStatsNotification) {
+                            this.showNotification('Cache stats refreshed', 'info')
+                            this.showCacheStatsNotification = false
+                        }
                     } else {
                         console.warn('No cache stats received from API')
                         // Keep existing stats or set defaults if null
@@ -2980,7 +3431,203 @@ class DashboardApplication {
 
         }))
 
+        // Add fallback check for login success notification after Alpine initialization
+        setTimeout(() => {
+            const showLoginSuccess = sessionStorage.getItem('showLoginSuccess')
+            console.log('🔍 Fallback: Checking sessionStorage:', showLoginSuccess)
+            console.log('🔍 Fallback: All sessionStorage keys:', Object.keys(sessionStorage))
+            console.log('🔍 Fallback: Alpine available:', !!window.Alpine)
+            
+            if (showLoginSuccess === 'true') {
+                console.log('🔍 Fallback: Found login success flag, checking notification...')
+                
+                // Try multiple ways to access Alpine component
+                let dashboardApp = null
+                
+                // Method 1: Direct Alpine data access
+                if (window.Alpine && window.Alpine.data) {
+                    dashboardApp = window.Alpine.data('dashboardApp')
+                    console.log('🔍 Fallback: Method 1 - Alpine data:', !!dashboardApp)
+                }
+                
+                // Method 2: Try to find Alpine component in DOM
+                if (!dashboardApp) {
+                    const alpineElement = document.querySelector('[x-data*="dashboardApp"]')
+                    if (alpineElement && (alpineElement as any)._x_dataStack) {
+                        dashboardApp = (alpineElement as any)._x_dataStack[0]
+                        console.log('🔍 Fallback: Method 2 - DOM element:', !!dashboardApp)
+                    }
+                }
+                
+                // Method 3: Try global window access
+                if (!dashboardApp) {
+                    dashboardApp = (window as any).dashboardApp
+                    console.log('🔍 Fallback: Method 3 - Global window:', !!dashboardApp)
+                }
+                
+                // Method 4: Try to access via Alpine store
+                if (!dashboardApp && window.Alpine && window.Alpine.store) {
+                    try {
+                        dashboardApp = window.Alpine.store('dashboardApp')
+                        console.log('🔍 Fallback: Method 4 - Alpine store:', !!dashboardApp)
+                    } catch (e) {
+                        console.log('🔍 Fallback: Method 4 failed:', e)
+                    }
+                }
+                
+                console.log('🔍 Fallback: Dashboard app available:', !!dashboardApp)
+                
+                if (dashboardApp) {
+                    console.log('🔍 Fallback: Setting showLoginSuccessNotification to true')
+                    dashboardApp.showLoginSuccessNotification = true
+                    console.log('📊 Fallback: State set to:', dashboardApp.showLoginSuccessNotification)
+                    
+                    // Force trigger notification immediately
+                    if (typeof dashboardApp.showLoginSuccessNotificationNow === 'function') {
+                        console.log('🔍 Fallback: Calling showLoginSuccessNotificationNow')
+                        dashboardApp.showLoginSuccessNotificationNow()
+                    } else if (typeof dashboardApp.checkLoginSuccessNotification === 'function') {
+                        console.log('🔍 Fallback: Calling checkLoginSuccessNotification')
+                        dashboardApp.checkLoginSuccessNotification()
+                    }
+                } else {
+                    console.log('❌ Fallback: Could not access Alpine component, trying direct DOM manipulation')
+                    // Fallback: Direct DOM manipulation
+                    this.triggerNotificationDirectly()
+                }
+            } else {
+                console.log('🔍 Fallback: No login success flag found')
+            }
+        }, 500)
+
         perf.endTimer('alpine-initialization')
+    }
+
+    // Direct DOM manipulation fallback
+    private triggerNotificationDirectly() {
+        console.log('🚀 ===== DIRECT DOM MANIPULATION FALLBACK =====')
+        
+        // Try to find and show notification elements
+        const fixedNotification = document.querySelector('[x-show="showLoginSuccessNotification"]')
+        const pageNotification = document.querySelector('[x-show="showLoginSuccessNotification"]')
+        
+        if (fixedNotification) {
+            console.log('🚀 Found fixed notification element, showing...')
+            const element = fixedNotification as HTMLElement
+            element.style.display = 'block'
+            element.style.opacity = '1'
+            element.style.transform = 'translateY(0)'
+        }
+        
+        if (pageNotification) {
+            console.log('🚀 Found page notification element, showing...')
+            const element = pageNotification as HTMLElement
+            element.style.display = 'block'
+            element.style.opacity = '1'
+            element.style.transform = 'scale(1) translateY(0)'
+        }
+        
+        // Check if notification has already been shown for this session
+        const notificationShown = sessionStorage.getItem('loginSuccessNotificationShown')
+        if (notificationShown === 'true') {
+            console.log('🚫 Login success notification already shown in this session, skipping direct toast...')
+            return
+        }
+        
+        // Also try to show toast notifications
+        this.showDirectToastNotification('🎉 Welcome to Hashcat Dashboard!', 'success')
+        setTimeout(() => {
+            this.showDirectToastNotification('✅ Login successful! You are now logged in.', 'success')
+        }, 1000)
+        setTimeout(() => {
+            this.showDirectToastNotification('🚀 Ready to start cracking passwords!', 'info')
+        }, 2000)
+        
+        console.log('🚀 ================================================')
+    }
+
+    // Direct toast notification fallback
+    private showDirectToastNotification(message: string, type: string) {
+        console.log(`🔔 Direct toast: [${type.toUpperCase()}] ${message}`)
+        
+        // Check if we're on login page and block login success notifications
+        const isLoginSuccess = message.includes('Login successful')
+        const isLoginError = message.includes('Authentication Failed') || message.includes('Login failed')
+        const currentPath = window.location.pathname
+        
+        if (currentPath === '/login' && !isLoginError) {
+            console.log(`🔔 Direct toast blocked on login page: [${type.toUpperCase()}] ${message}`)
+            return
+        }
+        
+        // Check if login success notification has already been shown for this session
+        if (isLoginSuccess) {
+            const notificationShown = sessionStorage.getItem('loginSuccessNotificationShown')
+            if (notificationShown === 'true') {
+                console.log('🚫 Login success notification already shown in this session, skipping direct toast...')
+                return
+            }
+        }
+        
+        // Create notification element
+        const notification = document.createElement('div')
+        notification.className = 'fixed top-4 right-4 z-[99999] p-4 rounded-lg shadow-lg max-w-sm'
+        
+        // Set colors based on type
+        if (type === 'success') {
+            notification.className += ' bg-green-50 border-l-4 border-green-400'
+        } else if (type === 'error') {
+            notification.className += ' bg-red-50 border-l-4 border-red-400'
+        } else if (type === 'warning') {
+            notification.className += ' bg-yellow-50 border-l-4 border-yellow-400'
+        } else {
+            notification.className += ' bg-blue-50 border-l-4 border-blue-400'
+        }
+        
+        notification.innerHTML = `
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center text-white ${
+                        type === 'success' ? 'bg-green-400' : 
+                        type === 'error' ? 'bg-red-400' : 
+                        type === 'warning' ? 'bg-yellow-400' : 'bg-blue-400'
+                    }">
+                        <i class="fas text-xs ${
+                            type === 'success' ? 'fa-check' : 
+                            type === 'error' ? 'fa-exclamation-triangle' : 
+                            type === 'warning' ? 'fa-exclamation' : 'fa-info'
+                        }"></i>
+                    </div>
+                </div>
+                <div class="ml-3 flex-1">
+                    <p class="text-sm font-medium ${
+                        type === 'success' ? 'text-green-800' : 
+                        type === 'error' ? 'text-red-800' : 
+                        type === 'warning' ? 'text-yellow-800' : 'text-blue-800'
+                    }">${message}</p>
+                </div>
+                <div class="ml-3 flex-shrink-0">
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                            class="inline-flex rounded-md p-1.5 transition-colors hover:bg-black/5 ${
+                                type === 'success' ? 'text-green-400' : 
+                                type === 'error' ? 'text-red-400' : 
+                                type === 'warning' ? 'text-yellow-400' : 'text-blue-400'
+                            }">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        `
+        
+        // Add to DOM
+        document.body.appendChild(notification)
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove()
+            }
+        }, 5000)
     }
 
     // Initialize services and API connections

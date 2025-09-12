@@ -21,7 +21,8 @@ class AuthStore {
         const token = authService.getToken()
         const user = authService.getUser()
         
-        if (token && user && !authService.isTokenExpired()) {
+        // More strict validation - check if token exists, is valid, and not expired
+        if (token && user && !authService.isTokenExpired() && token.trim() !== '') {
             this.state = {
                 isAuthenticated: true,
                 user,

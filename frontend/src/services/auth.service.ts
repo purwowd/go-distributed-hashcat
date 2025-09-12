@@ -174,11 +174,15 @@ class AuthService {
     // Check if token is expired (basic check)
     public isTokenExpired(): boolean {
         const token = this.getToken()
-        if (!token) return true
+        if (!token || token.trim() === '') return true
 
         try {
+            // Check if token has proper JWT format (3 parts separated by dots)
+            const parts = token.split('.')
+            if (parts.length !== 3) return true
+            
             // Decode JWT payload (basic implementation)
-            const payload = JSON.parse(atob(token.split('.')[1]))
+            const payload = JSON.parse(atob(parts[1]))
             const now = Math.floor(Date.now() / 1000)
             return payload.exp < now
         } catch {

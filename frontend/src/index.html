@@ -20,11 +20,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     
+    <!-- Security and Password Manager -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="google" content="notranslate">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="msapplication-tap-highlight" content="no">
+    
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS is now properly integrated via PostCSS -->
     
     <!-- Alpine.js - Complete manual control -->
     <script>
@@ -37,6 +43,37 @@
         
         // Flag to track if we've manually started Alpine
         window.alpineManuallyStarted = false;
+        window.alpineStartCount = 0;
+        
+        // Override Alpine.start to prevent multiple starts
+        window.addEventListener('DOMContentLoaded', function() {
+            if (window.Alpine && window.Alpine.start) {
+                const originalStart = window.Alpine.start;
+                window.Alpine.start = function() {
+                    if (window.alpineManuallyStarted) {
+                        console.warn('⚠️ Alpine.start() called multiple times, ignoring...');
+                        return;
+                    }
+                    window.alpineManuallyStarted = true;
+                    window.alpineStartCount++;
+                    return originalStart.call(this);
+                };
+            }
+        });
+        
+        // Also override immediately if Alpine is already loaded
+        if (window.Alpine && window.Alpine.start) {
+            const originalStart = window.Alpine.start;
+            window.Alpine.start = function() {
+                if (window.alpineManuallyStarted) {
+                    console.warn('⚠️ Alpine.start() called multiple times, ignoring...');
+                    return;
+                }
+                window.alpineManuallyStarted = true;
+                window.alpineStartCount++;
+                return originalStart.call(this);
+            };
+        }
     </script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     

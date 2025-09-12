@@ -31,7 +31,7 @@ func (u *authUsecase) Login(ctx context.Context, req *domain.LoginRequest) (*dom
 	user, err := u.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
 		// Check if it's a "not found" error vs other database errors
-		if err.Error() == "user not found" {
+		if _, ok := err.(*domain.UserNotFoundError); ok {
 			return nil, &domain.InvalidCredentialsError{}
 		}
 		return nil, &domain.InvalidCredentialsError{}
@@ -255,7 +255,7 @@ func (u *authUsecase) CheckUsernameExists(ctx context.Context, username string) 
 	_, err := u.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		// If user not found, return false (username doesn't exist)
-		if err.Error() == "user not found" {
+		if _, ok := err.(*domain.UserNotFoundError); ok {
 			return false, nil
 		}
 		// For other errors, return the error

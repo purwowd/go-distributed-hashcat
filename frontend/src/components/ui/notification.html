@@ -15,8 +15,7 @@
              'border-yellow-400 bg-yellow-50': notifications[0].type === 'warning',
              'border-blue-400 bg-blue-50': notifications[0].type === 'info' || !notifications[0].type
          } : {}"
-         x-data="{ debugType: notifications[0]?.type }"
-         x-init="console.log('Notification type:', debugType, 'Full notification:', notifications[0])">
+         x-data="{}">
         <div class="flex items-start">
             <div class="flex-shrink-0 mr-3">
                 <div class="w-6 h-6 rounded-full flex items-center justify-center text-white"
@@ -35,15 +34,23 @@
                        } : {}"></i>
                 </div>
             </div>
-            <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium leading-5"
-                   :class="notifications[0] ? {
-                       'text-green-800': notifications[0].type === 'success',
-                       'text-red-800': notifications[0].type === 'error',
-                       'text-yellow-800': notifications[0].type === 'warning',
-                       'text-blue-800': notifications[0].type === 'info' || !notifications[0].type
-                   } : {}"
-                   x-text="notifications[0]?.message || 'No message'"></p>
+            <div class="flex-1 min-w-0"
+                x-show="notifications.length > 0"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 transform scale-95"
+                x-transition:enter-end="opacity-100 transform scale-100"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 transform scale-100"
+                x-transition:leave-end="opacity-0 transform scale-95">
+            
+            <p class="text-sm font-medium leading-5"
+                :class="notifications[0] ? {
+                    'text-green-800': notifications[0].type === 'success',
+                    'text-red-800': notifications[0].type === 'error',
+                    'text-yellow-800': notifications[0].type === 'warning',
+                    'text-blue-800': notifications[0].type === 'info' || !notifications[0].type
+                } : {}"
+                x-text="notifications[0]?.message || ''"></p>
             </div>
             <div class="flex-shrink-0 ml-3">
                 <button @click="removeNotification(notifications[0]?.id)"
