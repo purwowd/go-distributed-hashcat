@@ -1910,11 +1910,10 @@ class DashboardApplication {
                 this.createdAgent = null
             },
             
-            async openAgentKeyModal() {
+            async             openAgentKeyModal() {
                 this.showAgentKeyModal = true
-                // Pre-generate an 8-char hex key on the client for instant UX; server will accept or generate if absent
-                const pregenerated = Math.random().toString(16).slice(2, 10).padEnd(8, '0').slice(0,8)
-                this.agentKeyForm = { name: '', agent_key: pregenerated }
+                // Initialize form with empty key - server will generate the actual key
+                this.agentKeyForm = { name: '', agent_key: '' }
                 this.createdAgentKey = null
                 this.showAgentNameError = false
             },
@@ -2055,12 +2054,12 @@ class DashboardApplication {
                 if (result) {
                     this.showNotification('Agent Key Generated Successfully!', 'success')
                     this.createdAgentKey = result
-                    // Always update the form with the server-generated key
+                    // Update the form with the server-generated key (this is the key that was saved to database)
                     this.agentKeyForm.agent_key = result.agent_key
-                    // Auto-close modal after short delay
-                    setTimeout(() => {
-                        this.closeAgentKeyModal()
-                    }, 400)
+                    // Don't auto-close modal so user can see and copy the generated key
+                    // setTimeout(() => {
+                    //     this.closeAgentKeyModal()
+                    // }, 400)
                 } else {
                     const state = agentStore.getState()
                     const rawError = String(state.error || '')

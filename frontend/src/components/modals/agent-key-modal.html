@@ -44,15 +44,14 @@
                         <div class="flex items-center space-x-2">
                             <input type="text"
                                    x-model="agentKeyForm.agent_key"
-                                   :value="agentKeyForm.agent_key || createdAgentKey?.agent_key || ''"
                                    readonly
                                    class="input-modern font-mono bg-gray-50 flex-1"
                                    placeholder="Will be generated after you click Generate Key">
                             <button type="button"
                                     class="btn-secondary px-4 py-2 text-sm whitespace-nowrap"
-                                     :class="!(agentKeyForm.agent_key || createdAgentKey) ? 'opacity-50 cursor-not-allowed' : ''"
-                                     :disabled="!(agentKeyForm.agent_key || createdAgentKey)"
-                                     @click="copyAgentKey(agentKeyForm.agent_key || createdAgentKey?.agent_key)">
+                                     :class="!agentKeyForm.agent_key ? 'opacity-50 cursor-not-allowed' : ''"
+                                     :disabled="!agentKeyForm.agent_key"
+                                     @click="copyAgentKey(agentKeyForm.agent_key)">
                                 <i class="fas fa-copy mr-2"></i>Copy
                             </button>
                         </div>
