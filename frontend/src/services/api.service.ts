@@ -218,10 +218,15 @@ class ApiService {
         }
     }
 
-    public async generateAgentKey(name: string): Promise<{agent: Agent | null, error: string | null}> {
-        const response = await this.post<{data: Agent}>('/api/v1/agents/generate-key', { name })
+    public async generateAgentKey(name: string, agentKey: string): Promise<{agent: Agent | null, error: string | null}> {
+        console.log('API: Sending generateAgentKey request with:', { name, agent_key: agentKey })
+        const response = await this.post<{data: Agent}>('/api/v1/agents/generate-key', { name, agent_key: agentKey })
+        console.log('API: Response received:', response)
+        console.log('API: Response data:', response.data)
+        console.log('API: Response data.data:', response.data?.data)
+        
         return {
-            agent: response.success ? response.data!.data : null,
+            agent: response.success && response.data?.data ? response.data.data : null,
             error: response.error || null
         }
     }

@@ -515,7 +515,8 @@ func (h *AgentHandler) UpdateAgentData(c *gin.Context) {
 // GenerateAgentKey creates a new agent key entry
 func (h *AgentHandler) GenerateAgentKey(c *gin.Context) {
 	type generateAgentKeyDTO struct {
-		Name string `json:"name" binding:"required"`
+		Name     string `json:"name" binding:"required"`
+		AgentKey string `json:"agent_key" binding:"required"`
 	}
 
 	var dto generateAgentKeyDTO
@@ -524,7 +525,7 @@ func (h *AgentHandler) GenerateAgentKey(c *gin.Context) {
 		return
 	}
 
-	agent, err := h.agentUsecase.GenerateAgentKey(c.Request.Context(), dto.Name)
+	agent, err := h.agentUsecase.GenerateAgentKey(c.Request.Context(), dto.Name, dto.AgentKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			c.JSON(http.StatusConflict, gin.H{

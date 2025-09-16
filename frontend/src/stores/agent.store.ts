@@ -54,6 +54,7 @@ class AgentStore {
             
             try {
                 const result = await apiService.getAgents(params)
+                console.log('Store: Fetched agents from server:', result.data)
                 this.setState({ 
                     agents: result.data, 
                     loading: false, 
@@ -126,16 +127,21 @@ class AgentStore {
         },
 
         // Generate new agent key
-        generateAgentKey: async (name: string): Promise<Agent | null> => {
+        generateAgentKey: async (name: string, agentKey: string): Promise<Agent | null> => {
             this.setState({ loading: true, error: null })
             
             try {
-                const { agent, error } = await apiService.generateAgentKey(name)
+                const { agent, error } = await apiService.generateAgentKey(name, agentKey)
                 if (agent) {
+                    console.log('Store: Adding new agent to state:', agent)
+                    console.log('Store: Current agents before add:', this.state.agents)
+                    
                     this.setState({
                         agents: [...this.state.agents, agent],
                         loading: false
                     })
+                    
+                    console.log('Store: Agents after add:', [...this.state.agents, agent])
                     return agent
                 } else {
                     this.setState({

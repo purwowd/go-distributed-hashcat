@@ -177,8 +177,8 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 
 	// Kondisi baru: agent tanpa IPAddress selalu offline
 	if agent.IPAddress == "" {
-		infrastructure.ServerLogger.Warning("Agent %s (%s) has no IP address, forcing offline status",
-			agent.Name, agent.ID.String()[:8])
+		infrastructure.ServerLogger.Warning("Agent %s (key: %s) has no IP address, forcing offline status",
+			agent.Name, agent.AgentKey)
 		*offlineCount++
 		// Update status ke offline tanpa reset speed
 		if agent.Status != "offline" {
@@ -211,8 +211,8 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 
 	// Status change needed?
 	if shouldBeOffline && currentlyOnline {
-		infrastructure.ServerLogger.Warning("Agent %s (%s) timeout detected - last seen %v ago",
-			agent.Name, agent.ID.String()[:8], timeSinceLastSeen)
+		infrastructure.ServerLogger.Warning("Agent %s (key: %s) timeout detected - last seen %v ago",
+			agent.Name, agent.AgentKey, timeSinceLastSeen)
 
 		// Update status to offline without resetting speed
 		if err := h.agentUsecase.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
@@ -233,8 +233,8 @@ func (h *agentHealthMonitor) checkSingleAgent(ctx context.Context, agent *domain
 		infrastructure.ServerLogger.Info("Agent %s status updated to offline", agent.Name)
 	} else if !shouldBeOffline && !currentlyOnline {
 		// Handle online status change (agent came back online)
-		infrastructure.ServerLogger.Info("Agent %s (%s) came back online - last seen %v ago",
-			agent.Name, agent.ID.String()[:8], timeSinceLastSeen)
+		infrastructure.ServerLogger.Info("Agent %s (key: %s) came back online - last seen %v ago",
+			agent.Name, agent.AgentKey, timeSinceLastSeen)
 
 		// Update status to online
 		if err := h.agentUsecase.UpdateAgentStatus(ctx, agent.ID, "online"); err != nil {

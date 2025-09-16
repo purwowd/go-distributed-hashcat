@@ -37,7 +37,7 @@
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <p class="text-sm font-semibold text-blue-900 mb-3">Recommendation: Use CLI upload for large files:</p>
                         <div class="bg-gray-800 text-green-400 p-3 rounded font-mono text-xs overflow-x-auto">
-                            <div>./server wordlist upload "<span x-text="wordlistForm.file?.name"></span>" --name "custom_name" --chunk 100 --count=true</div>
+                            <div>curl -X POST -F "file=@<span x-text="wordlistForm.file?.name"></span>" -F "name=<span x-text="wordlistForm.file?.name"></span>" http://30.30.30.39:1337/api/v1/wordlists/upload</div>
                         </div>
                     </div>
                 </div>

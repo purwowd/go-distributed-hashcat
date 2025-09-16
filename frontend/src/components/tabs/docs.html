@@ -154,7 +154,7 @@ chmod +x agent
 mkdir -p /root/uploads/{wordlists,hash-files,temp}
 
 # 3. Start agent
-./agent --server http://your-server:1337 --name my-gpu-agent
+sudo ./bin/agent --server http://your-server:1337 --name "name-agent" --agent-key "agent-key" --ip "192.168.1.100"
                 </div>
                 <p class="text-green-800 text-sm">
                     <i class="fas fa-lightbulb mr-2"></i>

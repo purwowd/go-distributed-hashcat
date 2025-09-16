@@ -422,6 +422,7 @@ class DashboardApplication {
         window.Alpine.data('dashboardApp', () => ({
             // Reactive state
             currentTab: router.getCurrentRoute(),
+            mobileMenuOpen: false,
             isLoading: false,
             isAlpineInitialized: false,
             notifications: [] as Array<{id: number, message: string, type: 'success' | 'error' | 'info' | 'warning', timestamp: Date}>,
@@ -475,6 +476,14 @@ class DashboardApplication {
             forceStopLoading() {
                 this.isLoading = false
                 // console.log('🛑 Loading force stopped by user')
+            },
+
+            // Generate agent key on frontend
+            generateAgentKey() {
+                // Generate 8-character hex key
+                const bytes = new Uint8Array(4)
+                crypto.getRandomValues(bytes)
+                return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
             },
             
             // Cache stats (if needed)
@@ -1910,10 +1919,12 @@ class DashboardApplication {
                 this.createdAgent = null
             },
             
-            async             openAgentKeyModal() {
+            async openAgentKeyModal() {
                 this.showAgentKeyModal = true
-                // Initialize form with empty key - server will generate the actual key
-                this.agentKeyForm = { name: '', agent_key: '' }
+                // Generate key on frontend for immediate display
+                const generatedKey = this.generateAgentKey()
+                console.log('Generated key on modal open:', generatedKey)
+                this.agentKeyForm = { name: '', agent_key: generatedKey }
                 this.createdAgentKey = null
                 this.showAgentNameError = false
             },
@@ -2024,13 +2035,63 @@ class DashboardApplication {
 
 
             async copyAgentKey(agentKey: string) {
+                console.log('copyAgentKey called with:', agentKey)
+                
+                // Validate agent key
+                if (!agentKey || agentKey.trim() === '') {
+                    console.log('Agent key is empty or invalid')
+                    this.showNotification('No agent key to copy', 'error')
+                    return
+                }
+
                 try {
-                    await navigator.clipboard.writeText(agentKey)
-                    this.showNotification('Agent key copied to clipboard!', 'success')
+                    // Check if clipboard API is available
+                    if (navigator.clipboard && window.isSecureContext) {
+                        console.log('Using modern clipboard API')
+                        await navigator.clipboard.writeText(agentKey)
+                        this.showNotification('Agent key copied to clipboard!', 'success')
+                    } else {
+                        console.log('Using fallback copy method')
+                        // Fallback for older browsers or non-HTTPS contexts
+                        this.fallbackCopyTextToClipboard(agentKey)
+                    }
                 } catch (err) {
                     console.error('Failed to copy agent key: ', err)
+                    // Try fallback method
+                    this.fallbackCopyTextToClipboard(agentKey)
+                }
+            },
+
+            fallbackCopyTextToClipboard(text: string) {
+                console.log('fallbackCopyTextToClipboard called with:', text)
+                
+                const textArea = document.createElement("textarea")
+                textArea.value = text
+                
+                // Avoid scrolling to bottom
+                textArea.style.top = "0"
+                textArea.style.left = "0"
+                textArea.style.position = "fixed"
+                textArea.style.opacity = "0"
+                
+                document.body.appendChild(textArea)
+                textArea.focus()
+                textArea.select()
+                
+                try {
+                    const successful = document.execCommand('copy')
+                    console.log('execCommand copy result:', successful)
+                    if (successful) {
+                        this.showNotification('Agent key copied to clipboard!', 'success')
+                    } else {
+                        this.showNotification('Failed to copy agent key', 'error')
+                    }
+                } catch (err) {
+                    console.error('Fallback copy failed: ', err)
                     this.showNotification('Failed to copy agent key', 'error')
                 }
+                
+                document.body.removeChild(textArea)
             },
             
             async validateAndCreateAgentKey(agentKeyData: any) {
@@ -2049,17 +2110,26 @@ class DashboardApplication {
             },
 
             async createAgentKey(agentKeyData: any) {
+                console.log('Creating agent key with data:', agentKeyData)
+                console.log('Frontend key before sending to server:', agentKeyData.agent_key)
+                
                 // Use the new generateAgentKey action for creating agent keys
-                const result = await agentStore.actions.generateAgentKey(agentKeyData.name)
+                const result = await agentStore.actions.generateAgentKey(agentKeyData.name, agentKeyData.agent_key)
                 if (result) {
+                    console.log('Server returned agent:', result)
+                    console.log('Server key:', result.agent_key)
+                    console.log('Frontend key after server response:', agentKeyData.agent_key)
+                    
                     this.showNotification('Agent Key Generated Successfully!', 'success')
                     this.createdAgentKey = result
-                    // Update the form with the server-generated key (this is the key that was saved to database)
-                    this.agentKeyForm.agent_key = result.agent_key
-                    // Don't auto-close modal so user can see and copy the generated key
-                    // setTimeout(() => {
-                    //     this.closeAgentKeyModal()
-                    // }, 400)
+                    
+                    // Refresh the agents table to show the new agent
+                    await this.refreshAgentsTable()
+                    
+                    // Auto-close modal after short delay
+                    setTimeout(() => {
+                        this.closeAgentKeyModal()
+                    }, 400)
                 } else {
                     const state = agentStore.getState()
                     const rawError = String(state.error || '')

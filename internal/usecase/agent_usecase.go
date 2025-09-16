@@ -41,7 +41,7 @@ type AgentUsecase interface {
 	CreateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error
-	GenerateAgentKey(ctx context.Context, name string) (*domain.Agent, error)
+	GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error)
 }
 
 type agentUsecase struct {
@@ -442,7 +442,7 @@ func (u *agentUsecase) GetByNameAndIP(ctx context.Context, name, ip string, port
 }
 
 // GenerateAgentKey creates a new agent key entry in the database
-func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name string) (*domain.Agent, error) {
+func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error) {
 	// Check if agent name already exists
 	existingAgent, err := u.agentRepo.GetByName(ctx, name)
 	if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
@@ -453,10 +453,14 @@ func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name string) (*doma
 		return nil, fmt.Errorf("agent name '%s' already exists", name)
 	}
 
-	// Generate unique agent key
-	agentKey, err := generateAgentKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate agent key: %w", err)
+	// Check if agent key already exists
+	existingAgentByKey, err := u.agentRepo.GetByAgentKey(ctx, agentKey)
+	if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
+		return nil, fmt.Errorf("failed to check existing agent key: %w", err)
+	}
+
+	if existingAgentByKey != nil {
+		return nil, fmt.Errorf("agent key '%s' already exists", agentKey)
 	}
 
 	// Create new agent entry with just the name and key

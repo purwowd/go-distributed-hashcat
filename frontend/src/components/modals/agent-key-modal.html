@@ -38,24 +38,30 @@
                         </p>
                     </div>
 
-                    <!-- Preview field so users can see/copy the key from the same modal after generation -->
+                    <!-- Agent Key field - generated on frontend -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Agent Key</label>
                         <div class="flex items-center space-x-2">
                             <input type="text"
                                    x-model="agentKeyForm.agent_key"
-                                   readonly
-                                   class="input-modern font-mono bg-gray-50 flex-1"
-                                   placeholder="Will be generated after you click Generate Key">
+                                   :disabled="createdAgentKey"
+                                   class="input-modern font-mono flex-1"
+                                   placeholder="Agent key will be generated automatically">
+                            <!-- <button type="button"
+                                    class="btn-secondary px-3 py-2 text-sm whitespace-nowrap"
+                                    @click="agentKeyForm.agent_key = generateAgentKey()"
+                                    :disabled="createdAgentKey">
+                                <i class="fas fa-sync-alt mr-1"></i>Regenerate
+                            </button> -->
                             <button type="button"
                                     class="btn-secondary px-4 py-2 text-sm whitespace-nowrap"
                                      :class="!agentKeyForm.agent_key ? 'opacity-50 cursor-not-allowed' : ''"
                                      :disabled="!agentKeyForm.agent_key"
-                                     @click="copyAgentKey(agentKeyForm.agent_key)">
+                                     @click="copyAgentKey(agentKeyForm.agent_key || '')">
                                 <i class="fas fa-copy mr-2"></i>Copy
                             </button>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1">The key will appear after you click Generate Key</p>
+                        <p class="text-xs text-gray-500 mt-1">Key is generated automatically. You can regenerate if needed.</p>
                     </div>
                 </div>
                 
