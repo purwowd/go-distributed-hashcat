@@ -151,7 +151,7 @@ class DashboardApplication {
             // console.log('🔍 Main containers:', document.querySelectorAll('main').length)
 
         } catch (error) {
-            console.error('❌ Failed to initialize dashboard:', error)
+            // console.error('❌ Failed to initialize dashboard:', error)
             this.showErrorState()
         }
         
@@ -161,7 +161,7 @@ class DashboardApplication {
             const hasContent = mainContainers.length > 0 && Array.from(mainContainers).some(main => main.children.length > 0)
             
             if (!hasContent) {
-                console.warn('⚠️ No content rendered after 5 seconds, showing debug mode')
+                // console.warn('⚠️ No content rendered after 5 seconds, showing debug mode')
                 const debugContainer = document.getElementById('debug-container')
                 if (debugContainer) {
                     debugContainer.style.display = 'block'
@@ -202,6 +202,7 @@ class DashboardApplication {
                 { name: 'modals/job-modal', path: '/components/modals/job-modal.html' },
                 { name: 'modals/file-modal', path: '/components/modals/file-modal.html' },
                 { name: 'modals/wordlist-modal', path: '/components/modals/wordlist-modal.html' },
+                { name: 'modals/large-file-warning-modal', path: '/components/modals/large-file-warning-modal.html' },
                 { name: 'ui/notification', path: '/components/ui/notification.html' },
                 { name: 'ui/loading', path: '/components/ui/loading.html' }
             ]
@@ -218,7 +219,7 @@ class DashboardApplication {
             perf.endTimer('component-loading')
             // console.log('✅ HTML components loaded successfully')
         } catch (error) {
-            console.error('❌ Failed to load components:', error)
+            // console.error('❌ Failed to load components:', error)
             throw error
         }
     }
@@ -238,7 +239,7 @@ class DashboardApplication {
             mainContainer.className = 'container-modern'
             document.body.appendChild(mainContainer)
         } else {
-            console.log('📦 Found existing main container')
+            // console.log('📦 Found existing main container')
         }
 
         // Load navigation (only if not on login page)
@@ -257,7 +258,7 @@ class DashboardApplication {
                 document.body.insertBefore(navElement, mainContainer)
                 // console.log('✅ Navigation injected into DOM')
             } else {
-                console.error('❌ Failed to find nav element in navigation component')
+                // console.error('❌ Failed to find nav element in navigation component')
                 // console.log('📝 Navigation content preview:', navigation.substring(0, 200) + '...')
             }
 
@@ -275,7 +276,7 @@ class DashboardApplication {
                 document.body.insertBefore(breadcrumbElement, mainContainer)
                 // console.log('✅ Breadcrumb injected into DOM')
             } else {
-                console.error('❌ Failed to find nav element in breadcrumb component')
+                // console.error('❌ Failed to find nav element in breadcrumb component')
             }
         }
 
@@ -293,7 +294,7 @@ class DashboardApplication {
                 mainContainer.appendChild(loginElement)
                 // console.log('✅ Injected login component with x-data')
             } else {
-                console.warn('❌ Failed to inject login component')
+                // console.warn('❌ Failed to inject login component')
             }
         } else {
             // Load tab content for other routes
@@ -317,7 +318,8 @@ class DashboardApplication {
                     mainContainer.appendChild(element)
                     // console.log(`✅ Injected ${component} component`)
                 } else {
-                    console.warn(`❌ Failed to inject ${component} component`)
+                    // Silently handle failed component injection
+                    // console.warn(`❌ Failed to inject ${component} component`)
                 }
             }
         }
@@ -329,7 +331,8 @@ class DashboardApplication {
             'modals/delete-confirm-modal',
             'modals/job-modal',
             'modals/file-modal',
-            'modals/wordlist-modal'
+            'modals/wordlist-modal',
+            'modals/large-file-warning-modal'
         ]
 
         for (const component of modalComponents) {
@@ -342,7 +345,8 @@ class DashboardApplication {
                 document.body.appendChild(element)
                 // console.log(`✅ Injected ${component} modal`)
             } else {
-                console.warn(`❌ Failed to inject ${component} modal`)
+                // Silently handle failed modal injection
+                // console.warn(`❌ Failed to inject ${component} modal`)
             }
         }
 
@@ -362,7 +366,7 @@ class DashboardApplication {
                 document.body.appendChild(element)
                 // console.log(`✅ Injected ${component} UI component`)
             } else {
-                console.warn(`❌ Failed to inject ${component} UI component`)
+                // console.warn(`❌ Failed to inject ${component} UI component`)
             }
         }
     }
@@ -402,13 +406,13 @@ class DashboardApplication {
 
         // Ensure Alpine is available (it should be from our wait)
         if (!window.Alpine) {
-            console.warn('Alpine not available during initialization')
+            // console.warn('Alpine not available during initialization')
             return
         }
 
         // Prevent duplicate data registration
         if (this.alpineDataRegistered) {
-            console.log('Alpine data already registered, skipping...')
+            // console.log('Alpine data already registered, skipping...')
             return
         }
         this.alpineDataRegistered = true
@@ -437,6 +441,9 @@ class DashboardApplication {
             currentStep: 1, // 1: Basic Config, 2: Distribution Preview
             showFileModal: false,
             showWordlistModal: false,
+            showLargeFileWarningModal: false,
+            showLargeFileWarning: false,
+            largeFileInfo: null as { name: string, size: string } | null,
             showDistributedJobModal: false,
             
             // Compact mode for agent selection
@@ -452,7 +459,7 @@ class DashboardApplication {
             jobForm: { name: '', hash_file_id: '', wordlist_id: '', agent_ids: [] as string[], hash_type: '', attack_mode: '' },
             distributedJobForm: { name: '', hash_file_id: '', wordlist_id: '', hash_type: '', attack_mode: '', auto_distribute: true },
             fileForm: { file: null },
-            wordlistForm: { file: null },
+            wordlistForm: { file: null as File | null },
             loginForm: { username: '', password: '' },
             showPassword: false,
             usernameError: null as string | null,
@@ -467,7 +474,7 @@ class DashboardApplication {
             // Manual loading reset (fallback)
             forceStopLoading() {
                 this.isLoading = false
-                console.log('🛑 Loading force stopped by user')
+                // console.log('🛑 Loading force stopped by user')
             },
             
             // Cache stats (if needed)
@@ -715,15 +722,15 @@ class DashboardApplication {
                 
                 // Check authentication status on init
                 const currentRoute = router.getCurrentRoute()
-                console.log('🔍 Initial route:', currentRoute)
-                console.log('🔍 Authentication status:', this.isAuthenticated)
-                console.log('🔍 Auth store state:', authStore.getState())
-                console.log('🔍 Current URL:', window.location.href)
-                console.log('🔍 Current hash:', window.location.hash)
+                // console.log('🔍 Initial route:', currentRoute)
+                // console.log('🔍 Authentication status:', this.isAuthenticated)
+                // console.log('🔍 Auth store state:', authStore.getState())
+                // console.log('🔍 Current URL:', window.location.href)
+                // console.log('🔍 Current hash:', window.location.hash)
                 
                 // STRICT AUTHENTICATION: If not authenticated, redirect to login for ANY route except login
                 if (!this.isAuthenticated && currentRoute !== 'login') {
-                    console.log('🔒 STRICT AUTH: Unauthenticated access to', currentRoute, '- redirecting to login')
+                    // console.log('🔒 STRICT AUTH: Unauthenticated access to', currentRoute, '- redirecting to login')
                     this.showNotification('Please login to access this page', 'warning')
                     // Force redirect to login with URL change
                     window.location.replace('/login')
@@ -746,11 +753,11 @@ class DashboardApplication {
                 // Additional protection: Listen for direct URL changes
                 window.addEventListener('popstate', () => {
                     const currentRoute = router.getCurrentRoute()
-                    console.log('🔍 URL changed to:', currentRoute)
+                    // console.log('🔍 URL changed to:', currentRoute)
                     
                     // STRICT AUTHENTICATION: If not authenticated, redirect to login for ANY route except login
                     if (!this.isAuthenticated && currentRoute !== 'login') {
-                        console.log('🔒 STRICT AUTH: Direct URL access to', currentRoute, '- redirecting to login')
+                        // console.log('🔒 STRICT AUTH: Direct URL access to', currentRoute, '- redirecting to login')
                         this.showNotification('Please login to access this page', 'warning')
                         window.location.replace('/login')
                     }
@@ -776,7 +783,7 @@ class DashboardApplication {
                     
                     // console.log('🎉 Dashboard initialization complete')
                 } catch (error) {
-                    console.error('❌ Dashboard initialization failed:', error)
+                    // console.error('❌ Dashboard initialization failed:', error)
                     this.showNotification('Failed to initialize dashboard', 'error')
                 }
                 
@@ -785,7 +792,7 @@ class DashboardApplication {
                 // Safety timeout to prevent infinite loading
                 setTimeout(() => {
                     if (this.isLoading) {
-                        console.warn('⚠️ Loading timeout reached, forcing stop')
+                        // console.warn('⚠️ Loading timeout reached, forcing stop')
                         this.forceStopLoading()
                         this.showNotification('Loading took too long. Data may be incomplete.', 'warning')
                     }
@@ -884,7 +891,7 @@ class DashboardApplication {
             
             // Wait for modal to close and then show notification
             waitForModalClose(modalElement: Element) {
-                console.log('⏳ Waiting for modal to close...')
+                // console.log('⏳ Waiting for modal to close...')
                 
                 let checkCount = 0
                 const maxChecks = 100 // Maximum 10 seconds (100 * 100ms)
@@ -898,7 +905,7 @@ class DashboardApplication {
                                           (modalElement as HTMLElement).style.display !== 'none')
                     
                     if (!isModalPresent || checkCount >= maxChecks) {
-                        console.log('✅ Modal closed or timeout reached, showing notification...')
+                        // console.log('✅ Modal closed or timeout reached, showing notification...')
                         // Add small delay to ensure modal is completely gone
                         setTimeout(() => {
                             this.showLoginSuccessNotificationNow()
@@ -915,12 +922,12 @@ class DashboardApplication {
 
             // Show notification immediately
             showLoginSuccessNotificationNow() {
-                console.log('🚀 ===== SHOWING LOGIN SUCCESS NOTIFICATION NOW =====')
+                // console.log('🚀 ===== SHOWING LOGIN SUCCESS NOTIFICATION NOW =====')
                 
                 // Check if notification has already been shown for this session
                 const notificationShown = sessionStorage.getItem('loginSuccessNotificationShown')
                 if (notificationShown === 'true') {
-                    console.log('🚫 Login success notification already shown in this session, skipping...')
+                    // console.log('🚫 Login success notification already shown in this session, skipping...')
                     return
                 }
                 
@@ -928,12 +935,12 @@ class DashboardApplication {
                 sessionStorage.setItem('loginSuccessNotificationShown', 'true')
                 
                 this.showLoginSuccessNotification = true
-                console.log('🚀 State set to:', this.showLoginSuccessNotification)
+                // console.log('🚀 State set to:', this.showLoginSuccessNotification)
                 
                 // Force Alpine reactivity
                 if (window.Alpine) {
                     window.Alpine.nextTick(() => {
-                        console.log('🚀 After nextTick, state is:', this.showLoginSuccessNotification)
+                        // console.log('🚀 After nextTick, state is:', this.showLoginSuccessNotification)
                     })
                 }
                 
@@ -946,25 +953,25 @@ class DashboardApplication {
                     this.showNotification('🚀 Ready to start cracking passwords!', 'info')
                 }, 2000)
                 
-                console.log('🚀 =====================================================')
+                // console.log('🚀 =====================================================')
             },
 
 
             // Check for login success notification
             checkLoginSuccessNotification() {
-                console.log('🔍 ===== CHECKING LOGIN SUCCESS NOTIFICATION =====')
-                console.log('🔍 Current tab in checkLoginSuccessNotification:', this.currentTab)
-                console.log('🔍 Current route:', window.location.pathname)
-                console.log('🔍 Alpine available:', !!window.Alpine)
-                console.log('🔍 Dashboard app available:', !!(window as any).Alpine?.data('dashboardApp'))
+                // console.log('🔍 ===== CHECKING LOGIN SUCCESS NOTIFICATION =====')
+                // console.log('🔍 Current tab in checkLoginSuccessNotification:', this.currentTab)
+                // console.log('🔍 Current route:', window.location.pathname)
+                // console.log('🔍 Alpine available:', !!window.Alpine)
+                // console.log('🔍 Dashboard app available:', !!(window as any).Alpine?.data('dashboardApp'))
                 
                 const showLoginSuccess = sessionStorage.getItem('showLoginSuccess')
                 const loginSuccessTime = sessionStorage.getItem('loginSuccessTime')
-                console.log('📝 showLoginSuccess flag:', showLoginSuccess)
-                console.log('⏰ loginSuccessTime:', loginSuccessTime)
-                console.log('🔍 showLoginSuccess === "true"?', showLoginSuccess === 'true')
-                console.log('🔍 SessionStorage keys:', Object.keys(sessionStorage))
-                console.log('🔍 ================================================')
+                // console.log('📝 showLoginSuccess flag:', showLoginSuccess)
+                // console.log('⏰ loginSuccessTime:', loginSuccessTime)
+                // console.log('🔍 showLoginSuccess === "true"?', showLoginSuccess === 'true')
+                // console.log('🔍 SessionStorage keys:', Object.keys(sessionStorage))
+                // console.log('🔍 ================================================')
                 
                 // Check if Google Password Manager modal is present
                 const googleModal = document.querySelector('[role="dialog"]') || 
@@ -976,13 +983,13 @@ class DashboardApplication {
                                  document.querySelector('[class*="overlay"]')
                 
                 if (googleModal) {
-                    console.log('⚠️ Google Password Manager modal detected, delaying notification...')
-                    console.log('⚠️ Modal element:', googleModal)
+                    // console.log('⚠️ Google Password Manager modal detected, delaying notification...')
+                    // console.log('⚠️ Modal element:', googleModal)
                     // Wait for modal to be closed
                     this.waitForModalClose(googleModal)
                     return
                 } else {
-                    console.log('✅ No modal detected, showing notification immediately')
+                    // console.log('✅ No modal detected, showing notification immediately')
                 }
                 
                 // Make this method globally accessible
@@ -991,8 +998,8 @@ class DashboardApplication {
                 }
                 
                 if (showLoginSuccess === 'true') {
-                    console.log('✅ Showing login success notification!')
-                    console.log('🔍 About to call showNotification...')
+                    // console.log('✅ Showing login success notification!')
+                    // console.log('🔍 About to call showNotification...')
                     
                     // Check if notification has already been shown for this session
                     const notificationShown = sessionStorage.getItem('loginSuccessNotificationShown')
@@ -1011,7 +1018,7 @@ class DashboardApplication {
                     setTimeout(() => {
                         sessionStorage.removeItem('showLoginSuccess')
                         sessionStorage.removeItem('loginSuccessTime')
-                        console.log('🧹 Cleared login success flags from sessionStorage')
+                        // console.log('🧹 Cleared login success flags from sessionStorage')
                     }, 5000) // Clear after 5 seconds
                     
                     // Auto-hide notification after 8 seconds
@@ -1107,12 +1114,12 @@ class DashboardApplication {
                         // Set multiple flags for success notification
                         sessionStorage.setItem('showLoginSuccess', 'true')
                         sessionStorage.setItem('loginSuccessTime', Date.now().toString())
-                        console.log('💾 showLoginSuccess flag set in sessionStorage')
+                        // console.log('💾 showLoginSuccess flag set in sessionStorage')
                         console.log('💾 SessionStorage contents:', {
                             showLoginSuccess: sessionStorage.getItem('showLoginSuccess'),
                             loginSuccessTime: sessionStorage.getItem('loginSuccessTime')
                         })
-                        console.log('💾 All sessionStorage keys:', Object.keys(sessionStorage))
+                        // console.log('💾 All sessionStorage keys:', Object.keys(sessionStorage))
                         console.log('🎉 ================================')
                         
                         // Force trigger notification check immediately
@@ -1513,7 +1520,7 @@ class DashboardApplication {
 
             // Load content based on route
             async loadContentForRoute(route: string) {
-                console.log('🔄 loadContentForRoute called with route:', route)
+                // console.log('🔄 loadContentForRoute called with route:', route)
                 const mainContainer = document.getElementById('main-content')
                 if (!mainContainer) return
                 
@@ -1787,8 +1794,8 @@ class DashboardApplication {
                 message: string,
                 type: 'success' | 'error' | 'info' | 'warning' = 'info'
             ) {
-                console.log(`🔔 showNotification called: [${type.toUpperCase()}] ${message}`)
-                console.log(`🔔 Current tab: ${this.currentTab}`)
+                // console.log(`🔔 showNotification called: [${type.toUpperCase()}] ${message}`)
+                // console.log(`🔔 Current tab: ${this.currentTab}`)
             
                 const isLoginSuccess = message.includes('Login successful')
                 const isLoginError =
@@ -1802,7 +1809,7 @@ class DashboardApplication {
             
                 // Jangan tampilkan notifikasi di halaman login kecuali login error
                 if (this.currentTab === 'login' && !isLoginError) {
-                    console.log(`🔔 Notification blocked on login page: [${type.toUpperCase()}] ${message}`)
+                    // console.log(`🔔 Notification blocked on login page: [${type.toUpperCase()}] ${message}`)
                     return
                 }
             
@@ -1811,11 +1818,11 @@ class DashboardApplication {
                     (n) => n.message === message && n.type === type
                 )
                 if (exists) {
-                    console.log(`🔔 Duplicate notification blocked: [${type.toUpperCase()}] ${message}`)
+                    // console.log(`🔔 Duplicate notification blocked: [${type.toUpperCase()}] ${message}`)
                     return
                 }
             
-                console.log(`🔔 Showing notification: [${type.toUpperCase()}] ${message}`)
+                // console.log(`🔔 Showing notification: [${type.toUpperCase()}] ${message}`)
             
                 const notification = {
                     id: Date.now(),
@@ -2333,6 +2340,30 @@ class DashboardApplication {
             
             closeWordlistModal() {
                 this.showWordlistModal = false
+                this.wordlistForm = { file: null }
+                // Also close large file warning if open
+                this.closeLargeFileWarning()
+                this.closeLargeFileWarningModal()
+            },
+            
+            openLargeFileWarningModal() {
+                this.showLargeFileWarningModal = true
+            },
+            
+            closeLargeFileWarningModal() {
+                this.showLargeFileWarningModal = false
+            },
+
+            // Handle wordlist file selection
+            handleWordlistFileChange(event: Event) {
+                const target = event.target as HTMLInputElement
+                if (target.files && target.files[0]) {
+                    const file = target.files[0]
+                    this.wordlistForm.file = file
+                    // console.log('File selected:', file.name, 'Size:', file.size)
+                    
+                    // File size check will be done when user clicks upload
+                }
             },
 
             // Handle wordlist change and validate agent selection
@@ -3144,12 +3175,34 @@ class DashboardApplication {
                 }
             },
 
+            handleWordlistUpload() {
+                // console.log('handleWordlistUpload called, wordlistForm.file:', this.wordlistForm.file)
+                if (!this.wordlistForm.file) {
+                    this.showNotification('Please select a file to upload', 'error')
+                    return
+                }
+                
+                // File validation will be done in uploadWordlist
+                this.uploadWordlist(this.wordlistForm.file)
+            },
+
             async uploadWordlist(file: File) {
                 if (!file) {
                     this.showNotification('Please select a file to upload', 'error')
                     return
                 }
                 
+                // Check file size (1GB = 1073741824 bytes)
+                const maxSize = 1073741824 // 1GB in bytes
+                if (file.size > maxSize) {
+                    this.openLargeFileWarningModal()
+                    return
+                }
+                
+                await this.performWordlistUpload(file)
+            },
+
+            async performWordlistUpload(file: File) {
                 try {
                     this.isLoading = true
                     this.showNotification(`Uploading ${file.name}...`, 'info')
@@ -3174,6 +3227,20 @@ class DashboardApplication {
                     this.showNotification('Upload failed due to network error', 'error')
                 } finally {
                     this.isLoading = false
+                }
+            },
+
+
+            closeLargeFileWarning() {
+                this.showLargeFileWarning = false
+                this.largeFileInfo = null
+            },
+
+            async proceedWithLargeFileUpload() {
+                this.closeLargeFileWarning()
+                this.closeLargeFileWarningModal()
+                if (this.wordlistForm.file) {
+                    await this.performWordlistUpload(this.wordlistForm.file)
                 }
             },
 
@@ -3434,12 +3501,12 @@ class DashboardApplication {
         // Add fallback check for login success notification after Alpine initialization
         setTimeout(() => {
             const showLoginSuccess = sessionStorage.getItem('showLoginSuccess')
-            console.log('🔍 Fallback: Checking sessionStorage:', showLoginSuccess)
-            console.log('🔍 Fallback: All sessionStorage keys:', Object.keys(sessionStorage))
-            console.log('🔍 Fallback: Alpine available:', !!window.Alpine)
+            // console.log('🔍 Fallback: Checking sessionStorage:', showLoginSuccess)
+            // console.log('🔍 Fallback: All sessionStorage keys:', Object.keys(sessionStorage))
+            // console.log('🔍 Fallback: Alpine available:', !!window.Alpine)
             
             if (showLoginSuccess === 'true') {
-                console.log('🔍 Fallback: Found login success flag, checking notification...')
+                // console.log('🔍 Fallback: Found login success flag, checking notification...')
                 
                 // Try multiple ways to access Alpine component
                 let dashboardApp = null
@@ -3447,7 +3514,7 @@ class DashboardApplication {
                 // Method 1: Direct Alpine data access
                 if (window.Alpine && window.Alpine.data) {
                     dashboardApp = window.Alpine.data('dashboardApp')
-                    console.log('🔍 Fallback: Method 1 - Alpine data:', !!dashboardApp)
+                    // console.log('🔍 Fallback: Method 1 - Alpine data:', !!dashboardApp)
                 }
                 
                 // Method 2: Try to find Alpine component in DOM
@@ -3455,48 +3522,48 @@ class DashboardApplication {
                     const alpineElement = document.querySelector('[x-data*="dashboardApp"]')
                     if (alpineElement && (alpineElement as any)._x_dataStack) {
                         dashboardApp = (alpineElement as any)._x_dataStack[0]
-                        console.log('🔍 Fallback: Method 2 - DOM element:', !!dashboardApp)
+                        // console.log('🔍 Fallback: Method 2 - DOM element:', !!dashboardApp)
                     }
                 }
                 
                 // Method 3: Try global window access
                 if (!dashboardApp) {
                     dashboardApp = (window as any).dashboardApp
-                    console.log('🔍 Fallback: Method 3 - Global window:', !!dashboardApp)
+                    // console.log('🔍 Fallback: Method 3 - Global window:', !!dashboardApp)
                 }
                 
                 // Method 4: Try to access via Alpine store
                 if (!dashboardApp && window.Alpine && window.Alpine.store) {
                     try {
                         dashboardApp = window.Alpine.store('dashboardApp')
-                        console.log('🔍 Fallback: Method 4 - Alpine store:', !!dashboardApp)
+                        // console.log('🔍 Fallback: Method 4 - Alpine store:', !!dashboardApp)
                     } catch (e) {
-                        console.log('🔍 Fallback: Method 4 failed:', e)
+                        // console.log('🔍 Fallback: Method 4 failed:', e)
                     }
                 }
                 
-                console.log('🔍 Fallback: Dashboard app available:', !!dashboardApp)
+                // console.log('🔍 Fallback: Dashboard app available:', !!dashboardApp)
                 
                 if (dashboardApp) {
-                    console.log('🔍 Fallback: Setting showLoginSuccessNotification to true')
+                    // console.log('🔍 Fallback: Setting showLoginSuccessNotification to true')
                     dashboardApp.showLoginSuccessNotification = true
-                    console.log('📊 Fallback: State set to:', dashboardApp.showLoginSuccessNotification)
+                    // console.log('📊 Fallback: State set to:', dashboardApp.showLoginSuccessNotification)
                     
                     // Force trigger notification immediately
                     if (typeof dashboardApp.showLoginSuccessNotificationNow === 'function') {
-                        console.log('🔍 Fallback: Calling showLoginSuccessNotificationNow')
+                        // console.log('🔍 Fallback: Calling showLoginSuccessNotificationNow')
                         dashboardApp.showLoginSuccessNotificationNow()
                     } else if (typeof dashboardApp.checkLoginSuccessNotification === 'function') {
-                        console.log('🔍 Fallback: Calling checkLoginSuccessNotification')
+                        // console.log('🔍 Fallback: Calling checkLoginSuccessNotification')
                         dashboardApp.checkLoginSuccessNotification()
                     }
                 } else {
-                    console.log('❌ Fallback: Could not access Alpine component, trying direct DOM manipulation')
+                    // console.log('❌ Fallback: Could not access Alpine component, trying direct DOM manipulation')
                     // Fallback: Direct DOM manipulation
                     this.triggerNotificationDirectly()
                 }
             } else {
-                console.log('🔍 Fallback: No login success flag found')
+                // console.log('🔍 Fallback: No login success flag found')
             }
         }, 500)
 
@@ -3548,7 +3615,7 @@ class DashboardApplication {
 
     // Direct toast notification fallback
     private showDirectToastNotification(message: string, type: string) {
-        console.log(`🔔 Direct toast: [${type.toUpperCase()}] ${message}`)
+        // console.log(`🔔 Direct toast: [${type.toUpperCase()}] ${message}`)
         
         // Check if we're on login page and block login success notifications
         const isLoginSuccess = message.includes('Login successful')
@@ -3556,7 +3623,7 @@ class DashboardApplication {
         const currentPath = window.location.pathname
         
         if (currentPath === '/login' && !isLoginError) {
-            console.log(`🔔 Direct toast blocked on login page: [${type.toUpperCase()}] ${message}`)
+            // console.log(`🔔 Direct toast blocked on login page: [${type.toUpperCase()}] ${message}`)
             return
         }
         

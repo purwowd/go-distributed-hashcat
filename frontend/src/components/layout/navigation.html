@@ -92,9 +92,42 @@
                     <span class="hidden sm:inline">API Docs</span>
                     <div class="route-indicator"></div>
                 </a>
+                
+                <!-- User dropdown menu -->
+                <div class="relative" x-data="{ userDropdownOpen: false }">
+                    <button @click="userDropdownOpen = !userDropdownOpen" 
+                            @click.away="userDropdownOpen = false"
+                            class="nav-item text-gray-600 hover:text-gray-800 transition-all duration-300 relative flex items-center">
+                        <i class="fas fa-user-circle sm:mr-2"></i>
+                        <span class="hidden sm:inline" x-text="user?.username || 'admin'"></span>
+                        <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                    </button>
+                    
+                    <!-- Dropdown menu -->
+                    <div x-show="userDropdownOpen" 
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                         style="display: none;">
+                        <div class="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
+                            <div class="font-medium" x-text="user?.username || 'admin'"></div>
+                            <div class="text-xs text-gray-500">Administrator</div>
+                        </div>
+                        <button @click="handleLogout(); userDropdownOpen = false" 
+                                class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-200 flex items-center"
+                                :disabled="isLoading">
+                            <i class="fas fa-sign-out-alt mr-2"></i>
+                            Logout
+                        </button>
+                    </div>
+                </div>
             </div>
             
-            <!-- Right side: Smart status + User info + Logout -->
+            <!-- Right side: Smart status indicator -->
             <div class="flex items-center space-x-3">
                 <!-- Combined smart status indicator -->
                 <div class="flex items-center text-xs text-gray-500">
@@ -102,23 +135,6 @@
                         <div :class="wsConnected ? 'w-2 h-2 bg-green-400 rounded-full animate-pulse' : 'w-2 h-2 bg-amber-400 rounded-full'"></div>
                         <span x-text="wsConnected ? 'Live' : 'Offline'" class="hidden sm:inline"></span>
                     </div>
-                </div>
-                
-                <!-- User info and logout -->
-                <div class="flex items-center space-x-2">
-                    <!-- User info -->
-                    <div class="hidden sm:flex items-center text-sm text-gray-600 bg-white/50 backdrop-blur-sm rounded-lg px-3 py-1.5">
-                        <i class="fas fa-user-circle text-blue-600 mr-2"></i>
-                        <span x-text="user?.username || 'User'" class="font-medium"></span>
-                    </div>
-                    
-                    <!-- Logout button -->
-                    <button @click="handleLogout()" 
-                            class="flex items-center space-x-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                            :disabled="isLoading">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span class="hidden sm:inline">Logout</span>
-                    </button>
                 </div>
                 
                 <!-- Loading indicator -->

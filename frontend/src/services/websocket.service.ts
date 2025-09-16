@@ -71,7 +71,7 @@ class WebSocketService {
                     const message: WebSocketMessage = JSON.parse(event.data)
                     this.handleMessage(message)
                 } catch (error) {
-                    console.error('❌ Failed to parse WebSocket message:', error)
+                    // console.error('❌ Failed to parse WebSocket message:', error)
                 }
             }
             
@@ -86,12 +86,12 @@ class WebSocketService {
             }
             
             this.ws.onerror = (error) => {
-                console.error('❌ WebSocket error:', error)
+                // console.error('❌ WebSocket error:', error)
                 this.emit('error', { error })
             }
             
         } catch (error) {
-            console.error('❌ Failed to create WebSocket connection:', error)
+            // console.error('❌ Failed to create WebSocket connection:', error)
         }
     }
 

@@ -54,10 +54,10 @@ export class ComponentLoader {
                     
                     return html
                 } else {
-                    console.warn(`❌ Failed to fetch ${name}: ${response.status} ${response.statusText}`)
+                    // console.warn(`❌ Failed to fetch ${name}: ${response.status} ${response.statusText}`)
                 }
             } catch (error) {
-                console.warn(`❌ Network error loading component ${name}:`, error)
+                // console.warn(`❌ Network error loading component ${name}:`, error)
             }
         }
 

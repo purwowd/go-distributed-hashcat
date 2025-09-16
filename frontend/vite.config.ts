@@ -92,10 +92,14 @@ export default defineConfig(({ command, mode }) => {
       host: env.VITE_DEV_HOST === 'true', // Allow external connections
       cors: true,
       historyApiFallback: true, // Enable history API fallback for SPA routing
+      hmr: {
+        overlay: false, // Disable HMR overlay to reduce console messages
+        clientLogLevel: 'silent' // Suppress Vite client messages
+      },
       proxy: {
         // Proxy API calls to backend during development
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:1337',
+          target: env.VITE_API_BASE_URL || 'http://30.30.30.39:1337',
           changeOrigin: true,
           secure: false,
         }

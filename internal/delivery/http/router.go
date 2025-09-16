@@ -1,7 +1,6 @@
 package http
 
 import (
-	"os"
 	"time"
 
 	"go-distributed-hashcat/internal/delivery/http/handler"
@@ -28,16 +27,8 @@ func NewRouter(
 	router := gin.New()
 
 	// CORS middleware (must be first to handle preflight requests)
-	// In development, allow frontend origin specifically
-	if env := os.Getenv("GIN_MODE"); env == "debug" {
-		frontendURL := os.Getenv("HASHCAT_FRONTEND_URL")
-		if frontendURL == "" {
-			frontendURL = "http://localhost:3000" // fallback for development
-		}
-		router.Use(middleware.CORSWithSpecificOrigin(frontendURL))
-	} else {
-		router.Use(middleware.CORS())
-	}
+	// Temporarily use wildcard CORS for development
+	router.Use(middleware.CORS())
 
 	// Performance middleware
 	router.Use(middleware.Performance())

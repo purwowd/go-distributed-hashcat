@@ -4,6 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Alpine.js x-cloak directive */
+[x-cloak] {
+  display: none !important;
+}
+
 /* Modern glassmorphism and gradient variables */
 :root {
   --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

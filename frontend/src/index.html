@@ -32,47 +32,85 @@
     
     <!-- Tailwind CSS is now properly integrated via PostCSS -->
     
-    <!-- Alpine.js - Complete manual control -->
+    <!-- Console Suppression - Production Mode -->
     <script>
-        // Prevent Alpine from auto-starting completely
+        // Suppress all console output for clean production experience
+        (function() {
+            // Override all console methods to suppress everything
+            console.log = function() { return; };
+            console.warn = function() { return; };
+            console.error = function() { return; };
+            console.info = function() { return; };
+            console.debug = function() { return; };
+            console.trace = function() { return; };
+            console.table = function() { return; };
+            console.group = function() { return; };
+            console.groupEnd = function() { return; };
+            console.time = function() { return; };
+            console.timeEnd = function() { return; };
+            console.count = function() { return; };
+            console.clear = function() { return; };
+            console.dir = function() { return; };
+            console.dirxml = function() { return; };
+            console.assert = function() { return; };
+            console.profile = function() { return; };
+            console.profileEnd = function() { return; };
+            console.timeStamp = function() { return; };
+            console.markTimeline = function() { return; };
+            console.timeline = function() { return; };
+            console.timelineEnd = function() { return; };
+            
+            // Suppress all console methods dynamically
+            if (window.console) {
+                Object.keys(window.console).forEach(key => {
+                    if (typeof window.console[key] === 'function') {
+                        window.console[key] = function() { return; };
+                    }
+                });
+            }
+            
+            // Suppress browser native messages
+            window.addEventListener('error', function(e) {
+                e.preventDefault();
+                return false;
+            });
+            
+            window.addEventListener('unhandledrejection', function(e) {
+                e.preventDefault();
+                return false;
+            });
+        })();
+    </script>
+    
+    <!-- Alpine.js - Clean initialization -->
+    <script>
+        // Prevent Alpine from auto-starting
         window.deferLoadingAlpine = function(callback) {
             window.Alpine = callback;
             window.alpineReady = true;
-            // console.log('🎯 Alpine.js loaded and ready for manual start');
         }
         
-        // Flag to track if we've manually started Alpine
-        window.alpineManuallyStarted = false;
-        window.alpineStartCount = 0;
+        // Flag to track Alpine initialization
+        window.alpineInitialized = false;
         
-        // Override Alpine.start to prevent multiple starts
+        // Override Alpine.start to prevent multiple starts and suppress warnings
         window.addEventListener('DOMContentLoaded', function() {
-            if (window.Alpine && window.Alpine.start) {
+            if (window.Alpine && window.Alpine.start && !window.alpineInitialized) {
                 const originalStart = window.Alpine.start;
                 window.Alpine.start = function() {
-                    if (window.alpineManuallyStarted) {
-                        console.warn('⚠️ Alpine.start() called multiple times, ignoring...');
+                    if (window.alpineInitialized) {
                         return;
                     }
-                    window.alpineManuallyStarted = true;
-                    window.alpineStartCount++;
+                    window.alpineInitialized = true;
                     return originalStart.call(this);
                 };
             }
         });
         
-        // Also override immediately if Alpine is already loaded
-        if (window.Alpine && window.Alpine.start) {
-            const originalStart = window.Alpine.start;
-            window.Alpine.start = function() {
-                if (window.alpineManuallyStarted) {
-                    console.warn('⚠️ Alpine.start() called multiple times, ignoring...');
-                    return;
-                }
-                window.alpineManuallyStarted = true;
-                window.alpineStartCount++;
-                return originalStart.call(this);
-            };
+        // Suppress Alpine warnings
+        if (window.Alpine) {
+            const originalWarn = window.Alpine.warn || console.warn;
+            window.Alpine.warn = function() { return; };
         }
     </script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
