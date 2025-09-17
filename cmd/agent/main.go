@@ -171,38 +171,60 @@ func runAgent(cmd *cobra.Command, args []string) {
 		infrastructure.AgentLogger.Warning("Failed to scan local files: %v", err)
 	}
 
-	// Registrasi ke server
-	err := agent.registerWithServer(name, ip, port, capabilities, agentKey)
-	if err != nil && strings.Contains(err.Error(), "already registered") {
-		if info.Name != name {
-			infrastructure.AgentLogger.Fatal("Agent key '%s' already used by another agent: %s", agentKey, info.Name)
-		}
+	// Check if agent data is incomplete and needs update
+	needsUpdate := false
+	updateReason := []string{}
+	
+	if info.IPAddress == "" {
+		needsUpdate = true
+		updateReason = append(updateReason, "IP address is empty")
+	}
+	if info.Port == 0 {
+		needsUpdate = true
+		updateReason = append(updateReason, "Port is 0")
+	}
+	if info.Capabilities == "" {
+		needsUpdate = true
+		updateReason = append(updateReason, "Capabilities is empty")
+	}
 
-		// If IP, Port, or Capabilities are empty → update data
-		if info.IPAddress == "" || info.Port == 0 || info.Capabilities == "" {
-			infrastructure.AgentLogger.Info("Agent data '%s' is incomplete, being updated...", name)
-			if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
-				infrastructure.AgentLogger.Fatal("Failed to update agent info: %v", err)
+	// If agent data is incomplete, update it first
+	if needsUpdate {
+		infrastructure.AgentLogger.Info("Agent data '%s' is incomplete, updating...", name)
+		infrastructure.AgentLogger.Info("Update reasons: %s", strings.Join(updateReason, ", "))
+		infrastructure.AgentLogger.Info("Updating with: IP=%s, Port=%d, Capabilities=%s", ip, port, capabilities)
+		
+		if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
+			infrastructure.AgentLogger.Fatal("Failed to update incomplete agent data: %v", err)
+		}
+		
+		infrastructure.AgentLogger.Success("Agent data updated successfully")
+		infrastructure.AgentLogger.Success("Agent %s (%s) is now online with complete data", agent.Name, agent.ID.String())
+		agent.updateStatus("online")
+	} else {
+		// Agent data is complete, proceed with normal registration
+		err := agent.registerWithServer(name, ip, port, capabilities, agentKey)
+		if err != nil && strings.Contains(err.Error(), "already registered") {
+			if info.Name != name {
+				infrastructure.AgentLogger.Fatal("Agent key '%s' already used by another agent: %s", agentKey, info.Name)
 			}
-			// Still use "registered successfully" log
-			infrastructure.AgentLogger.Success("Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
-			agent.updateStatus("online")
-		} else {
+
 			// Complete data → log already exists with its data
 			infrastructure.AgentLogger.Info("Agent key already exists with complete data:")
 			infrastructure.AgentLogger.Info("Name: %s", agent.Name)
 			infrastructure.AgentLogger.Info("    ID: %s", info.ID.String())
 			infrastructure.AgentLogger.Info("Server URL: %s", agent.ServerURL)
+			infrastructure.AgentLogger.Info("IP: %s", info.IPAddress)
 			infrastructure.AgentLogger.Info("Port: %d", info.Port)
 			infrastructure.AgentLogger.Info("Capabilities: %s", info.Capabilities)
 			infrastructure.AgentLogger.Success("Agent %s (%s) is running", agent.Name, agent.ID.String())
 			agent.updateStatus("online")
+		} else if err != nil {
+			infrastructure.AgentLogger.Fatal("Failed to register and lookup agent: %v", err)
+		} else {
+			// New registration successful
+			infrastructure.AgentLogger.Success("Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 		}
-	} else if err != nil {
-		infrastructure.AgentLogger.Fatal("Failed to register and lookup agent: %v", err)
-	} else {
-		// New registration successful
-		infrastructure.AgentLogger.Success("Agent %s (%s) registered successfully", agent.Name, agent.ID.String())
 	}
 
 	// Update status to online and port to 8081 when agent starts running
