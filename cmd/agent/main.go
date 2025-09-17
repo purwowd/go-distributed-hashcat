@@ -299,7 +299,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	var info AgentInfo
-	url := fmt.Sprintf("%s/api/v1/agents?agent_key=%s", a.ServerURL, key)
+	url := fmt.Sprintf("%s/api/v1/agents/?agent_key=%s", a.ServerURL, key)
 	resp, err := a.Client.Get(url)
 	if err != nil {
 		return info, err
