@@ -89,7 +89,7 @@ export default defineConfig(({ command, mode }) => {
     // Development server configuration
     server: {
       port: parseInt(env.VITE_DEV_PORT || '3000'),
-      host: env.VITE_DEV_HOST === 'true', // Allow external connections
+      host: '0.0.0.0', // Allow external connections from any IP
       cors: true,
       historyApiFallback: true, // Enable history API fallback for SPA routing
       hmr: {
@@ -152,7 +152,7 @@ export default defineConfig(({ command, mode }) => {
     // Preview server (for production builds)
     preview: {
       port: parseInt(env.VITE_DEV_PORT || '3000'),
-      host: env.VITE_DEV_HOST === 'true',
+      host: '0.0.0.0', // Allow external connections from any IP
       cors: true
     },
     
