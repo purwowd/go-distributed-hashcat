@@ -29,7 +29,7 @@ export interface BuildConfig {
 export const configs: Record<string, BuildConfig> = {
     development: {
         mode: 'development',
-        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://30.30.30.39:1337',
+        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://172.15.1.140:1337',
         components: [
             { name: 'navigation', path: '/components/layout/navigation.html', preload: true },
             { name: 'overview', path: '/components/tabs/overview.html', preload: true },
@@ -57,7 +57,7 @@ export const configs: Record<string, BuildConfig> = {
     },
     production: {
         mode: 'production',
-        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://30.30.30.39:1337',
+        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://172.15.1.140:1337',
         components: [
             { name: 'navigation', path: '/components/layout/navigation.html', preload: true },
             { name: 'overview', path: '/components/tabs/overview.html', preload: true },

@@ -38,10 +38,10 @@ HASHCAT_DATABASE_PATH=./data/hashcat.db
 HASHCAT_UPLOAD_DIRECTORY=./uploads
 
 # CORS Configuration
-HASHCAT_FRONTEND_URL=http://30.30.30.39:3000
+HASHCAT_FRONTEND_URL=http://172.15.1.140:3000
 
 # API Base URL (for reference)
-API_BASE_URL=http://30.30.30.39:1337
+API_BASE_URL=http://172.15.1.140:1337
 
 # Development Configuration
 GIN_MODE=debug
@@ -66,7 +66,7 @@ Edit `frontend/.env` with your server IP:
 # Environment Configuration for Distributed Hashcat Frontend
 
 # API Configuration
-VITE_API_BASE_URL=http://30.30.30.39:1337
+VITE_API_BASE_URL=http://172.15.1.140:1337
 
 # Development Configuration
 VITE_DEV_PORT=3000
@@ -103,13 +103,13 @@ For agents, you can either:
 
 **Option A: Use environment variable**
 ```bash
-export HASHCAT_SERVER_URL=http://30.30.30.39:1337
+export HASHCAT_SERVER_URL=http://172.15.1.140:1337
 ./bin/agent --agent-key YOUR_AGENT_KEY
 ```
 
 **Option B: Use command line parameter**
 ```bash
-./bin/agent --server http://30.30.30.39:1337 --agent-key YOUR_AGENT_KEY
+./bin/agent --server http://172.15.1.140:1337 --agent-key YOUR_AGENT_KEY
 ```
 
 ## Environment Variables Reference
@@ -119,18 +119,18 @@ export HASHCAT_SERVER_URL=http://30.30.30.39:1337
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
 | `HASHCAT_SERVER_PORT` | Server port | 1337 | 1337 |
-| `HASHCAT_SERVER_HOST` | Server host/IP | 0.0.0.0 | 30.30.30.39 |
+| `HASHCAT_SERVER_HOST` | Server host/IP | 0.0.0.0 | 172.15.1.140 |
 | `HASHCAT_DATABASE_TYPE` | Database type | sqlite | sqlite |
 | `HASHCAT_DATABASE_PATH` | Database file path | ./data/hashcat.db | ./data/hashcat.db |
 | `HASHCAT_UPLOAD_DIRECTORY` | Upload directory | ./uploads | ./uploads |
-| `HASHCAT_FRONTEND_URL` | Frontend URL for CORS | http://localhost:3000 | http://30.30.30.39:3000 |
+| `HASHCAT_FRONTEND_URL` | Frontend URL for CORS | http://localhost:3000 | http://172.15.1.140:3000 |
 | `GIN_MODE` | Gin framework mode | debug | debug/release |
 
 ### Frontend Variables
 
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
-| `VITE_API_BASE_URL` | Backend API URL | http://localhost:1337 | http://30.30.30.39:1337 |
+| `VITE_API_BASE_URL` | Backend API URL | http://localhost:1337 | http://172.15.1.140:1337 |
 | `VITE_DEV_PORT` | Development server port | 3000 | 3000 |
 | `VITE_DEV_HOST` | Allow external connections | true | true |
 | `VITE_ENABLE_HOT_RELOAD` | Enable hot reload | true | true |
@@ -142,7 +142,7 @@ export HASHCAT_SERVER_URL=http://30.30.30.39:1337
 
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
-| `HASHCAT_SERVER_URL` | Server URL for agent connection | http://localhost:1337 | http://30.30.30.39:1337 |
+| `HASHCAT_SERVER_URL` | Server URL for agent connection | http://localhost:1337 | http://172.15.1.140:1337 |
 
 ## Running the System
 
@@ -173,11 +173,11 @@ npm run dev
 
 ```bash
 # Using environment variable
-export HASHCAT_SERVER_URL=http://30.30.30.39:1337
+export HASHCAT_SERVER_URL=http://172.15.1.140:1337
 ./bin/agent --agent-key YOUR_AGENT_KEY
 
 # Or using command line parameter
-./bin/agent --server http://30.30.30.39:1337 --agent-key YOUR_AGENT_KEY
+./bin/agent --server http://172.15.1.140:1337 --agent-key YOUR_AGENT_KEY
 ```
 
 ## Configuration Files
@@ -213,7 +213,7 @@ export HASHCAT_SERVER_URL=http://30.30.30.39:1337
 
 4. **Frontend shows "Loading components..." indefinitely**
    - Check `HASHCAT_FRONTEND_URL` in backend `.env` matches frontend URL
-   - Verify CORS headers: `curl -H "Origin: http://30.30.30.39:3000" http://30.30.30.39:1337/api/v1/agents/`
+   - Verify CORS headers: `curl -H "Origin: http://172.15.1.140:3000" http://172.15.1.140:1337/api/v1/agents/`
    - Restart both backend and frontend servers
 
 5. **Script dev-server.sh doesn't load environment variables**
@@ -232,10 +232,10 @@ env | grep VITE
 ls -la .env frontend/.env
 
 # Test backend connectivity
-curl http://30.30.30.39:1337/health
+curl http://172.15.1.140:1337/health
 
 # Test CORS configuration
-curl -H "Origin: http://30.30.30.39:3000" http://30.30.30.39:1337/api/v1/agents/
+curl -H "Origin: http://172.15.1.140:3000" http://172.15.1.140:1337/api/v1/agents/
 
 # Check if servers are running
 netstat -tlnp | grep -E "(1337|3000)"
@@ -243,7 +243,7 @@ lsof -i :1337
 lsof -i :3000
 
 # Test API response
-curl -s http://30.30.30.39:1337/api/v1/agents/ | python3 -c "import json, sys; data=json.load(sys.stdin); print('Agents:', len(data.get('data', [])))"
+curl -s http://172.15.1.140:1337/api/v1/agents/ | python3 -c "import json, sys; data=json.load(sys.stdin); print('Agents:', len(data.get('data', [])))"
 ```
 
 ## Migration from Hardcoded URLs
