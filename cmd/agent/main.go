@@ -71,7 +71,7 @@ func main() {
 	rootCmd.Flags().Int("port", 8081, "Agent port")
 	rootCmd.Flags().String("capabilities", "auto", "Agent capabilities (auto, CPU, GPU, or custom)")
 	rootCmd.Flags().String("agent-key", "", "Agent key")
-	rootCmd.Flags().String("upload-dir", "./uploads", "Local uploads directory")
+	rootCmd.Flags().String("upload-dir", "/root/uploads", "Local uploads directory")
 
 	viper.BindPFlags(rootCmd.Flags())
 
