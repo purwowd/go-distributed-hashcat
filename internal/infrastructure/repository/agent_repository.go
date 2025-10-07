@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
@@ -40,7 +41,7 @@ func (r *agentRepository) prepareStatements() {
 	var err error
 
 	r.getByIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE id = ? LIMIT 1
 	`)
 	if err != nil {
@@ -48,7 +49,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE name = ? LIMIT 1
 	`)
 	if err != nil {
@@ -56,7 +57,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameIPStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE name = ? AND ip_address = ? AND port = ? LIMIT 1
 	`)
 	if err != nil {
@@ -64,7 +65,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByIPAddressStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE ip_address = ? LIMIT 1
 	`)
 	if err != nil {
@@ -72,7 +73,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents ORDER BY created_at DESC, id ASC
 	`)
 	if err != nil {
@@ -81,7 +82,7 @@ func (r *agentRepository) prepareStatements() {
 
 	r.updateStmt, err = r.db.DB().Prepare(`
 		UPDATE agents SET
-		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, agent_key = ?, last_seen = ?, updated_at = ?
+		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, agent_key = ?, speed = ?, last_seen = ?, updated_at = ?
 		WHERE id = ?
 	`)
 	if err != nil {
@@ -96,7 +97,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByAgentKeyStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE agent_key = ? LIMIT 1
 	`)
 	if err != nil {
@@ -121,8 +122,8 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 	r.cache.Delete(ctx, "agents:all")
 
 	query := `
-        INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, last_seen, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
 
 	_, err := r.db.DB().ExecContext(ctx, query,
@@ -133,6 +134,7 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 		agent.Status,
 		agent.Capabilities,
 		agent.AgentKey,
+		agent.Speed,
 		agent.LastSeen,
 		agent.CreatedAt,
 		agent.UpdatedAt,
@@ -162,6 +164,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 		&agent.Status,
 		&agent.Capabilities,
 		&agent.AgentKey,
+		&agent.Speed,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
@@ -196,6 +199,7 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 		&agent.Status,
 		&agent.Capabilities,
 		&agent.AgentKey,
+		&agent.Speed,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
@@ -230,6 +234,7 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 		&agent.Status,
 		&agent.Capabilities,
 		&agent.AgentKey,
+		&agent.Speed,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
@@ -274,6 +279,7 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 			&agent.Status,
 			&agent.Capabilities,
 			&agent.AgentKey,
+			&agent.Speed,
 			&agent.LastSeen,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
@@ -319,6 +325,7 @@ func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error
 		agent.Status,
 		agent.Capabilities,
 		agent.AgentKey,
+		agent.Speed,
 		agent.LastSeen,
 		agent.UpdatedAt,
 		agent.ID,
@@ -372,6 +379,56 @@ func (r *agentRepository) UpdateLastSeen(ctx context.Context, id uuid.UUID) erro
 	return err
 }
 
+// UpdateSpeed updates the agent speed with comprehensive logging and cache invalidation
+// This method is called during real-time speed monitoring and benchmark updates
+func (r *agentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed int64) error {
+	query := `
+		UPDATE agents SET speed = ?, updated_at = ? WHERE id = ?
+	`
+	now := time.Now()
+
+	// Execute speed update query
+	_, err := r.db.DB().ExecContext(ctx, query, speed, now, id.String())
+	if err != nil {
+		return fmt.Errorf("failed to update agent speed: %w", err)
+	}
+
+	// Log speed update for real-time monitoring
+	log.Printf("[REAL-TIME SPEED UPDATE] Agent %s speed updated to %d H/s at %s",
+		id.String(), speed, now.Format("2006-01-02 15:04:05"))
+
+	// Invalidate cache to ensure fresh data
+	r.cache.Delete(ctx, "agent:"+id.String())
+	r.cache.Delete(ctx, "agents:all")
+
+	return nil
+}
+
+// UpdateSpeedWithStatus updates agent speed and status simultaneously
+// This method is used for comprehensive agent state updates during monitoring
+func (r *agentRepository) UpdateSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error {
+	query := `
+		UPDATE agents SET speed = ?, status = ?, updated_at = ? WHERE id = ?
+	`
+	now := time.Now()
+
+	// Execute combined update query
+	_, err := r.db.DB().ExecContext(ctx, query, speed, status, now, id.String())
+	if err != nil {
+		return fmt.Errorf("failed to update agent speed and status: %w", err)
+	}
+
+	// Log comprehensive update for real-time monitoring
+	log.Printf("[REAL-TIME AGENT UPDATE] Agent %s: speed=%d H/s, status=%s, time=%s",
+		id.String(), speed, status, now.Format("2006-01-02 15:04:05"))
+
+	// Invalidate cache to ensure fresh data
+	r.cache.Delete(ctx, "agent:"+id.String())
+	r.cache.Delete(ctx, "agents:all")
+
+	return nil
+}
+
 func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domain.Agent, error) {
 	cacheKey := "agent:ip:" + ip
 
@@ -393,6 +450,7 @@ func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domai
 		&agent.Status,
 		&agent.Capabilities,
 		&agent.AgentKey,
+		&agent.Speed,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
@@ -431,6 +489,7 @@ func (r *agentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*
 		&agent.Status,
 		&agent.Capabilities,
 		&agent.AgentKey,
+		&agent.Speed,
 		&agent.LastSeen,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,

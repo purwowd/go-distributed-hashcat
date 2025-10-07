@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Connection Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>🔗 Frontend-Backend API Connection Test</h1>
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'http://192.168.1.186:1337';
+        const results = document.getElementById('results');
+
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        async function testConnection() {
+            addResult('🚀 Starting API connection tests...', 'info');
+
+            // Test 1: Health Check
+            try {
+                const healthResponse = await fetch(`${API_BASE_URL}/health`);
+                if (healthResponse.ok) {
+                    addResult('✅ Health check: Backend is accessible', 'success');
+                } else {
+                    addResult('❌ Health check: Backend returned error', 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Health check failed: ${error.message}`, 'error');
+            }
+
+            // Test 2: Authentication
+            try {
+                const authResponse = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+
+                if (authResponse.ok) {
+                    const authData = await authResponse.json();
+                    addResult('✅ Authentication: Login successful', 'success');
+                    addResult(`🔑 Token received: ${authData.token.substring(0, 20)}...`, 'info');
+                    
+                    // Test 3: Authenticated API call
+                    try {
+                        const agentsResponse = await fetch(`${API_BASE_URL}/api/v1/agents/`, {
+                            headers: {
+                                'Authorization': `Bearer ${authData.token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        if (agentsResponse.ok) {
+                            const agentsData = await agentsResponse.json();
+                            addResult('✅ Authenticated API: Agents endpoint accessible', 'success');
+                            addResult(`📊 Found ${agentsData.data ? agentsData.data.length : 0} agents`, 'info');
+                        } else {
+                            addResult('❌ Authenticated API: Agents endpoint failed', 'error');
+                        }
+                    } catch (error) {
+                        addResult(`❌ Authenticated API failed: ${error.message}`, 'error');
+                    }
+
+                } else {
+                    addResult('❌ Authentication: Login failed', 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Authentication failed: ${error.message}`, 'error');
+            }
+
+            // Test 4: CORS Headers
+            try {
+                const corsResponse = await fetch(`${API_BASE_URL}/api/v1/agents/`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': 'http://localhost:3000',
+                        'Access-Control-Request-Method': 'GET',
+                        'Access-Control-Request-Headers': 'Authorization'
+                    }
+                });
+
+                const corsHeaders = corsResponse.headers;
+                const allowOrigin = corsHeaders.get('Access-Control-Allow-Origin');
+                const allowMethods = corsHeaders.get('Access-Control-Allow-Methods');
+                const allowHeaders = corsHeaders.get('Access-Control-Allow-Headers');
+
+                if (allowOrigin && allowMethods && allowHeaders) {
+                    addResult('✅ CORS: Headers properly configured', 'success');
+                    addResult(`🌐 Allow Origin: ${allowOrigin}`, 'info');
+                    addResult(`🔧 Allow Methods: ${allowMethods}`, 'info');
+                    addResult(`📋 Allow Headers: ${allowHeaders}`, 'info');
+                } else {
+                    addResult('❌ CORS: Headers missing or incomplete', 'error');
+                }
+            } catch (error) {
+                addResult(`❌ CORS test failed: ${error.message}`, 'error');
+            }
+
+            addResult('🏁 API connection tests completed!', 'info');
+        }
+
+        // Run tests when page loads
+        document.addEventListener('DOMContentLoaded', testConnection);
+    </script>
+</body>
+</html>

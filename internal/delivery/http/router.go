@@ -1,12 +1,12 @@
 package http
 
 import (
-	"os"
 	"time"
 
 	"go-distributed-hashcat/internal/delivery/http/handler"
 	"go-distributed-hashcat/internal/delivery/http/middleware"
 	"go-distributed-hashcat/internal/domain"
+	"go-distributed-hashcat/internal/infrastructure"
 	"go-distributed-hashcat/internal/usecase"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +19,7 @@ func NewRouter(
 	wordlistUsecase usecase.WordlistUsecase,
 	jobEnrichmentService usecase.JobEnrichmentService,
 	distributedJobUsecase domain.DistributedJobUsecase,
+	authUsecase domain.AuthUsecase,
 ) *gin.Engine {
 	// Set Gin to release mode for production performance
 	gin.SetMode(gin.ReleaseMode)
@@ -26,12 +27,8 @@ func NewRouter(
 	router := gin.New()
 
 	// CORS middleware (must be first to handle preflight requests)
-	// In development, allow frontend origin specifically
-	if env := os.Getenv("GIN_MODE"); env == "debug" {
-		router.Use(middleware.CORSWithSpecificOrigin("http://localhost:3000"))
-	} else {
-		router.Use(middleware.CORS())
-	}
+	// Temporarily use wildcard CORS for development
+	router.Use(middleware.CORS())
 
 	// Performance middleware
 	router.Use(middleware.Performance())
@@ -44,6 +41,9 @@ func NewRouter(
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
+	// Initialize JWT service
+	jwtService := infrastructure.NewJWTService()
+
 	// Initialize handlers
 	agentHandler := handler.NewAgentHandler(agentUsecase)
 	jobHandler := handler.NewJobHandler(jobUsecase, jobEnrichmentService, agentUsecase, wordlistUsecase)
@@ -51,6 +51,7 @@ func NewRouter(
 	wordlistHandler := handler.NewWordlistHandler(wordlistUsecase)
 	cacheHandler := handler.NewCacheHandler(jobEnrichmentService)
 	wsHandler := handler.NewWebSocketHandler()
+	authHandler := handler.NewAuthHandler(authUsecase)
 
 	// Initialize distributed job handler
 	distributedJobHandler := handler.NewDistributedJobHandler(distributedJobUsecase)
@@ -83,6 +84,27 @@ func NewRouter(
 	})
 
 	{
+		// Authentication routes (public)
+		auth := v1.Group("/auth")
+		{
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
+			auth.POST("/refresh", authHandler.RefreshToken)
+			auth.POST("/validate", authHandler.ValidateToken)
+			auth.POST("/check-username", authHandler.CheckUsernameExists)
+		}
+
+		// User management routes (admin only)
+		users := v1.Group("/users")
+		users.Use(middleware.AuthMiddleware(jwtService))
+		users.Use(middleware.AdminOnlyMiddleware())
+		{
+			users.POST("/", authHandler.CreateUser)
+			users.GET("/", authHandler.GetAllUsers)
+			users.GET("/:id", authHandler.GetUser)
+			users.PUT("/:id", authHandler.UpdateUser)
+			users.DELETE("/:id", authHandler.DeleteUser)
+		}
 		// Agent routes
 		agents := v1.Group("/agents")
 		{
@@ -94,6 +116,10 @@ func NewRouter(
 			agents.GET("/", agentHandler.GetAllAgents)
 			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
+			agents.PUT("/:id/speed", agentHandler.UpdateAgentSpeed)
+			agents.PUT("/:id/speed-status", agentHandler.UpdateAgentSpeedWithStatus) // Real-time speed and status update
+
+			agents.PUT("/:id/status-offline", agentHandler.UpdateAgentStatusOffline) // Update status to offline without resetting speed
 			agents.PUT("/:id/heartbeat", agentHandler.UpdateAgentHeartbeat)
 			agents.POST("/:id/files", agentHandler.RegisterAgentFiles)
 			agents.GET("/:id/jobs", jobHandler.GetJobsByAgentID)

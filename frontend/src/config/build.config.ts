@@ -29,7 +29,7 @@ export interface BuildConfig {
 export const configs: Record<string, BuildConfig> = {
     development: {
         mode: 'development',
-        apiBaseUrl: 'http://localhost:1337',
+        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.186:1337',
         components: [
             { name: 'navigation', path: '/components/layout/navigation.html', preload: true },
             { name: 'overview', path: '/components/tabs/overview.html', preload: true },
@@ -43,21 +43,21 @@ export const configs: Record<string, BuildConfig> = {
             { name: 'loading', path: '/components/ui/loading.html', preload: true }
         ],
         features: {
-            hotReload: true,
-            lazyLoading: false,
-            componentCaching: true,
-            performanceMonitoring: true
+            hotReload: import.meta.env.VITE_ENABLE_HOT_RELOAD === 'true',
+            lazyLoading: import.meta.env.VITE_ENABLE_LAZY_LOADING === 'true',
+            componentCaching: import.meta.env.VITE_ENABLE_COMPONENT_CACHING === 'true',
+            performanceMonitoring: import.meta.env.VITE_ENABLE_PERFORMANCE_MONITORING === 'true'
         },
         optimization: {
-            bundleSplitting: false,
-            treeshaking: false,
-            minification: false,
-            compression: false
+            bundleSplitting: import.meta.env.VITE_ENABLE_BUNDLE_SPLITTING === 'true',
+            treeshaking: import.meta.env.VITE_ENABLE_TREESHAKING === 'true',
+            minification: import.meta.env.VITE_ENABLE_MINIFICATION === 'true',
+            compression: import.meta.env.VITE_ENABLE_COMPRESSION === 'true'
         }
     },
     production: {
         mode: 'production',
-        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'https://api.your-domain.com',
+        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.186:1337',
         components: [
             { name: 'navigation', path: '/components/layout/navigation.html', preload: true },
             { name: 'overview', path: '/components/tabs/overview.html', preload: true },
@@ -71,16 +71,16 @@ export const configs: Record<string, BuildConfig> = {
             { name: 'loading', path: '/components/ui/loading.html', preload: true }
         ],
         features: {
-            hotReload: false,
-            lazyLoading: true,
-            componentCaching: true,
-            performanceMonitoring: false
+            hotReload: import.meta.env.VITE_ENABLE_HOT_RELOAD === 'true',
+            lazyLoading: import.meta.env.VITE_ENABLE_LAZY_LOADING === 'true',
+            componentCaching: import.meta.env.VITE_ENABLE_COMPONENT_CACHING === 'true',
+            performanceMonitoring: import.meta.env.VITE_ENABLE_PERFORMANCE_MONITORING === 'true'
         },
         optimization: {
-            bundleSplitting: true,
-            treeshaking: true,
-            minification: true,
-            compression: true
+            bundleSplitting: import.meta.env.VITE_ENABLE_BUNDLE_SPLITTING === 'true',
+            treeshaking: import.meta.env.VITE_ENABLE_TREESHAKING === 'true',
+            minification: import.meta.env.VITE_ENABLE_MINIFICATION === 'true',
+            compression: import.meta.env.VITE_ENABLE_COMPRESSION === 'true'
         }
     }
 }

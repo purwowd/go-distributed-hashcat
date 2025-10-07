@@ -27,6 +27,9 @@ type AgentUsecase interface {
 	GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error)
 	GetAllAgents(ctx context.Context) ([]domain.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error
+	UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error
+	UpdateAgentStatusOffline(ctx context.Context, id uuid.UUID) error
 	DeleteAgent(ctx context.Context, id uuid.UUID) error
 	GetAvailableAgent(ctx context.Context) (*domain.Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, id uuid.UUID) error
@@ -38,7 +41,7 @@ type AgentUsecase interface {
 	CreateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error
-	GenerateAgentKey(ctx context.Context, name string) (*domain.Agent, error)
+	GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error)
 }
 
 type agentUsecase struct {
@@ -259,6 +262,84 @@ func (u *agentUsecase) UpdateAgentLastSeen(ctx context.Context, id uuid.UUID) er
 	return nil
 }
 
+func (u *agentUsecase) UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error {
+	// Update speed in database
+	if err := u.agentRepo.UpdateSpeed(ctx, id, speed); err != nil {
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the speed update if broadcast fails
+	}
+
+	// Broadcast real-time speed update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentSpeed(agent.ID.String(), agent.Speed)
+		log.Printf("Real-time agent speed broadcast: %s -> %d H/s", agent.Name, speed)
+	} else {
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+// UpdateAgentSpeedWithStatus updates agent speed and status simultaneously with comprehensive logging
+// This method is used for real-time monitoring and comprehensive agent state updates
+func (u *agentUsecase) UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error {
+	// Update speed and status in database using new repository method
+	if err := u.agentRepo.UpdateSpeedWithStatus(ctx, id, speed, status); err != nil {
+		log.Printf("❌ [REAL-TIME UPDATE FAILED] Agent %s: speed=%d H/s, status=%s, error=%v",
+			id.String(), speed, status, err)
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the update if broadcast fails
+	}
+
+	// Broadcast real-time speed and status update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentSpeed(agent.ID.String(), agent.Speed)
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("[REAL-TIME BROADCAST] Agent %s: speed=%d H/s, status=%s",
+			agent.Name, speed, status)
+	} else {
+		log.Printf("⚠️ Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
+func (u *agentUsecase) UpdateAgentStatusOffline(ctx context.Context, id uuid.UUID) error {
+	// Update status in database
+	if err := u.agentRepo.UpdateStatus(ctx, id, "offline"); err != nil {
+		return err
+	}
+
+	// Get updated agent info for WebSocket broadcast
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to get agent info for WebSocket broadcast: %v", err)
+		return nil // Don't fail the status update if broadcast fails
+	}
+
+	// Broadcast real-time status update via WebSocket
+	if u.wsHub != nil {
+		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
+		log.Printf("Real-time agent status broadcast: %s -> %s (offline)", agent.Name, agent.Status)
+	} else {
+		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
+	}
+
+	return nil
+}
+
 func (u *agentUsecase) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
 	return u.agentRepo.GetByAgentKey(ctx, agentKey)
 }
@@ -361,7 +442,7 @@ func (u *agentUsecase) GetByNameAndIP(ctx context.Context, name, ip string, port
 }
 
 // GenerateAgentKey creates a new agent key entry in the database
-func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name string) (*domain.Agent, error) {
+func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error) {
 	// Check if agent name already exists
 	existingAgent, err := u.agentRepo.GetByName(ctx, name)
 	if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
@@ -372,10 +453,14 @@ func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name string) (*doma
 		return nil, fmt.Errorf("agent name '%s' already exists", name)
 	}
 
-	// Generate unique agent key
-	agentKey, err := generateAgentKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate agent key: %w", err)
+	// Check if agent key already exists
+	existingAgentByKey, err := u.agentRepo.GetByAgentKey(ctx, agentKey)
+	if err != nil && !errors.Is(err, domain.ErrAgentNotFound) {
+		return nil, fmt.Errorf("failed to check existing agent key: %w", err)
+	}
+
+	if existingAgentByKey != nil {
+		return nil, fmt.Errorf("agent key '%s' already exists", agentKey)
 	}
 
 	// Create new agent entry with just the name and key

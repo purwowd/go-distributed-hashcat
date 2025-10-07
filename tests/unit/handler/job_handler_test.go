@@ -218,8 +218,8 @@ func (m *MockJobUsecase) UpdateJobProgress(ctx context.Context, id uuid.UUID, pr
 	return args.Error(0)
 }
 
-func (m *MockJobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result string) error {
-	args := m.Called(ctx, id, result)
+func (m *MockJobUsecase) CompleteJob(ctx context.Context, id uuid.UUID, result string, speed int64) error {
+	args := m.Called(ctx, id, result, speed)
 	return args.Error(0)
 }
 

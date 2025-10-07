@@ -98,6 +98,7 @@ func (s *SQLiteDB) migrate() error {
 			status TEXT NOT NULL DEFAULT 'offline',
 			capabilities TEXT,
 			agent_key TEXT NOT NULL,
+			speed INTEGER DEFAULT 0,
 			last_seen DATETIME,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL
@@ -118,6 +119,8 @@ func (s *SQLiteDB) migrate() error {
 			speed INTEGER DEFAULT 0,
 			eta DATETIME,
 			result TEXT,
+			skip INTEGER,
+			word_limit INTEGER,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
 			started_at DATETIME,

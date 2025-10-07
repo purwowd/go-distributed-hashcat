@@ -74,6 +74,9 @@ func (m *MockJobRepository) UpdateProgress(ctx context.Context, id uuid.UUID, pr
 	return args.Error(0)
 }
 
+// MockAgentRepository is defined in agent_usecase_test.go
+// We only need to add the missing UpdateSpeed method here
+
 // MockHashFileRepository for job tests
 type MockHashFileRepository struct {
 	mock.Mock
@@ -102,6 +105,8 @@ func (m *MockHashFileRepository) Delete(ctx context.Context, id uuid.UUID) error
 	return args.Error(0)
 }
 
+// MockWordlistRepository is defined in wordlist_usecase_test.go
+
 func TestJobUsecase_CreateJob(t *testing.T) {
 	hashFileID := uuid.New()
 	agentID := uuid.New()
@@ -109,7 +114,7 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 	tests := []struct {
 		name          string
 		request       *domain.CreateJobRequest
-		mockSetup     func(*MockJobRepository, *MockAgentRepository, *MockHashFileRepository)
+		mockSetup     func(*MockJobRepository, *MockAgentRepository, *MockHashFileRepository, *MockWordlistRepository)
 		expectedError bool
 	}{
 		{
@@ -121,7 +126,7 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 				HashFileID: hashFileID.String(),
 				Wordlist:   "rockyou.txt",
 			},
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				// Mock hash file exists
 				hashFile := &domain.HashFile{
 					ID:   hashFileID,
@@ -145,7 +150,7 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 				Wordlist:   "rockyou.txt",
 				AgentID:    agentID.String(),
 			},
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				// Mock hash file exists
 				hashFile := &domain.HashFile{
 					ID:   hashFileID,
@@ -163,6 +168,17 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 
 				// Mock job creation
 				jobRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
+
+				// Mock job retrieval for StartJob (called internally when agent is assigned)
+				createdJob := &domain.Job{
+					ID:       uuid.New(),
+					Name:     "test-job",
+					Status:   "pending",
+					AgentID:  &agentID,
+					HashType: 0,
+				}
+				jobRepo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(createdJob, nil)
+				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
 			},
 			expectedError: false,
 		},
@@ -175,7 +191,7 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 				HashFileID: hashFileID.String(),
 				Wordlist:   "rockyou.txt",
 			},
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				hashFileRepo.On("GetByID", mock.Anything, hashFileID).Return(nil, errors.New("hash file not found"))
 			},
 			expectedError: true,
@@ -190,7 +206,7 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 				Wordlist:   "rockyou.txt",
 				AgentID:    agentID.String(),
 			},
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				// Mock hash file exists
 				hashFile := &domain.HashFile{
 					ID:   hashFileID,
@@ -213,7 +229,7 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 				HashFileID: "invalid-uuid",
 				Wordlist:   "rockyou.txt",
 			},
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				// No mocks needed - should fail on UUID parsing
 			},
 			expectedError: true,
@@ -225,10 +241,11 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 			jobRepo := new(MockJobRepository)
 			agentRepo := new(MockAgentRepository)
 			hashFileRepo := new(MockHashFileRepository)
+			wordlistRepo := new(MockWordlistRepository)
 
-			tt.mockSetup(jobRepo, agentRepo, hashFileRepo)
+			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 			ctx := context.Background()
 
 			job, err := usecase.CreateJob(ctx, tt.request)
@@ -258,13 +275,13 @@ func TestJobUsecase_StartJob(t *testing.T) {
 	tests := []struct {
 		name          string
 		jobID         uuid.UUID
-		mockSetup     func(*MockJobRepository, *MockAgentRepository)
+		mockSetup     func(*MockJobRepository, *MockAgentRepository, *MockHashFileRepository, *MockWordlistRepository)
 		expectedError bool
 	}{
 		{
 			name:  "successful job start",
 			jobID: jobID,
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				job := &domain.Job{
 					ID:      jobID,
 					Status:  "pending",
@@ -278,7 +295,7 @@ func TestJobUsecase_StartJob(t *testing.T) {
 		{
 			name:  "job not found",
 			jobID: jobID,
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("GetByID", mock.Anything, jobID).Return(nil, errors.New("job not found"))
 			},
 			expectedError: true,
@@ -286,7 +303,7 @@ func TestJobUsecase_StartJob(t *testing.T) {
 		{
 			name:  "job already running",
 			jobID: jobID,
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				job := &domain.Job{
 					ID:     jobID,
 					Status: "running",
@@ -298,7 +315,7 @@ func TestJobUsecase_StartJob(t *testing.T) {
 		{
 			name:  "repository update error",
 			jobID: jobID,
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				job := &domain.Job{
 					ID:      jobID,
 					Status:  "pending",
@@ -316,10 +333,11 @@ func TestJobUsecase_StartJob(t *testing.T) {
 			jobRepo := new(MockJobRepository)
 			agentRepo := new(MockAgentRepository)
 			hashFileRepo := new(MockHashFileRepository)
+			wordlistRepo := new(MockWordlistRepository)
 
-			tt.mockSetup(jobRepo, agentRepo)
+			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 			ctx := context.Background()
 
 			err := usecase.StartJob(ctx, tt.jobID)
@@ -344,7 +362,7 @@ func TestJobUsecase_UpdateJobProgress(t *testing.T) {
 		jobID         uuid.UUID
 		progress      float64
 		speed         int64
-		mockSetup     func(*MockJobRepository)
+		mockSetup     func(*MockJobRepository, *MockAgentRepository, *MockHashFileRepository, *MockWordlistRepository)
 		expectedError bool
 	}{
 		{
@@ -352,7 +370,7 @@ func TestJobUsecase_UpdateJobProgress(t *testing.T) {
 			jobID:    jobID,
 			progress: 50.5,
 			speed:    1000000,
-			mockSetup: func(jobRepo *MockJobRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("UpdateProgress", mock.Anything, jobID, 50.5, int64(1000000)).Return(nil)
 			},
 			expectedError: false,
@@ -362,7 +380,7 @@ func TestJobUsecase_UpdateJobProgress(t *testing.T) {
 			jobID:    jobID,
 			progress: 75.0,
 			speed:    500000,
-			mockSetup: func(jobRepo *MockJobRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("UpdateProgress", mock.Anything, jobID, 75.0, int64(500000)).Return(errors.New("database error"))
 			},
 			expectedError: true,
@@ -374,10 +392,11 @@ func TestJobUsecase_UpdateJobProgress(t *testing.T) {
 			jobRepo := new(MockJobRepository)
 			agentRepo := new(MockAgentRepository)
 			hashFileRepo := new(MockHashFileRepository)
+			wordlistRepo := new(MockWordlistRepository)
 
-			tt.mockSetup(jobRepo)
+			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 			ctx := context.Background()
 
 			err := usecase.UpdateJobProgress(ctx, tt.jobID, tt.progress, tt.speed)
@@ -401,14 +420,14 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 		name          string
 		jobID         uuid.UUID
 		result        string
-		mockSetup     func(*MockJobRepository, *MockAgentRepository)
+		mockSetup     func(*MockJobRepository, *MockAgentRepository, *MockHashFileRepository, *MockWordlistRepository)
 		expectedError bool
 	}{
 		{
 			name:   "successful job completion",
 			jobID:  jobID,
 			result: "password123",
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				job := &domain.Job{
 					ID:      jobID,
 					Status:  "running",
@@ -416,7 +435,7 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 				}
 				jobRepo.On("GetByID", mock.Anything, jobID).Return(job, nil)
 				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
-				agentRepo.On("UpdateStatus", mock.Anything, agentID, "online").Return(nil)
+				// Note: CompleteJob does not call UpdateStatus on agent repository
 			},
 			expectedError: false,
 		},
@@ -424,7 +443,7 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 			name:   "job not found",
 			jobID:  jobID,
 			result: "password123",
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("GetByID", mock.Anything, jobID).Return(nil, errors.New("job not found"))
 			},
 			expectedError: true,
@@ -433,7 +452,7 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 			name:   "completing already completed job",
 			jobID:  jobID,
 			result: "password123",
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				job := &domain.Job{
 					ID:     jobID,
 					Status: "completed",
@@ -450,13 +469,14 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 			jobRepo := new(MockJobRepository)
 			agentRepo := new(MockAgentRepository)
 			hashFileRepo := new(MockHashFileRepository)
+			wordlistRepo := new(MockWordlistRepository)
 
-			tt.mockSetup(jobRepo, agentRepo)
+			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 			ctx := context.Background()
 
-			err := usecase.CompleteJob(ctx, tt.jobID, tt.result)
+			err := usecase.CompleteJob(ctx, tt.jobID, tt.result, 1000000) // Add speed parameter
 
 			if tt.expectedError {
 				assert.Error(t, err)
@@ -476,12 +496,12 @@ func TestJobUsecase_AssignJobsToAgents(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		mockSetup     func(*MockJobRepository, *MockAgentRepository)
+		mockSetup     func(*MockJobRepository, *MockAgentRepository, *MockHashFileRepository, *MockWordlistRepository)
 		expectedError bool
 	}{
 		{
 			name: "successful job assignment",
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				// Mock pending jobs
 				pendingJob := &domain.Job{
 					ID:      jobID,
@@ -505,14 +525,14 @@ func TestJobUsecase_AssignJobsToAgents(t *testing.T) {
 		},
 		{
 			name: "no pending jobs",
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("GetByStatus", mock.Anything, "pending").Return([]domain.Job{}, nil)
 			},
 			expectedError: false,
 		},
 		{
 			name: "no available agents",
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				pendingJob := &domain.Job{
 					ID:      jobID,
 					Status:  "pending",
@@ -527,7 +547,7 @@ func TestJobUsecase_AssignJobsToAgents(t *testing.T) {
 		},
 		{
 			name: "repository error getting pending jobs",
-			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("GetByStatus", mock.Anything, "pending").Return([]domain.Job{}, errors.New("database error"))
 			},
 			expectedError: true,
@@ -539,10 +559,11 @@ func TestJobUsecase_AssignJobsToAgents(t *testing.T) {
 			jobRepo := new(MockJobRepository)
 			agentRepo := new(MockAgentRepository)
 			hashFileRepo := new(MockHashFileRepository)
+			wordlistRepo := new(MockWordlistRepository)
 
-			tt.mockSetup(jobRepo, agentRepo)
+			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 			ctx := context.Background()
 
 			err := usecase.AssignJobsToAgents(ctx)
@@ -563,14 +584,14 @@ func TestJobUsecase_GetJobsByStatus(t *testing.T) {
 	tests := []struct {
 		name          string
 		status        string
-		mockSetup     func(*MockJobRepository)
+		mockSetup     func(*MockJobRepository, *MockAgentRepository, *MockHashFileRepository, *MockWordlistRepository)
 		expectedCount int
 		expectedError bool
 	}{
 		{
 			name:   "get pending jobs",
 			status: "pending",
-			mockSetup: func(jobRepo *MockJobRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobs := []domain.Job{
 					{ID: uuid.New(), Status: "pending"},
 					{ID: uuid.New(), Status: "pending"},
@@ -583,7 +604,7 @@ func TestJobUsecase_GetJobsByStatus(t *testing.T) {
 		{
 			name:   "no jobs with status",
 			status: "completed",
-			mockSetup: func(jobRepo *MockJobRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("GetByStatus", mock.Anything, "completed").Return([]domain.Job{}, nil)
 			},
 			expectedCount: 0,
@@ -592,7 +613,7 @@ func TestJobUsecase_GetJobsByStatus(t *testing.T) {
 		{
 			name:   "repository error",
 			status: "running",
-			mockSetup: func(jobRepo *MockJobRepository) {
+			mockSetup: func(jobRepo *MockJobRepository, agentRepo *MockAgentRepository, hashFileRepo *MockHashFileRepository, wordlistRepo *MockWordlistRepository) {
 				jobRepo.On("GetByStatus", mock.Anything, "running").Return([]domain.Job{}, errors.New("database error"))
 			},
 			expectedError: true,
@@ -604,10 +625,11 @@ func TestJobUsecase_GetJobsByStatus(t *testing.T) {
 			jobRepo := new(MockJobRepository)
 			agentRepo := new(MockAgentRepository)
 			hashFileRepo := new(MockHashFileRepository)
+			wordlistRepo := new(MockWordlistRepository)
 
-			tt.mockSetup(jobRepo)
+			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 			ctx := context.Background()
 
 			jobs, err := usecase.GetJobsByStatus(ctx, tt.status)

@@ -1,5 +1,6 @@
 // API Service for Distributed Hashcat Dashboard
 import { getConfig } from '@/config/build.config'
+import { authService } from './auth.service'
 
 // Types for API responses
 export interface Agent {
@@ -91,6 +92,7 @@ class ApiService {
             const response = await fetch(url, {
                 headers: {
                     'Content-Type': 'application/json',
+                    ...authService.getAuthHeader(),
                     ...options.headers
                 },
                 ...options
@@ -216,10 +218,15 @@ class ApiService {
         }
     }
 
-    public async generateAgentKey(name: string): Promise<{agent: Agent | null, error: string | null}> {
-        const response = await this.post<{data: Agent}>('/api/v1/agents/generate-key', { name })
+    public async generateAgentKey(name: string, agentKey: string): Promise<{agent: Agent | null, error: string | null}> {
+        console.log('API: Sending generateAgentKey request with:', { name, agent_key: agentKey })
+        const response = await this.post<{data: Agent}>('/api/v1/agents/generate-key', { name, agent_key: agentKey })
+        console.log('API: Response received:', response)
+        console.log('API: Response data:', response.data)
+        console.log('API: Response data.data:', response.data?.data)
+        
         return {
-            agent: response.success ? response.data!.data : null,
+            agent: response.success && response.data?.data ? response.data.data : null,
             error: response.error || null
         }
     }
@@ -293,7 +300,20 @@ class ApiService {
 
     // Distributed Job Creation - for multiple agents with H/s-based distribution
     public async createDistributedJob(jobData: any): Promise<any | null> {
-        const response = await this.post<any>('/api/v1/distributed-jobs/', jobData)
+        // Prepare distributed job request with specific agents
+        const distributedJobData = {
+            name: jobData.name,
+            hash_type: jobData.hash_type,
+            attack_mode: jobData.attack_mode,
+            hash_file_id: jobData.hash_file_id,
+            wordlist_id: jobData.wordlist_id,
+            rules: jobData.rules || '',
+            auto_distribute: false, // Use specific agents, not all online agents
+            agent_ids: jobData.agent_ids || [], // Use the selected agents
+            create_master_job: false // Don't create master job to avoid clutter
+        }
+        
+        const response = await this.post<any>('/api/v1/distributed-jobs/', distributedJobData)
         return response.success ? response.data! : null
     }
 

@@ -107,6 +107,21 @@ func (m *MockAgentRepository) GetByNameAndIPForStartup(ctx context.Context, name
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentRepository) UpdateSpeed(ctx context.Context, id uuid.UUID, speed int64) error {
+	args := m.Called(ctx, id, speed)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) UpdateSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error {
+	args := m.Called(ctx, id, speed, status)
+	return args.Error(0)
+}
+
+func (m *MockAgentRepository) ResetSpeedOnOffline(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func TestAgentUsecase_RegisterAgent(t *testing.T) {
 	existingAgentID := uuid.New()
 
@@ -467,10 +482,10 @@ func TestAgentUsecase_UpdateAgentStatus(t *testing.T) {
 			status:  "offline",
 			mockSetup: func(repo *MockAgentRepository) {
 				expectedAgent := &domain.Agent{
-					ID:        agentID,
-					Name:      "test-agent",
-					Status:    "offline",
-					LastSeen:  time.Now(),
+					ID:       agentID,
+					Name:     "test-agent",
+					Status:   "offline",
+					LastSeen: time.Now(),
 				}
 				repo.On("UpdateStatus", mock.Anything, agentID, "offline").Return(nil)
 				repo.On("GetByID", mock.Anything, agentID).Return(expectedAgent, nil)

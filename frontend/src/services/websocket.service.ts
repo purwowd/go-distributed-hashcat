@@ -71,7 +71,7 @@ class WebSocketService {
                     const message: WebSocketMessage = JSON.parse(event.data)
                     this.handleMessage(message)
                 } catch (error) {
-                    console.error('❌ Failed to parse WebSocket message:', error)
+                    // console.error('❌ Failed to parse WebSocket message:', error)
                 }
             }
             
@@ -86,12 +86,12 @@ class WebSocketService {
             }
             
             this.ws.onerror = (error) => {
-                console.error('❌ WebSocket error:', error)
+                // console.error('❌ WebSocket error:', error)
                 this.emit('error', { error })
             }
             
         } catch (error) {
-            console.error('❌ Failed to create WebSocket connection:', error)
+            // console.error('❌ Failed to create WebSocket connection:', error)
         }
     }
 
@@ -99,7 +99,7 @@ class WebSocketService {
         this.reconnectAttempts++
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
         
-        // console.log(`🔄 Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
+        // console.log(`Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
         
         setTimeout(() => {
             if (this.shouldReconnect) {

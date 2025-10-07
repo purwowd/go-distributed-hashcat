@@ -99,12 +99,16 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 	// Normalize response to ensure all fields are populated with sensible defaults
 	normalized := make([]gin.H, 0, len(enrichedJobs))
 	for _, ej := range enrichedJobs {
+		// Skip jobs with invalid or empty names
+		if ej.Name == "" || ej.Name == "-" || ej.Name == "null" || strings.TrimSpace(ej.Name) == "" {
+			continue
+		}
 		var (
-			hashFileID    string
-			wordlistID    string
-			agentID       string
-			etaStr        string
-			startedAtStr  string
+			hashFileID     string
+			wordlistID     string
+			agentID        string
+			etaStr         string
+			startedAtStr   string
 			completedAtStr string
 		)
 
@@ -203,13 +207,13 @@ func (h *JobHandler) UpdateJobProgress(c *gin.Context) {
 		ETA      *string `json:"eta,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("❌ Invalid request body for job progress update %s: %v", id.String(), err)
+		log.Printf("Invalid request body for job progress update %s: %v", id.String(), err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if err := h.jobUsecase.UpdateJobProgress(c.Request.Context(), id, req.Progress, req.Speed); err != nil {
-		log.Printf("❌ Failed to update job progress %s: %v", id.String(), err)
+		log.Printf("Failed to update job progress %s: %v", id.String(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -243,7 +247,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 	// Get job details before completion
 	job, err := h.jobUsecase.GetJob(c.Request.Context(), id)
 	if err != nil {
-		log.Printf("❌ Failed to get job %s for completion logging: %v", id.String(), err)
+		log.Printf("Failed to get job %s for completion logging: %v", id.String(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -253,7 +257,7 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 	if job.AgentID != nil {
 		agent, err := h.agentUsecase.GetAgent(c.Request.Context(), *job.AgentID)
 		if err != nil {
-			log.Printf("⚠️ Failed to get agent details for job %s: %v", id.String(), err)
+			log.Printf("Failed to get agent details for job %s: %v", id.String(), err)
 			agentName = "Unknown Agent"
 		} else {
 			agentName = agent.Name
@@ -264,13 +268,18 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 
 	// Log job completion with agent details
 	if req.Result != "" && req.Result != "Password not found - exhausted" {
-		log.Printf("🎉 SUCCESS: Agent %s found password for job %s", agentName, job.Name)
-		log.Printf("   📍 Result: %s", req.Result)
-		log.Printf("   🔍 Job ID: %s", job.ID.String())
+		log.Printf("🎯 PASSWORD FOUND: Agent %s found password for job %s (Status: COMPLETED)", agentName, job.Name)
+		log.Printf("   Result: %s", req.Result)
+		log.Printf("   Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
-		log.Printf("   📊 Progress: %.2f%%", job.Progress)
+		log.Printf("   Progress: %.2f%%", job.Progress)
+
+		// Check if this is a distributed job and log coordination info
+		if strings.Contains(job.Name, " (Part ") || strings.Contains(job.Name, " (") {
+			log.Printf("COORDINATION: This is a distributed job - stopping other agents...")
+		}
 	} else {
-		log.Printf("❌ FAILED: Agent %s did not find password for job %s", agentName, job.Name)
+		log.Printf("❌ FAILED: Agent %s failed job %s (no password found)", agentName, job.Name)
 		log.Printf("   🔍 Job ID: %s", job.ID.String())
 		log.Printf("   ⚡ Speed: %d H/s", job.Speed)
 		log.Printf("   📊 Progress: %.2f%%", job.Progress)
@@ -279,8 +288,8 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 		}
 	}
 
-	if err := h.jobUsecase.CompleteJob(c.Request.Context(), id, req.Result); err != nil {
-		log.Printf("❌ Failed to complete job %s: %v", id.String(), err)
+	if err := h.jobUsecase.CompleteJob(c.Request.Context(), id, req.Result, job.Speed); err != nil {
+		log.Printf("Failed to complete job %s: %v", id.String(), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -294,8 +303,16 @@ func (h *JobHandler) CompleteJob(c *gin.Context) {
 		}
 	}
 
-	// Broadcast job completion with result
-	Hub.BroadcastJobStatus(id.String(), "completed", req.Result)
+	// Broadcast job completion with result - status will be determined by the usecase
+	// Get the updated job to get the correct status
+	updatedJob, err := h.jobUsecase.GetJob(c.Request.Context(), id)
+	if err != nil {
+		log.Printf("Failed to get updated job status for broadcasting: %v", err)
+		// Fallback to completed status
+		Hub.BroadcastJobStatus(id.String(), "completed", req.Result)
+	} else {
+		Hub.BroadcastJobStatus(id.String(), updatedJob.Status, req.Result)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Job completed successfully"})
 }
@@ -528,24 +545,30 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		return
 	}
 
-	// Baca konten wordlist
-	wordlistLines, err := readWordlistFile(wordlist.Path)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read wordlist"})
-		return
-	}
-
-	// Filter non-empty words
-	var validWords []string
-	for _, word := range wordlistLines {
-		word = strings.TrimSpace(word)
-		if word != "" {
-			validWords = append(validWords, word)
+	// Get word count from repository
+	var totalWords int64
+	if wordlist.WordCount != nil {
+		totalWords = *wordlist.WordCount
+		log.Printf("📝 Wordlist contains %d words (from repository)", totalWords)
+	} else {
+		// Fallback: read file content if word count not available
+		wordlistLines, err := readWordlistFile(wordlist.Path)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read wordlist"})
+			return
 		}
-	}
 
-	log.Printf("📝 Wordlist contains %d valid words", len(validWords))
-	log.Printf("📋 Words: %v", validWords)
+		// Filter non-empty words
+		var validWords []string
+		for _, word := range wordlistLines {
+			word = strings.TrimSpace(word)
+			if word != "" {
+				validWords = append(validWords, word)
+			}
+		}
+		totalWords = int64(len(validWords))
+		log.Printf("📝 Wordlist contains %d valid words (from file)", totalWords)
+	}
 
 	// Analisis kecepatan agent berdasarkan capabilities
 	type AgentSpeed struct {
@@ -556,18 +579,23 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 	var agentSpeeds []AgentSpeed
 
 	for _, agent := range onlineAgents {
-		speed := 1 // Default for CPU
-		if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
-			speed = 5 // GPU is faster
-		} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
-			speed = 8 // RTX lebih cepat lagi
-		} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
-			speed = 6 // GTX lebih cepat
+		// Use actual speed from database, fallback to capability-based estimation if speed is 0
+		speed := agent.Speed
+		if speed == 0 {
+			// Fallback to capability-based estimation for agents without speed data
+			speed = 1 // Default for CPU
+			if strings.Contains(strings.ToLower(agent.Capabilities), "gpu") {
+				speed = 5 // GPU is faster
+			} else if strings.Contains(strings.ToLower(agent.Capabilities), "rtx") {
+				speed = 8 // RTX lebih cepat lagi
+			} else if strings.Contains(strings.ToLower(agent.Capabilities), "gtx") {
+				speed = 6 // GTX lebih cepat
+			}
 		}
 
 		agentSpeeds = append(agentSpeeds, AgentSpeed{
 			Agent:  agent,
-			Speed:  speed,
+			Speed:  int(speed),
 			Weight: 0, // Akan dihitung nanti
 		})
 	}
@@ -578,6 +606,15 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		totalSpeed += agentSpeed.Speed
 	}
 
+	// Sort agents by speed (highest first) for proper distribution
+	for i := 0; i < len(agentSpeeds)-1; i++ {
+		for j := i + 1; j < len(agentSpeeds); j++ {
+			if agentSpeeds[i].Speed < agentSpeeds[j].Speed {
+				agentSpeeds[i], agentSpeeds[j] = agentSpeeds[j], agentSpeeds[i]
+			}
+		}
+	}
+
 	// Calculate weight for each agent
 	for i := range agentSpeeds {
 		agentSpeeds[i].Weight = float64(agentSpeeds[i].Speed) / float64(totalSpeed)
@@ -586,7 +623,7 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 	// Log distribusi agent
 	log.Printf("🤖 Agent distribution plan:")
 	for _, agentSpeed := range agentSpeeds {
-		wordCount := int(float64(len(validWords)) * agentSpeed.Weight)
+		wordCount := int64(float64(totalWords) * agentSpeed.Weight)
 		log.Printf("   - %s (%s): Speed=%d, Weight=%.2f, Words=%d",
 			agentSpeed.Agent.Name,
 			agentSpeed.Agent.Capabilities,
@@ -595,65 +632,61 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 			wordCount)
 	}
 
-	// Bagi wordlist berdasarkan bobot kecepatan
-	wordlistParts := make(map[string][]string)
-	currentIndex := 0
+	// Create jobs with skip/limit parameters based on agent performance
+	var createdJobs []domain.Job
+	currentSkip := int64(0)
 
 	for i, agentSpeed := range agentSpeeds {
-		wordCount := int(float64(len(validWords)) * agentSpeed.Weight)
+		// Calculate word count for this agent
+		wordCount := int64(float64(totalWords) * agentSpeed.Weight)
 
-		// Pastikan agent terakhir mendapat sisa kata
+		// Ensure last agent gets remaining words
 		if i == len(agentSpeeds)-1 {
-			wordCount = len(validWords) - currentIndex
+			wordCount = totalWords - currentSkip
 		}
 
-		if wordCount > 0 {
-			endIndex := currentIndex + wordCount
-			if endIndex > len(validWords) {
-				endIndex = len(validWords)
-			}
-
-			agentWords := validWords[currentIndex:endIndex]
-			wordlistParts[agentSpeed.Agent.ID.String()] = agentWords
-
-			log.Printf("📦 Assigned %d words to %s: %v",
-				len(agentWords),
-				agentSpeed.Agent.Name,
-				agentWords)
-
-			currentIndex = endIndex
+		// Ensure minimum words per agent
+		if wordCount < 1 {
+			wordCount = 1
 		}
-	}
 
-	// Create job for each part
-	var createdJobs []domain.Job
-	for agentID, words := range wordlistParts {
+		// Calculate skip and limit values for this agent
+		skip := currentSkip
+		limit := wordCount
+
+		// Create job with skip/limit parameters
 		job, err := h.jobUsecase.CreateJob(c.Request.Context(), &domain.CreateJobRequest{
 			HashFileID: request.HashFileID,
-			Wordlist:   strings.Join(words, "\n"), // Gabungkan array menjadi string
-			AgentID:    agentID,
-			Name:       fmt.Sprintf("Parallel Job - %s", wordlist.Name),
+			WordlistID: request.WordlistID,
+			Wordlist:   wordlist.OrigName,                      // Use original wordlist name
+			AgentIDs:   []string{agentSpeed.Agent.ID.String()}, // Use AgentIDs for distributed job
+			Name:       fmt.Sprintf("Parallel Job - %s (%s)", wordlist.Name, agentSpeed.Agent.Name),
 		})
 		if err != nil {
-			log.Printf("❌ Failed to create job for agent %s: %v", agentID, err)
+			log.Printf("Failed to create job for agent %s: %v", agentSpeed.Agent.ID.String(), err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create job"})
 			return
 		}
 
 		createdJobs = append(createdJobs, *job)
-		log.Printf("✅ Created job %s for agent %s with %d words",
+		log.Printf("📦 Created job %s for agent %s with skip=%d, limit=%d words (%.1f%%)",
 			job.ID.String(),
-			agentID,
-			len(words))
+			agentSpeed.Agent.Name,
+			skip,
+			limit,
+			agentSpeed.Weight*100)
+
+		// Update currentSkip for next agent
+		currentSkip += wordCount
 	}
 
-	log.Printf("🎉 Successfully created %d parallel jobs", len(createdJobs))
+	log.Printf("Successfully created %d parallel jobs", len(createdJobs))
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Parallel jobs created successfully",
 		"data": gin.H{
 			"total_jobs":  len(createdJobs),
-			"total_words": len(validWords),
+			"total_words": totalWords,
 			"agents_used": len(agentSpeeds),
 			"jobs":        createdJobs,
 		},

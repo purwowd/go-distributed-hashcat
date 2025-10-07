@@ -124,6 +124,21 @@ func (m *MockAgentUsecase) UpdateAgentData(ctx context.Context, agentKey string,
 	return args.Error(0)
 }
 
+func (m *MockAgentUsecase) UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error {
+	args := m.Called(ctx, id, speed)
+	return args.Error(0)
+}
+
+func (m *MockAgentUsecase) UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error {
+	args := m.Called(ctx, id, speed, status)
+	return args.Error(0)
+}
+
+func (m *MockAgentUsecase) UpdateAgentStatusOffline(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func setupTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

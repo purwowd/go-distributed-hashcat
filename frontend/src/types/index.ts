@@ -5,6 +5,7 @@ export interface Agent {
     port: number
     status: 'online' | 'offline' | 'busy'
     capabilities: string
+    agent_key: string
     last_seen: string
     created_at: string
     updated_at: string
@@ -51,11 +52,46 @@ export interface Stats {
 export interface Notification {
     show: boolean
     message: string
-    type: 'success' | 'error'
+    type: 'success' | 'error' | 'info' | 'warning'
 }
 
 export interface ApiResponse<T> {
     success: boolean
     data: T
     error?: string
+}
+
+// Authentication types
+export interface User {
+    id: string
+    username: string
+    email: string
+    role: 'admin' | 'user' | 'guest'
+    is_active: boolean
+    created_at: string
+    updated_at: string
+    last_login?: string
+}
+
+export interface LoginRequest {
+    username: string
+    password: string
+}
+
+export interface LoginResponse {
+    token: string
+    user: User
+    expires_at: string
+}
+
+export interface LogoutRequest {
+    token: string
+}
+
+export interface AuthState {
+    isAuthenticated: boolean
+    user: User | null
+    token: string | null
+    isLoading: boolean
+    error: string | null
 } 

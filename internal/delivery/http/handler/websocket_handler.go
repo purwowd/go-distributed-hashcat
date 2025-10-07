@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -15,7 +16,63 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		// Allow connections from localhost in development
 		origin := r.Header.Get("Origin")
-		return origin == "http://localhost:3000" || origin == "http://localhost:5173" || origin == ""
+		host := r.Host
+		
+		// Allow connections from various localhost origins
+		allowedOrigins := []string{
+			"http://localhost:3000",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:5173",
+			"http://[::1]:3000",
+			"http://[::1]:5173",
+			"", // Empty origin for direct connections
+		}
+		
+		// Add frontend URL from environment variable
+		if frontendURL := os.Getenv("HASHCAT_FRONTEND_URL"); frontendURL != "" {
+			allowedOrigins = append(allowedOrigins, frontendURL)
+		}
+		
+		// Check if origin is in allowed list
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+		
+		// Allow connections from same host (for direct access)
+		serverHost := os.Getenv("HASHCAT_SERVER_HOST")
+		serverPort := os.Getenv("HASHCAT_SERVER_PORT")
+		if serverHost == "" {
+			serverHost = "0.0.0.0"
+		}
+		if serverPort == "" {
+			serverPort = "1337"
+		}
+		
+		allowedHosts := []string{
+			"localhost:1337",
+			"127.0.0.1:1337",
+			"[::1]:1337",
+			serverHost + ":" + serverPort,
+		}
+		
+		if origin == "" {
+			for _, allowedHost := range allowedHosts {
+				if host == allowedHost {
+					return true
+				}
+			}
+		}
+		
+		// In development mode, be more permissive with CORS
+		// Allow any origin that starts with http:// (for development only)
+		if origin != "" && (origin[:7] == "http://" || origin[:8] == "https://") {
+			return true
+		}
+		
+		return false
 	},
 }
 
@@ -143,6 +200,22 @@ func (h *WebSocketHub) BroadcastAgentStatus(agentID string, status string, lastS
 	case h.broadcast <- message:
 	default:
 		log.Println("Failed to broadcast agent status - channel full")
+	}
+}
+
+func (h *WebSocketHub) BroadcastAgentSpeed(agentID string, speed int64) {
+	message := WebSocketMessage{
+		Type: "agent_speed",
+		Data: map[string]interface{}{
+			"agent_id": agentID,
+			"speed":    speed,
+		},
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	select {
+	case h.broadcast <- message:
+	default:
+		log.Println("Failed to broadcast agent speed - channel full")
 	}
 }
 
