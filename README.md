@@ -2,8 +2,9 @@
 
 **Modern distributed password cracking system** with Go backend, TypeScript frontend, and clean architecture.
 
-[![Go](https://img.shields.io/badge/Go-1.24-blue)](https://golang.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Go](https://img.shields.io/badge/Go-1.24.7-blue)](https://golang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-blue)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.0.10-646CFF)](https://vitejs.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ## 🚀 Key Features
@@ -14,13 +15,18 @@
 - **🔒 Secure**: WireGuard VPN support
 - **📊 Real-time Updates**: Live progress tracking
 
-**Stack**: Go 1.24 + Gin + SQLite + TypeScript + Alpine.js + Tailwind CSS
+**Stack**: Go 1.24.7 + Gin + SQLite + TypeScript 5.3.3 + Vite 5.0.10 + Alpine.js + Tailwind CSS
 
 ## ⚡ Quick Start
 
 ```bash
 # Install dependencies (Ubuntu)
-sudo apt update && sudo apt install git nodejs npm golang-go hashcat sqlite3 -y
+sudo apt update && sudo apt install git nodejs npm hashcat sqlite3 -y
+
+# Install Go 1.24.7 (required)
+wget https://go.dev/dl/go1.24.7.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.24.7.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
 
 # Clone and build
 git clone https://github.com/purwowd/go-distributed-hashcat.git
@@ -33,6 +39,36 @@ cd frontend && npm install && npm run dev
 ```
 
 **Access**: http://localhost:3000
+
+## 🎨 Frontend Development
+
+The frontend is built with **Vite 5.0.10** for fast development and optimized builds:
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Development server (with hot reload)
+npm run dev
+
+# Type checking
+npm run type-check
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+**Frontend Features**:
+- ⚡ **Vite 5.0.10**: Lightning-fast build tool
+- 🔷 **TypeScript 5.3.3**: Type-safe development
+- 🎨 **Tailwind CSS**: Utility-first styling
+- 🏔️ **Alpine.js**: Lightweight reactive framework
+- 📦 **ES Modules**: Modern JavaScript modules
 
 ### 🗝️ Agent Key Setup
 
@@ -58,11 +94,17 @@ Frontend (TypeScript) ←→ REST API (Go) ←→ Agent Network (GPU)
 ```
 
 **Clean Architecture Layers**:
-- **Frontend**: TypeScript + Alpine.js + Tailwind CSS
+- **Frontend**: Vite 5.0.10 + TypeScript 5.3.3 + Alpine.js + Tailwind CSS
 - **Domain**: Core business logic (`internal/domain/`)
 - **Use Cases**: Application logic (`internal/usecase/`)
 - **Infrastructure**: Database, external services
 - **Delivery**: HTTP handlers, CLI
+
+**Technology Stack**:
+- **Backend**: Go 1.24.7 + Gin + SQLite + CGO
+- **Frontend**: Vite 5.0.10 + TypeScript 5.3.3 + Alpine.js + Tailwind CSS
+- **Build**: Make + Terser + ESLint + Prettier
+- **Development**: Hot reload, Type checking, Linting
 
 ## 🌐 Production Deploy
 
@@ -130,6 +172,44 @@ make docker      # Docker build
 - **Latency**: <5ms average
 - **Scalability**: 100+ agents, 1000+ jobs
 - **GPU Support**: RTX 4090 (1.2M H/s), RTX 3080 (800K H/s)
+
+## 🔧 Troubleshooting
+
+### Go Version Issues
+```bash
+# Check Go version (must be 1.24+)
+go version
+
+# If you get "cannot compile Go 1.24 code" error:
+# Install Go 1.24.7 manually
+wget https://go.dev/dl/go1.24.7.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.24.7.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+```
+
+### Frontend TypeScript Errors
+```bash
+cd frontend
+
+# Install missing dependencies
+npm install
+
+# Check for TypeScript errors
+npm run type-check
+
+# Fix linting issues
+npm run lint:fix
+```
+
+### Build Issues
+```bash
+# Clean and rebuild
+make clean
+make build
+
+# Check if binaries were created
+ls -la bin/
+```
 
 ---
 

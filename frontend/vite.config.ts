@@ -1,6 +1,11 @@
 import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import fs from 'fs'
+import { fileURLToPath } from 'url'
+
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // Custom plugin to compile HTML templates
 const htmlTemplatePlugin = () => {
@@ -71,7 +76,7 @@ const htmlTemplatePlugin = () => {
           
           return html // fallback to original HTML
         } catch (error) {
-          console.warn('Template compilation warning:', error.message)
+          console.warn('Template compilation warning:', error instanceof Error ? error.message : String(error))
           return html // fallback to original HTML if template compilation fails
         }
       }
@@ -79,7 +84,7 @@ const htmlTemplatePlugin = () => {
   }
 }
 
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ command, mode }: { command: string; mode: string }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '')
   
@@ -106,7 +111,7 @@ export default defineConfig(({ command, mode }) => {
       target: 'es2015',
       outDir: '../dist',
       assetsDir: 'assets',
-      minify: 'terser',
+      minify: 'terser' as const,
       sourcemap: mode === 'development',
       rollupOptions: {
         output: {
