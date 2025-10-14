@@ -1771,6 +1771,7 @@ class DashboardApplication {
             canStartJob(job: any): boolean {
                 return job.status !== 'running' && 
                        job.status !== 'completed' && 
+                       job.status !== 'pending' && 
                        job.agent_name && 
                        job.agent_name !== 'Unassigned'
             },

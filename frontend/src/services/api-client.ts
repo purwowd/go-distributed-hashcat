@@ -1,20 +1,27 @@
-import { Agent, Job, HashFile, ApiResponse } from '../types/index'
+import { Agent, Job, HashFile } from '../types/index'
 
 export class ApiClient {
     private baseUrl: string
+    private xToken: string
 
     constructor(baseUrl: string) {
         this.baseUrl = baseUrl
+        this.xToken = import.meta.env.VITE_X_TOKEN || ''
+    }
+
+    private buildHeaders(extra?: HeadersInit): HeadersInit {
+        return {
+            'Content-Type': 'application/json',
+            ...(this.xToken ? { 'X-Token': this.xToken } : {}),
+            ...extra
+        }
     }
 
     private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`
-        
+
         const response = await fetch(url, {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options?.headers
-            },
+            headers: this.buildHeaders(options?.headers), // <<< pakai helper
             ...options
         })
 
@@ -72,27 +79,19 @@ export class ApiClient {
     }
 
     async startJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}/start`, {
-            method: 'POST'
-        })
+        return this.request<void>(`/jobs/${id}/start`, { method: 'POST' })
     }
 
     async pauseJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}/pause`, {
-            method: 'POST'
-        })
+        return this.request<void>(`/jobs/${id}/pause`, { method: 'POST' })
     }
 
     async resumeJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}/resume`, {
-            method: 'POST'
-        })
+        return this.request<void>(`/jobs/${id}/resume`, { method: 'POST' })
     }
 
     async deleteJob(id: string): Promise<void> {
-        return this.request<void>(`/jobs/${id}`, {
-            method: 'DELETE'
-        })
+        return this.request<void>(`/jobs/${id}`, { method: 'DELETE' })
     }
 
     // Hash file methods
@@ -106,6 +105,9 @@ export class ApiClient {
 
         const response = await fetch(`${this.baseUrl}/hashfiles/upload`, {
             method: 'POST',
+            headers: {
+                ...(this.xToken ? { 'X-Token': this.xToken } : {})
+            },
             body: formData
         })
 
@@ -114,12 +116,10 @@ export class ApiClient {
         }
 
         const data = await response.json()
-        return data.data
+        return data.data || data
     }
 
     async deleteHashFile(id: string): Promise<void> {
-        return this.request<void>(`/hashfiles/${id}`, {
-            method: 'DELETE'
-        })
+        return this.request<void>(`/hashfiles/${id}`, { method: 'DELETE' })
     }
-} 
+}

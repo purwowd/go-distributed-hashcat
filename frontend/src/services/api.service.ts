@@ -78,8 +78,19 @@ class ApiService {
     private baseUrl: string
     private config = getConfig()
 
+    private xToken = this.config.xToken
+
     constructor() {
         this.baseUrl = this.config.apiBaseUrl
+    }
+
+    private buildHeaders(extra?: HeadersInit): HeadersInit {
+        return {
+            'Content-Type': 'application/json',
+            ...authService.getAuthHeader(),
+            ...(this.xToken ? { 'X-Token': this.xToken } : {}),
+            ...extra
+        }
     }
 
     // Generic HTTP request method
@@ -90,14 +101,9 @@ class ApiService {
         try {
             const url = `${this.baseUrl}${endpoint}`
             const response = await fetch(url, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...authService.getAuthHeader(),
-                    ...options.headers
-                },
+                headers: this.buildHeaders(options.headers),
                 ...options
             })
-
             if (!response.ok) {
                 let errorMessage = `HTTP ${response.status}: ${response.statusText}`
                 try {
@@ -368,6 +374,10 @@ class ApiService {
 
             const response = await fetch(`${this.baseUrl}/api/v1/hashfiles/upload`, {
                 method: 'POST',
+                headers: {
+                    ...authService.getAuthHeader(),
+                    ...(this.xToken ? { 'X-Token': this.xToken } : {})
+                },
                 body: formData
             })
 
@@ -390,7 +400,12 @@ class ApiService {
 
     public async downloadHashFile(id: string): Promise<Blob | null> {
         try {
-            const response = await fetch(`${this.baseUrl}/api/v1/hashfiles/${id}/download`)
+            const response = await fetch(`${this.baseUrl}/api/v1/hashfiles/${id}/download`, {
+                headers: {
+                    ...authService.getAuthHeader(),
+                    ...(this.xToken ? { 'X-Token': this.xToken } : {})
+                }
+            })
             if (!response.ok) {
                 throw new Error(`Download failed: ${response.statusText}`)
             }
@@ -422,6 +437,10 @@ class ApiService {
 
             const response = await fetch(`${this.baseUrl}/api/v1/wordlists/upload`, {
                 method: 'POST',
+                headers: {
+                    ...authService.getAuthHeader(),
+                    ...(this.xToken ? { 'X-Token': this.xToken } : {})
+                },
                 body: formData
             })
 
@@ -444,7 +463,12 @@ class ApiService {
 
     public async downloadWordlist(id: string): Promise<Blob | null> {
         try {
-            const response = await fetch(`${this.baseUrl}/api/v1/wordlists/${id}/download`)
+            const response = await fetch(`${this.baseUrl}/api/v1/wordlists/${id}/download`, {
+                headers: {
+                    ...authService.getAuthHeader(),
+                    ...(this.xToken ? { 'X-Token': this.xToken } : {})
+                }
+            })
             if (!response.ok) {
                 throw new Error(`Download failed: ${response.statusText}`)
             }
@@ -460,7 +484,10 @@ class ApiService {
         try {
             const response = await fetch(`${this.baseUrl}/health`, {
                 method: 'GET',
-                timeout: 5000
+                headers: {
+                    ...authService.getAuthHeader(),
+                    ...(this.xToken ? { 'X-Token': this.xToken } : {})
+                }
             } as any)
             return response.ok
         } catch {

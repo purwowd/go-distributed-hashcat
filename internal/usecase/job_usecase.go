@@ -245,11 +245,11 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 				}
 
 				// Auto-start the job after creation
-				if err := u.StartJob(ctx, subJob.ID); err != nil {
-					fmt.Printf("Warning: failed to auto-start job %s: %v\n", subJob.Name, err)
-				} else {
-					fmt.Printf("✅ Auto-started job \"%s\" for agent %s\n", subJob.Name, agentPerf.Name)
-				}
+				// if err := u.StartJob(ctx, subJob.ID); err != nil {
+				// 	fmt.Printf("Warning: failed to auto-start job %s: %v\n", subJob.Name, err)
+				// } else {
+				// 	fmt.Printf("✅ Auto-started job \"%s\" for agent %s\n", subJob.Name, agentPerf.Name)
+				// }
 
 				subJobs = append(subJobs, subJob)
 
@@ -297,13 +297,13 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 	}
 
 	// Auto-start the job if it has an agent assigned
-	if job.AgentID != nil {
-		if err := u.StartJob(ctx, job.ID); err != nil {
-			fmt.Printf("Warning: failed to auto-start job %s: %v\n", job.Name, err)
-		} else {
-			fmt.Printf("✅ Auto-started job \"%s\"\n", job.Name)
-		}
-	}
+	// if job.AgentID != nil {
+	// 	if err := u.StartJob(ctx, job.ID); err != nil {
+	// 		fmt.Printf("Warning: failed to auto-start job %s: %v\n", job.Name, err)
+	// 	} else {
+	// 		fmt.Printf("✅ Auto-started job \"%s\"\n", job.Name)
+	// 	}
+	// }
 
 	return job, nil
 }

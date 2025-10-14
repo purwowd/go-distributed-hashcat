@@ -107,6 +107,7 @@ func NewRouter(
 		}
 		// Agent routes
 		agents := v1.Group("/agents")
+		agents.Use(middleware.XTokenAuthMiddleware())
 		{
 			agents.POST("/generate-key", agentHandler.GenerateAgentKey) // New route for generating agent keys
 			agents.POST("/startup", agentHandler.AgentStartup)          // New route for agent startup
@@ -129,6 +130,7 @@ func NewRouter(
 
 		// Job routes
 		jobs := v1.Group("/jobs")
+		jobs.Use(middleware.XTokenAuthMiddleware())
 		{
 			jobs.POST("/", jobHandler.CreateJob)
 			jobs.GET("/", jobHandler.GetAllJobs)
@@ -150,6 +152,7 @@ func NewRouter(
 
 		// Distributed Job routes
 		distributedJobs := v1.Group("/distributed-jobs")
+		distributedJobs.Use(middleware.XTokenAuthMiddleware())
 		{
 			distributedJobs.POST("/", distributedJobHandler.CreateDistributedJobs)
 			distributedJobs.GET("/:id/status", distributedJobHandler.GetDistributedJobStatus)
@@ -160,6 +163,7 @@ func NewRouter(
 
 		// Hash file routes
 		hashFiles := v1.Group("/hashfiles")
+		hashFiles.Use(middleware.XTokenAuthMiddleware())
 		{
 			hashFiles.POST("/upload", hashFileHandler.UploadHashFile)
 			hashFiles.GET("/", hashFileHandler.GetAllHashFiles)
@@ -170,6 +174,7 @@ func NewRouter(
 
 		// Wordlist routes
 		wordlists := v1.Group("/wordlists")
+		wordlists.Use(middleware.XTokenAuthMiddleware())
 		{
 			wordlists.POST("/upload", wordlistHandler.UploadWordlist)
 			wordlists.GET("/", wordlistHandler.GetAllWordlists)
@@ -181,6 +186,7 @@ func NewRouter(
 
 		// Cache management routes
 		cache := v1.Group("/cache")
+		cache.Use(middleware.XTokenAuthMiddleware())
 		{
 			cache.GET("/stats", cacheHandler.GetCacheStats)
 			cache.DELETE("/clear", cacheHandler.ClearCache)
@@ -189,6 +195,7 @@ func NewRouter(
 
 	// Legacy API routes for backward compatibility
 	api := router.Group("/api")
+	api.Use(middleware.XTokenAuthMiddleware())
 	{
 		// Legacy routes (without v1 prefix)
 		api.GET("/agents", agentHandler.GetAllAgents)

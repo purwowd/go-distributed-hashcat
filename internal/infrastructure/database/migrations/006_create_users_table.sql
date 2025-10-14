@@ -30,7 +30,7 @@ VALUES (
     '00000000-0000-0000-0000-000000000001',
     'admin',
     'admin@hashcat.local',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2b$10$BO6WWqPlx/PsOj7GqnomHegRitXdBajhwRPeG0lQEiA7j6yj.g.M2',
     'admin',
     1,
     datetime('now'),

@@ -38,6 +38,7 @@ type Agent struct {
 	OriginalPort int                  // Store original port from database
 	ServerIP     string               // Store server IP for validation
 	Status       string               // Current agent status (online, offline, busy)
+	XToken       string			      // Global X-Token for authentication
 }
 
 type LocalFile struct {
@@ -58,6 +59,25 @@ type AgentInfo struct {
 	AgentKey     string    `json:"agent_key"`
 }
 
+type headerTransport struct {
+    base  http.RoundTripper
+    token string
+}
+
+func (t headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+    rt := t.base
+    if rt == nil {
+        rt = http.DefaultTransport
+    }
+    if t.token != "" {
+        // clone biar aman kalau req dipakai di tempat lain
+        req2 := req.Clone(req.Context())
+        req2.Header.Set("X-Token", t.token)
+        return rt.RoundTrip(req2)
+    }
+    return rt.RoundTrip(req)
+}
+
 func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "agent",
@@ -72,6 +92,7 @@ func main() {
 	rootCmd.Flags().String("capabilities", "auto", "Agent capabilities (auto, CPU, GPU, or custom)")
 	rootCmd.Flags().String("agent-key", "", "Agent key")
 	rootCmd.Flags().String("upload-dir", "/root/uploads", "Local uploads directory")
+	rootCmd.Flags().String("x-token", "", "X-Token for backend authentication")
 
 	viper.BindPFlags(rootCmd.Flags())
 
@@ -88,16 +109,20 @@ func runAgent(cmd *cobra.Command, args []string) {
 	capabilities := viper.GetString("capabilities")
 	agentKey := viper.GetString("agent-key")
 	uploadDir := viper.GetString("upload-dir")
+	xToken := viper.GetString("x-token")
 
 	if agentKey == "" {
 		infrastructure.AgentLogger.Fatal("Agent key is required. Please provide --agent-key parameter.")
 	}
 
-	// Create temporary agent client to check agent key
-	tempAgent := &Agent{
-		ServerURL: serverURL,
-		Client:    &http.Client{Timeout: 30 * time.Second},
-	}
+	tr := headerTransport{base: http.DefaultTransport, token: xToken}
+
+    // Create temporary agent client to check agent key
+    tempAgent := &Agent{
+        ServerURL: serverURL,
+        Client:    &http.Client{Timeout: 30 * time.Second, Transport: tr},
+        XToken:    xToken,                                                
+    }
 
 	// Check if agent key exists in database
 	info, lookupErr := getAgentByKeyOnly(tempAgent, agentKey)
@@ -154,12 +179,13 @@ func runAgent(cmd *cobra.Command, args []string) {
 		ID:           info.ID,
 		Name:         name,
 		ServerURL:    serverURL,
-		Client:       &http.Client{Timeout: 30 * time.Second},
+		Client:       &http.Client{Timeout: 30 * time.Second, Transport: tr},
 		UploadDir:    uploadDir,
 		LocalFiles:   make(map[string]LocalFile),
 		AgentKey:     agentKey,
 		OriginalPort: originalPort, // Store original port from database
 		ServerIP:     ip,           // Store server IP for validation
+		XToken:       xToken,
 	}
 
 	// Inisialisasi direktori
@@ -300,7 +326,12 @@ func runAgent(cmd *cobra.Command, args []string) {
 func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	var info AgentInfo
 	url := fmt.Sprintf("%s/api/v1/agents/?agent_key=%s", a.ServerURL, key)
-	resp, err := a.Client.Get(url)
+
+	httpReq, err := a.newAuthRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return info, err
+	}
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return info, err
 	}
@@ -562,7 +593,11 @@ func (a *Agent) registerLocalFiles() error {
 	}
 
 	url := fmt.Sprintf("%s/api/v1/agents/%s/files", a.ServerURL, a.ID.String())
-	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	httpReq, err := a.newAuthRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -608,19 +643,20 @@ func (a *Agent) registerWithServer(name, ip string, port int, capabilities, agen
 		IPAddress:    ip,
 		Port:         port,
 		Capabilities: capabilities,
-		AgentKey:     agentKey, // ← kirim agentKey ke server
+		AgentKey:     agentKey,
 	}
-
 	jsonData, err := json.Marshal(req)
 	if err != nil {
 		return err
 	}
 
-	resp, err := a.Client.Post(
-		fmt.Sprintf("%s/api/v1/agents", a.ServerURL),
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+	url := fmt.Sprintf("%s/api/v1/agents", a.ServerURL)
+	httpReq, err := a.newAuthRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -665,22 +701,18 @@ func (a *Agent) startHeartbeat(ctx context.Context) {
 }
 
 func (a *Agent) sendHeartbeat() error {
-	// Use new endpoint with agent key instead of agent ID
 	url := fmt.Sprintf("%s/api/v1/agents/heartbeat", a.ServerURL)
-
-	// Create request body with agent key
 	reqBody := struct {
 		AgentKey string `json:"agent_key"`
-	}{
-		AgentKey: a.AgentKey,
-	}
+	}{ AgentKey: a.AgentKey }
 
-	jsonData, err := json.Marshal(reqBody)
+	jsonData, _ := json.Marshal(reqBody)
+	httpReq, err := a.newAuthRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to marshal heartbeat request: %v", err)
+		return fmt.Errorf("failed to create heartbeat request: %v", err)
 	}
 
-	resp, err := a.Client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := a.Client.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -1921,3 +1953,18 @@ func (a *Agent) startRealTimeSpeedMonitoring(ctx context.Context) {
 		}
 	}()
 }
+
+func (a *Agent) newAuthRequest(method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if a != nil && strings.TrimSpace(a.XToken) != "" {
+		req.Header.Set("X-Token", strings.TrimSpace(a.XToken))
+	}
+	return req, nil
+}
+

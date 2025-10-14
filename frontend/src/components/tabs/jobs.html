@@ -221,7 +221,7 @@
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="flex items-center justify-center space-x-1">
-                                        <button @click="startJob(job.id)"
+                                        <button @click="resumeJob(job.id)"
                                                 :disabled="!canStartJob(job)"
                                                 :class="!canStartJob(job) ? 'text-gray-400 cursor-not-allowed' : 'text-green-600 hover:text-green-800'"
                                                 class="p-1.5 rounded hover:bg-green-50 transition-colors duration-200"
@@ -237,7 +237,7 @@
                                         </button>
                                         <button @click="deleteJob(job.id)"
                                                 class="text-red-600 hover:text-red-800 p-1.5 rounded hover:bg-red-50 transition-colors duration-200"
-                                                title="Delete Job">
+                                                title="Delete Job"> 
                                             <i class="fas fa-trash text-xs"></i>
                                         </button>
                                     </div>

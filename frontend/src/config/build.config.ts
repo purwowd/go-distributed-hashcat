@@ -10,6 +10,7 @@ export interface ComponentConfig {
 export interface BuildConfig {
     mode: 'development' | 'production'
     apiBaseUrl: string
+    xToken: string    
     components: ComponentConfig[]
     features: {
         hotReload: boolean
@@ -30,6 +31,7 @@ export const configs: Record<string, BuildConfig> = {
     development: {
         mode: 'development',
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.186:1337',
+        xToken: import.meta.env.VITE_X_TOKEN || 'super-secret-key-123',
         components: [
             { name: 'navigation', path: '/components/layout/navigation.html', preload: true },
             { name: 'overview', path: '/components/tabs/overview.html', preload: true },
@@ -58,6 +60,7 @@ export const configs: Record<string, BuildConfig> = {
     production: {
         mode: 'production',
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.186:1337',
+        xToken: import.meta.env.VITE_X_TOKEN || 'super-secret-key-123',
         components: [
             { name: 'navigation', path: '/components/layout/navigation.html', preload: true },
             { name: 'overview', path: '/components/tabs/overview.html', preload: true },
