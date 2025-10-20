@@ -882,48 +882,73 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 
 	// Prioritize WordlistID if available
 	if job.WordlistID != nil {
-		downloadedPath, err := a.downloadWordlist(*job.WordlistID)
-		if err != nil {
-			return fmt.Errorf("failed to download wordlist %s: %w", job.WordlistID.String(), err)
+		// If server also provided a filename in job.Wordlist, try to use local copy first
+		if job.Wordlist != "" {
+			// Try direct lookup in scanned local files map (case-insensitive)
+			if localPath, found := a.findLocalFile(job.Wordlist); found {
+				localWordlist = localPath
+				infrastructure.AgentLogger.Info("Using local wordlist (from job.Wordlist): %s", localWordlist)
+			} else if localPath, found := a.existsInUploadsWordlists(job.Wordlist); found {
+				// fallback to explicit uploads/wordlists folder
+				localWordlist = localPath
+				infrastructure.AgentLogger.Info("Using local wordlist (uploads/wordlists): %s", localWordlist)
+			}
 		}
-		localWordlist = downloadedPath
-		infrastructure.AgentLogger.Success("Downloaded wordlist from ID: %s", localWordlist)
+
+		// If job.Wordlist was empty or local file not found, try to see if any local file name
+		// matches the UUID string (some setups store filename as the UUID) or use any single file fallback.
+		if localWordlist == "" {
+			// try filename equal to wordlistID string (rare)
+			if localPath, found := a.findLocalFile(job.WordlistID.String()); found {
+				localWordlist = localPath
+				infrastructure.AgentLogger.Info("Using local wordlist (by UUID filename): %s", localWordlist)
+			}
+		}
+
+		// If still empty, download from server
+		if localWordlist == "" {
+			infrastructure.AgentLogger.Debug("No local copy found for wordlist ID %s, downloading...", job.WordlistID.String())
+			downloadedPath, err := a.downloadWordlist(*job.WordlistID)
+			if err != nil {
+				return fmt.Errorf("failed to download wordlist %s: %w", job.WordlistID.String(), err)
+			}
+			localWordlist = downloadedPath
+			infrastructure.AgentLogger.Success("Downloaded wordlist from ID: %s", localWordlist)
+		}
 	} else if job.Wordlist != "" {
-		// Check if wordlist contains newlines (indicating it's content, not a path)
+		// job.Wordlist might be content or a filename or a UUID string
 		if strings.Contains(job.Wordlist, "\n") {
-			// This is wordlist content, create a temporary file
+			// content -> create temp file (existing logic)
 			tempDir := filepath.Join(a.UploadDir, "temp")
 			if err := os.MkdirAll(tempDir, 0755); err != nil {
 				return fmt.Errorf("failed to create temp directory: %w", err)
 			}
-
 			wordlistFile := filepath.Join(tempDir, fmt.Sprintf("wordlist-%s.txt", job.ID.String()))
 			if err := os.WriteFile(wordlistFile, []byte(job.Wordlist), 0644); err != nil {
 				return fmt.Errorf("failed to create wordlist file: %w", err)
 			}
-
 			localWordlist = wordlistFile
 			infrastructure.AgentLogger.Info("Created wordlist file from content: %s", localWordlist)
 			infrastructure.AgentLogger.Info("Wordlist content preview: %s", strings.Split(job.Wordlist, "\n")[0])
 		} else {
-			// Fallback to wordlist filename resolution
+			// first try scanned local files / uploads/wordlists before interpreting job.Wordlist as UUID or path
 			if localPath, found := a.findLocalFile(job.Wordlist); found {
 				localWordlist = localPath
 				infrastructure.AgentLogger.Info("Using local wordlist: %s", localWordlist)
-			} else {
-				// Try to parse as UUID and download
-				if wordlistUUID, err := uuid.Parse(job.Wordlist); err == nil {
-					downloadedPath, err := a.downloadWordlist(wordlistUUID)
-					if err != nil {
-						return fmt.Errorf("failed to download wordlist %s: %w", job.Wordlist, err)
-					}
-					localWordlist = downloadedPath
-					infrastructure.AgentLogger.Success("Downloaded wordlist: %s", localWordlist)
-				} else {
-					// If not UUID, use as direct path
-					localWordlist = job.Wordlist
-					infrastructure.AgentLogger.Info("Using wordlist path directly: %s", localWordlist)
+			} else if localPath, found := a.existsInUploadsWordlists(job.Wordlist); found {
+				localWordlist = localPath
+				infrastructure.AgentLogger.Info("Using local wordlist (uploads/wordlists): %s", localWordlist)
+			} else if wordlistUUID, err := uuid.Parse(job.Wordlist); err == nil {
+				downloadedPath, err := a.downloadWordlist(wordlistUUID)
+				if err != nil {
+					return fmt.Errorf("failed to download wordlist %s: %w", job.Wordlist, err)
 				}
+				localWordlist = downloadedPath
+				infrastructure.AgentLogger.Success("Downloaded wordlist: %s", localWordlist)
+			} else {
+				// treat as direct path
+				localWordlist = job.Wordlist
+				infrastructure.AgentLogger.Info("Using wordlist path directly: %s", localWordlist)
 			}
 		}
 	}
@@ -941,6 +966,7 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		"--status",
 		"--status-timer=2",
 		"--potfile-disable",
+		"--hwmon-disable",
 		"--outfile", outfile,
 		"--outfile-format", "2", // Format: hash:plain
 	}
@@ -964,50 +990,43 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 
 	cmd := exec.Command("hashcat", args...)
 
-	// Set up pipes for stdout and stderr
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil { return err }
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil { return err }
 
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return err
-	}
+	var stdoutBuf, stderrBuf bytes.Buffer
 
-	// Monitor output for progress updates
+	stdout := io.TeeReader(stdoutPipe, &stdoutBuf)
+	stderr := io.TeeReader(stderrPipe, &stderrBuf)
+
+	if err := cmd.Start(); err != nil { return err }
+
 	go a.monitorHashcatOutput(job, stdout, stderr)
 
-	// Monitor job status for cancellation/pause
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go a.monitorJobStatus(ctx, job.ID, cmd)
-
-	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
-		// Check if hashcat found the password (exit code 0) or exhausted (exit code 1)
+		if s := strings.TrimSpace(stderrBuf.String()); s != "" {
+			infrastructure.AgentLogger.Error("hashcat stderr: %s", s)
+		}
+
 		if exitError, ok := err.(*exec.ExitError); ok {
 			exitCode := exitError.ExitCode()
 			switch exitCode {
 			case 1:
-				// Exhausted - not an error
 				a.completeJob(job.ID, "Password not found - exhausted")
 				a.cleanupJobFiles(job.ID)
 				return nil
 			case 255:
-				// Exit code 255 usually means invalid arguments or file not found
-				// Check if this is due to password not being found vs other errors
-				// For now, treat exit 255 as password not found scenario
 				a.failJob(job.ID, "Password not found")
 				a.cleanupJobFiles(job.ID)
 				return nil
+			default:
+				a.failJob(job.ID, fmt.Sprintf("hashcat error (exit %d): %s", exitCode, strings.TrimSpace(stderrBuf.String())))
+				a.cleanupJobFiles(job.ID)
+				return fmt.Errorf("hashcat failed (exit %d): %s", exitCode, strings.TrimSpace(stderrBuf.String()))
 			}
 		}
-		// Cleanup on other errors too
+
 		a.cleanupJobFiles(job.ID)
 		return err
 	}
@@ -1966,5 +1985,18 @@ func (a *Agent) newAuthRequest(method, url string, body io.Reader) (*http.Reques
 		req.Header.Set("X-Token", strings.TrimSpace(a.XToken))
 	}
 	return req, nil
+}
+
+func (a *Agent) existsInUploadsWordlists(name string) (string, bool) {
+	if name == "" {
+		return "", false
+	}
+	// only the basename matters
+	base := filepath.Base(name)
+	full := filepath.Join(a.UploadDir, "wordlists", base)
+	if fi, err := os.Stat(full); err == nil && fi.Mode().IsRegular() {
+		return full, true
+	}
+	return "", false
 }
 
