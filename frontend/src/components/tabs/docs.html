@@ -23,6 +23,9 @@
                 <div class="bg-green-50 px-4 py-2 rounded-full text-green-700 text-sm font-medium">
                     <i class="fas fa-file-code mr-2"></i>Format: JSON
                 </div>
+                <div class="bg-red-50 px-4 py-2 rounded-full text-red-700 text-sm font-medium">
+                    <i class="fas fa-key mr-2"></i>Auth: X-Token required
+                </div>
                 <div class="bg-orange-50 px-4 py-2 rounded-full text-orange-700 text-sm font-medium">
                     <i class="fas fa-bolt mr-2"></i>WebSocket: /ws
                 </div>
@@ -108,6 +111,19 @@
             </p>
         </div>
 
+        <div class="mb-8 p-6 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl border border-red-200">
+            <h4 class="text-lg font-semibold text-red-900 mb-2 flex items-center">
+                <i class="fas fa-key mr-2"></i>Global Authentication
+            </h4>
+            <p class="text-red-800 text-sm leading-relaxed">
+                All endpoints <strong>require</strong> the <code>X-Token</code> header. Requests without a valid token will be rejected (401/403).
+            </p>
+            <div class="code-block success" title="Click to copy"
+                @click="copyToClipboard($el.textContent.trim())">
+curl -H "X-Token: &lt;your-token&gt;" http://localhost:1337/health
+            </div>
+        </div>
+
         <!-- Prerequisites -->
         <div class="mb-8">
             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -154,7 +170,7 @@ chmod +x agent
 mkdir -p /root/uploads/{wordlists,hash-files,temp}
 
 # 3. Start agent
-sudo ./bin/agent --server http://your-server:1337 --name "name-agent" --agent-key "agent-key" --ip "192.168.1.100"
+sudo ./bin/agent --server http://your-server:1337 --name "name-agent" --agent-key "agent-key" --ip "192.168.1.100" --x-token "super-secret-key-123"
                 </div>
                 <p class="text-green-800 text-sm">
                     <i class="fas fa-lightbulb mr-2"></i>
