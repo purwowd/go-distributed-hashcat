@@ -4,7 +4,9 @@ export interface Agent {
     ip_address: string
     port: number
     status: 'online' | 'offline' | 'busy'
-    capabilities: string
+    type?: string
+    processor?: string
+    capabilities?: string
     agent_key: string
     last_seen: string
     created_at: string

@@ -106,7 +106,9 @@
                                             <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold" x-text="index + 1"></div>
                                             <div>
                                                 <div class="font-medium text-gray-900" x-text="agent.name"></div>
-                                                <div class="text-xs text-gray-500" x-text="agent.ip_address"></div>
+                                                <div class="text-xs text-gray-500 truncate max-w-[180px]"
+                                                     :title="getAgentHardwareDetail(agent)"
+                                                     x-text="getAgentHardwareDetail(agent)"></div>
                                             </div>
                                         </div>
                                         
@@ -117,7 +119,7 @@
                                                       'bg-green-100 text-green-800': isGPUAgent(agent),
                                                       'bg-blue-100 text-blue-800': !isGPUAgent(agent)
                                                   }"
-                                                  x-text="isGPUAgent(agent) ? 'GPU' : 'CPU'">
+                                                  x-text="getAgentHardwareType(agent)">
                                             </span>
                                             
                                             <!-- Performance Score -->

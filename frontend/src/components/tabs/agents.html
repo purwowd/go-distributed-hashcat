@@ -40,9 +40,18 @@
                 </div>
                 
                 <div class="space-y-2 mb-4 text-xs">
-                    <div class="flex items-center text-gray-600">
-                        <i class="fas fa-microchip text-blue-500 mr-2 w-3"></i>
-                        <span x-text="getAgentGpuInfo(item)">GPU Info</span>
+                    <div class="flex items-start text-gray-600">
+                        <i class="fas fa-microchip text-blue-500 mr-2 w-3 mt-0.5"></i>
+                        <div class="flex flex-col gap-1 min-w-0">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
+                                      :class="isGPUAgent(item) ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'"
+                                      x-text="getAgentHardwareType(item)">GPU</span>
+                                <span class="font-medium text-gray-800 truncate"
+                                      :title="getAgentHardwareDetail(item)"
+                                      x-text="getAgentHardwareDetail(item)">Hardware</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="flex items-center text-gray-600">
                         <i class="fas fa-clock text-green-500 mr-2 w-3"></i>

@@ -15,7 +15,9 @@ type Agent struct {
 	IPAddress    string    `json:"ip_address" db:"ip_address"`
 	Port         int       `json:"port" db:"port"`
 	Status       string    `json:"status" db:"status"` // online, offline, busy
-	Capabilities string    `json:"capabilities" db:"capabilities"`
+	ResourceType string    `json:"type" db:"resource_type"` // CPU or GPU
+	Processor    string    `json:"processor" db:"processor"`
+	Capabilities string    `json:"capabilities,omitempty" db:"capabilities"` // legacy combined field
 	AgentKey     string    `json:"agent_key" db:"agent_key"`
 	Speed        int64     `json:"speed" db:"speed"` // Hash rate dalam H/s dari benchmark
 	LastSeen     time.Time `json:"last_seen" db:"last_seen"`
@@ -154,6 +156,8 @@ type CreateAgentRequest struct {
 	Name         string `json:"name" binding:"required"`
 	IPAddress    string `json:"ip_address" binding:"omitempty"`
 	Port         int    `json:"port,omitempty"` // Optional, will default to 8080
+	ResourceType string `json:"type,omitempty"`
+	Processor    string `json:"processor,omitempty"`
 	Capabilities string `json:"capabilities,omitempty"`
 	AgentKey     string `json:"agent_key,omitempty"` // Agent key for validation
 	Status       string `json:"status,omitempty"`

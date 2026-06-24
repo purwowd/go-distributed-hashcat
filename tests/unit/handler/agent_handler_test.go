@@ -119,8 +119,8 @@ func (m *MockAgentUsecase) GenerateAgentKey(ctx context.Context, name string) (*
 	return args.Get(0).(*domain.Agent), args.Error(1)
 }
 
-func (m *MockAgentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error {
-	args := m.Called(ctx, agentKey, ipAddress, port, capabilities)
+func (m *MockAgentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, resourceType, processor, capabilities string) error {
+	args := m.Called(ctx, agentKey, ipAddress, port, resourceType, processor, capabilities)
 	return args.Error(0)
 }
 

@@ -97,6 +97,8 @@ func (s *SQLiteDB) migrate() error {
 			port INTEGER NOT NULL,
 			status TEXT NOT NULL DEFAULT 'offline',
 			capabilities TEXT,
+			resource_type TEXT,
+			processor TEXT,
 			agent_key TEXT NOT NULL,
 			speed INTEGER DEFAULT 0,
 			last_seen DATETIME,
@@ -168,13 +170,16 @@ func (s *SQLiteDB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_jobs_agent_status ON jobs(agent_id, status)`,
 		`ALTER TABLE jobs ADD COLUMN hash_file_id TEXT REFERENCES hash_files(id)`,
 		`ALTER TABLE jobs ADD COLUMN wordlist_id TEXT REFERENCES wordlists(id)`,
+		`ALTER TABLE agents ADD COLUMN resource_type TEXT`,
+		`ALTER TABLE agents ADD COLUMN processor TEXT`,
 	}
 
 	for _, query := range queries {
 		if _, err := s.db.Exec(query); err != nil {
 			// Ignore "duplicate column" errors for ALTER TABLE
 			errMsg := err.Error()
-			if errMsg != "duplicate column name: hash_file_id" && errMsg != "duplicate column name: wordlist_id" {
+			if errMsg != "duplicate column name: hash_file_id" && errMsg != "duplicate column name: wordlist_id" &&
+				errMsg != "duplicate column name: resource_type" && errMsg != "duplicate column name: processor" {
 				return fmt.Errorf("failed to execute migration query: %s, error: %w", query, err)
 			}
 		}

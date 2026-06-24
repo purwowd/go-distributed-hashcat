@@ -32,6 +32,8 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		Name         string `json:"name"` // Name is optional now, will be retrieved from database based on agent key
 		IPAddress    string `json:"ip_address"`
 		Port         int    `json:"port"`
+		ResourceType string `json:"type"`
+		Processor    string `json:"processor"`
 		Capabilities string `json:"capabilities"`
 		AgentKey     string `json:"agent_key" binding:"required"`
 	}
@@ -85,6 +87,8 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		Name:         agentName, // Use name from database
 		IPAddress:    dto.IPAddress,
 		Port:         dto.Port,
+		ResourceType: dto.ResourceType,
+		Processor:    dto.Processor,
 		Capabilities: dto.Capabilities,
 		AgentKey:     dto.AgentKey,
 		Status:       status,
@@ -465,6 +469,8 @@ func (h *AgentHandler) UpdateAgentData(c *gin.Context) {
 		AgentKey     string `json:"agent_key" binding:"required"`
 		IPAddress    string `json:"ip_address"`
 		Port         int    `json:"port"`
+		ResourceType string `json:"type"`
+		Processor    string `json:"processor"`
 		Capabilities string `json:"capabilities"`
 	}
 
@@ -475,7 +481,7 @@ func (h *AgentHandler) UpdateAgentData(c *gin.Context) {
 	}
 
 	// Update only data fields, keep status unchanged (offline)
-	if err := h.agentUsecase.UpdateAgentData(c.Request.Context(), dto.AgentKey, dto.IPAddress, dto.Port, dto.Capabilities); err != nil {
+	if err := h.agentUsecase.UpdateAgentData(c.Request.Context(), dto.AgentKey, dto.IPAddress, dto.Port, dto.ResourceType, dto.Processor, dto.Capabilities); err != nil {
 		// Handle specific validation errors
 		if strings.Contains(err.Error(), "AGENT_KEY_NOT_FOUND:") {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -617,6 +623,8 @@ func (h *AgentHandler) AgentStartup(c *gin.Context) {
 		Name         string `json:"name" binding:"required"`
 		IPAddress    string `json:"ip_address" binding:"required"`
 		Port         int    `json:"port"`
+		ResourceType string `json:"type"`
+		Processor    string `json:"processor"`
 		Capabilities string `json:"capabilities"`
 		AgentKey     string `json:"agent_key" binding:"required"`
 	}
@@ -654,7 +662,7 @@ func (h *AgentHandler) AgentStartup(c *gin.Context) {
 	// Check if agent already has IP, port, and capabilities
 	hasExistingData := existingAgentByKey.IPAddress != "" &&
 		existingAgentByKey.Port != 0 &&
-		existingAgentByKey.Capabilities != ""
+		(existingAgentByKey.ResourceType != "" || existingAgentByKey.Capabilities != "")
 
 	if hasExistingData {
 		// Agent already exists with data, just update status to online
@@ -681,6 +689,8 @@ func (h *AgentHandler) AgentStartup(c *gin.Context) {
 				"name":         existingAgentByKey.Name,
 				"ip_address":   existingAgentByKey.IPAddress,
 				"port":         existingAgentByKey.Port,
+				"type":         existingAgentByKey.ResourceType,
+				"processor":    existingAgentByKey.Processor,
 				"capabilities": existingAgentByKey.Capabilities,
 				"agent_key":    existingAgentByKey.AgentKey,
 				"status":       "online",
@@ -698,6 +708,8 @@ func (h *AgentHandler) AgentStartup(c *gin.Context) {
 	// Update agent with new data
 	existingAgentByKey.IPAddress = req.IPAddress
 	existingAgentByKey.Port = req.Port
+	existingAgentByKey.ResourceType = req.ResourceType
+	existingAgentByKey.Processor = req.Processor
 	existingAgentByKey.Capabilities = req.Capabilities
 	existingAgentByKey.Status = "online"
 	existingAgentByKey.LastSeen = time.Now() // Update LastSeen to current time
@@ -726,6 +738,8 @@ func (h *AgentHandler) AgentStartup(c *gin.Context) {
 			"name":         existingAgentByKey.Name,
 			"ip_address":   existingAgentByKey.IPAddress,
 			"port":         existingAgentByKey.Port,
+			"type":         existingAgentByKey.ResourceType,
+			"processor":    existingAgentByKey.Processor,
 			"capabilities": existingAgentByKey.Capabilities,
 			"agent_key":    existingAgentByKey.AgentKey,
 			"status":       "online",

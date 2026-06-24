@@ -41,7 +41,7 @@ func (r *agentRepository) prepareStatements() {
 	var err error
 
 	r.getByIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE id = ? LIMIT 1
 	`)
 	if err != nil {
@@ -49,7 +49,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE name = ? LIMIT 1
 	`)
 	if err != nil {
@@ -57,7 +57,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameIPStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE name = ? AND ip_address = ? AND port = ? LIMIT 1
 	`)
 	if err != nil {
@@ -65,7 +65,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByIPAddressStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE ip_address = ? LIMIT 1
 	`)
 	if err != nil {
@@ -73,7 +73,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents ORDER BY created_at DESC, id ASC
 	`)
 	if err != nil {
@@ -82,7 +82,7 @@ func (r *agentRepository) prepareStatements() {
 
 	r.updateStmt, err = r.db.DB().Prepare(`
 		UPDATE agents SET
-		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, agent_key = ?, speed = ?, last_seen = ?, updated_at = ?
+		name = ?, ip_address = ?, port = ?, status = ?, capabilities = ?, resource_type = ?, processor = ?, agent_key = ?, speed = ?, last_seen = ?, updated_at = ?
 		WHERE id = ?
 	`)
 	if err != nil {
@@ -97,7 +97,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByAgentKeyStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at
+		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
 		FROM agents WHERE agent_key = ? LIMIT 1
 	`)
 	if err != nil {
@@ -122,8 +122,8 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 	r.cache.Delete(ctx, "agents:all")
 
 	query := `
-        INSERT INTO agents (id, name, ip_address, port, status, capabilities, agent_key, speed, last_seen, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO agents (id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
 
 	_, err := r.db.DB().ExecContext(ctx, query,
@@ -133,6 +133,8 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 		agent.Port,
 		agent.Status,
 		agent.Capabilities,
+		agent.ResourceType,
+		agent.Processor,
 		agent.AgentKey,
 		agent.Speed,
 		agent.LastSeen,
@@ -147,11 +149,23 @@ func (r *agentRepository) Create(ctx context.Context, agent *domain.Agent) error
 	return nil
 }
 
+func finalizeAgent(agent *domain.Agent) {
+	domain.NormalizeAgentHardware(agent)
+}
+
+func finalizeAgents(agents []domain.Agent) []domain.Agent {
+	for i := range agents {
+		finalizeAgent(&agents[i])
+	}
+	return agents
+}
+
 func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
 	cacheKey := "agent:" + id.String()
 
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		finalizeAgent(&agent)
 		return &agent, nil
 	}
 
@@ -163,6 +177,8 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.ResourceType,
+		&agent.Processor,
 		&agent.AgentKey,
 		&agent.Speed,
 		&agent.LastSeen,
@@ -177,6 +193,7 @@ func (r *agentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ag
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+	finalizeAgent(&agent)
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -187,6 +204,7 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		finalizeAgent(&agent)
 		return &agent, nil
 	}
 
@@ -198,6 +216,8 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.ResourceType,
+		&agent.Processor,
 		&agent.AgentKey,
 		&agent.Speed,
 		&agent.LastSeen,
@@ -212,6 +232,7 @@ func (r *agentRepository) GetByName(ctx context.Context, name string) (*domain.A
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+	finalizeAgent(&agent)
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -222,6 +243,7 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		finalizeAgent(&agent)
 		return &agent, nil
 	}
 
@@ -233,6 +255,8 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.ResourceType,
+		&agent.Processor,
 		&agent.AgentKey,
 		&agent.Speed,
 		&agent.LastSeen,
@@ -247,6 +271,7 @@ func (r *agentRepository) GetByNameAndIP(ctx context.Context, name, ip string, p
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+	finalizeAgent(&agent)
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -257,7 +282,7 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 
 	var agents []domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agents); err == nil && found {
-		return agents, nil
+		return finalizeAgents(agents), nil
 	}
 
 	rows, err := r.getAllStmt.QueryContext(ctx)
@@ -278,6 +303,8 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 			&agent.Port,
 			&agent.Status,
 			&agent.Capabilities,
+		&agent.ResourceType,
+		&agent.Processor,
 			&agent.AgentKey,
 			&agent.Speed,
 			&agent.LastSeen,
@@ -289,6 +316,7 @@ func (r *agentRepository) GetAll(ctx context.Context) ([]domain.Agent, error) {
 		}
 
 		agent.ID = uuid.MustParse(idStr)
+		finalizeAgent(&agent)
 		agents = append(agents, agent)
 	}
 
@@ -324,6 +352,8 @@ func (r *agentRepository) Update(ctx context.Context, agent *domain.Agent) error
 		agent.Port,
 		agent.Status,
 		agent.Capabilities,
+		agent.ResourceType,
+		agent.Processor,
 		agent.AgentKey,
 		agent.Speed,
 		agent.LastSeen,
@@ -434,6 +464,7 @@ func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domai
 
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		finalizeAgent(&agent)
 		return &agent, nil
 	}
 
@@ -449,6 +480,8 @@ func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domai
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.ResourceType,
+		&agent.Processor,
 		&agent.AgentKey,
 		&agent.Speed,
 		&agent.LastSeen,
@@ -463,6 +496,7 @@ func (r *agentRepository) GetByIPAddress(ctx context.Context, ip string) (*domai
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+	finalizeAgent(&agent)
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil
@@ -473,6 +507,7 @@ func (r *agentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*
 
 	var agent domain.Agent
 	if found, err := r.cache.Get(ctx, cacheKey, &agent); err == nil && found {
+		finalizeAgent(&agent)
 		return &agent, nil
 	}
 
@@ -488,6 +523,8 @@ func (r *agentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*
 		&agent.Port,
 		&agent.Status,
 		&agent.Capabilities,
+		&agent.ResourceType,
+		&agent.Processor,
 		&agent.AgentKey,
 		&agent.Speed,
 		&agent.LastSeen,
@@ -502,6 +539,7 @@ func (r *agentRepository) GetByAgentKey(ctx context.Context, agentKey string) (*
 	}
 
 	agent.ID = uuid.MustParse(idStr)
+	finalizeAgent(&agent)
 	r.cache.Set(ctx, cacheKey, &agent)
 
 	return &agent, nil

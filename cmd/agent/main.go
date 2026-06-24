@@ -55,8 +55,15 @@ type AgentInfo struct {
 	Name         string    `json:"name"`
 	IPAddress    string    `json:"ip_address"`
 	Port         int       `json:"port"`
-	Capabilities string    `json:"capabilities"`
+	ResourceType string    `json:"type"`
+	Processor    string    `json:"processor"`
+	Capabilities string    `json:"capabilities"` // legacy
 	AgentKey     string    `json:"agent_key"`
+}
+
+type HardwareInfo struct {
+	Type      string // CPU or GPU
+	Processor string
 }
 
 type headerTransport struct {
@@ -106,7 +113,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	name := viper.GetString("name")
 	ip := viper.GetString("ip")
 	port := viper.GetInt("port")
-	capabilities := viper.GetString("capabilities")
+	capabilitiesFlag := viper.GetString("capabilities")
 	agentKey := viper.GetString("agent-key")
 	uploadDir := viper.GetString("upload-dir")
 	xToken := viper.GetString("x-token")
@@ -141,25 +148,26 @@ func runAgent(cmd *cobra.Command, args []string) {
 		infrastructure.AgentLogger.Info("Auto-detected local IP: %s", ip)
 	}
 
-	// Auto-detect capabilities using hashcat -I if not specified or empty
-	if capabilities == "" || capabilities == "auto" {
-		infrastructure.AgentLogger.Info("Auto-detection mode: Running hashcat -I to detect capabilities...")
-		capabilities = detectCapabilitiesWithHashcat()
-		infrastructure.AgentLogger.Success("Auto-detected capabilities using hashcat -I: %s", capabilities)
+	var hardware HardwareInfo
+	if capabilitiesFlag == "" || capabilitiesFlag == "auto" {
+		infrastructure.AgentLogger.Info("Auto-detection mode: Running hashcat -I to detect hardware...")
+		hardware = detectHardwareWithHashcat()
+		infrastructure.AgentLogger.Success("Auto-detected hardware: type=%s processor=%s", hardware.Type, hardware.Processor)
 	} else {
-		infrastructure.AgentLogger.Info("Using manually specified capabilities: %s", capabilities)
+		hardware = parseManualHardware(capabilitiesFlag)
+		infrastructure.AgentLogger.Info("Using manually specified hardware: type=%s processor=%s", hardware.Type, hardware.Processor)
 	}
 
-	// Update capabilities in database if different from detected
-	if info.Capabilities == "" || info.Capabilities != capabilities {
-		infrastructure.AgentLogger.Info("Updating capabilities from '%s' to '%s'", info.Capabilities, capabilities)
-		if err := updateAgentCapabilities(tempAgent, agentKey, capabilities); err != nil {
-			infrastructure.AgentLogger.Warning("Failed to update capabilities: %v", err)
+	if hardwareChanged(info, hardware) {
+		infrastructure.AgentLogger.Info("Updating hardware from type=%s processor=%s to type=%s processor=%s",
+			info.ResourceType, info.Processor, hardware.Type, hardware.Processor)
+		if err := updateAgentHardware(tempAgent, agentKey, hardware); err != nil {
+			infrastructure.AgentLogger.Warning("Failed to update hardware: %v", err)
 		} else {
-			infrastructure.AgentLogger.Success("Capabilities updated successfully")
+			infrastructure.AgentLogger.Success("Hardware updated successfully")
 		}
 	} else {
-		infrastructure.AgentLogger.Info("Capabilities already up-to-date: %s", capabilities)
+		infrastructure.AgentLogger.Info("Hardware already up-to-date: %s", hardwareLabel(hardware))
 	}
 
 	// If name is empty, use hostname
@@ -209,18 +217,18 @@ func runAgent(cmd *cobra.Command, args []string) {
 		needsUpdate = true
 		updateReason = append(updateReason, "Port is 0")
 	}
-	if info.Capabilities == "" {
+	if info.ResourceType == "" && info.Capabilities == "" {
 		needsUpdate = true
-		updateReason = append(updateReason, "Capabilities is empty")
+		updateReason = append(updateReason, "Hardware type is empty")
 	}
 
 	// If agent data is incomplete, update it first
 	if needsUpdate {
 		infrastructure.AgentLogger.Info("Agent data '%s' is incomplete, updating...", name)
 		infrastructure.AgentLogger.Info("Update reasons: %s", strings.Join(updateReason, ", "))
-		infrastructure.AgentLogger.Info("Updating with: IP=%s, Port=%d, Capabilities=%s", ip, port, capabilities)
-		
-		if err := agent.updateAgentInfo(info.ID, ip, port, capabilities, "online"); err != nil {
+		infrastructure.AgentLogger.Info("Updating with: IP=%s, Port=%d, Hardware=%s", ip, port, hardwareLabel(hardware))
+
+		if err := agent.updateAgentInfo(info.ID, ip, port, hardware, "online"); err != nil {
 			infrastructure.AgentLogger.Fatal("Failed to update incomplete agent data: %v", err)
 		}
 		
@@ -229,7 +237,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 		agent.updateStatus("online")
 	} else {
 		// Agent data is complete, proceed with normal registration
-		err := agent.registerWithServer(name, ip, port, capabilities, agentKey)
+		err := agent.registerWithServer(name, ip, port, hardware, agentKey)
 		if err != nil && strings.Contains(err.Error(), "already registered") {
 			if info.Name != name {
 				infrastructure.AgentLogger.Fatal("Agent key '%s' already used by another agent: %s", agentKey, info.Name)
@@ -242,7 +250,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 			infrastructure.AgentLogger.Info("Server URL: %s", agent.ServerURL)
 			infrastructure.AgentLogger.Info("IP: %s", info.IPAddress)
 			infrastructure.AgentLogger.Info("Port: %d", info.Port)
-			infrastructure.AgentLogger.Info("Capabilities: %s", info.Capabilities)
+			infrastructure.AgentLogger.Info("Hardware: type=%s processor=%s", info.ResourceType, info.Processor)
 			infrastructure.AgentLogger.Success("Agent %s (%s) is running", agent.Name, agent.ID.String())
 			agent.updateStatus("online")
 		} else if err != nil {
@@ -255,7 +263,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	// Update status to online and port to 8081 when agent starts running
 	infrastructure.AgentLogger.Info("Updating agent status to online and port to 8081...")
-	if err := agent.updateAgentInfo(agent.ID, ip, 8081, capabilities, "online"); err != nil {
+	if err := agent.updateAgentInfo(agent.ID, ip, 8081, hardware, "online"); err != nil {
 		infrastructure.AgentLogger.Warning("Failed to update agent status to online: %v", err)
 	} else {
 		infrastructure.AgentLogger.Success("Agent status updated to online with port 8081")
@@ -298,7 +306,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	// Update status to offline and restore original port 8080 before shutdown
 	infrastructure.AgentLogger.Info("Updating agent status to offline and restoring port to 8080...")
-	infrastructure.AgentLogger.Info("Preserving capabilities: %s", capabilities)
+	infrastructure.AgentLogger.Info("Preserving hardware: %s", hardwareLabel(hardware))
 
 	// Set agent status for real-time monitoring
 	agent.Status = "offline"
@@ -307,7 +315,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	// Speed will be updated when agent comes back online
 
 	// Update agent data (IP, port, capabilities) first
-	if err := agent.updateAgentInfo(agent.ID, ip, 8080, capabilities, ""); err != nil {
+	if err := agent.updateAgentInfo(agent.ID, ip, 8080, hardware, ""); err != nil {
 		infrastructure.AgentLogger.Warning("Failed to update agent data: %v", err)
 	} else {
 		infrastructure.AgentLogger.Success("Agent data updated successfully")
@@ -356,18 +364,19 @@ func getAgentByKeyOnly(a *Agent, key string) (AgentInfo, error) {
 	return res.Data[0], nil
 }
 
-func (a *Agent) updateAgentInfo(agentID uuid.UUID, ip string, port int, capabilities string, status string) error {
-	// Use the correct endpoint for updating agent data
+func (a *Agent) updateAgentInfo(agentID uuid.UUID, ip string, port int, hardware HardwareInfo, status string) error {
 	req := struct {
 		AgentKey     string `json:"agent_key"`
 		IPAddress    string `json:"ip_address"`
 		Port         int    `json:"port"`
-		Capabilities string `json:"capabilities"`
+		ResourceType string `json:"type"`
+		Processor    string `json:"processor"`
 	}{
 		AgentKey:     a.AgentKey,
 		IPAddress:    ip,
 		Port:         port,
-		Capabilities: capabilities,
+		ResourceType: hardware.Type,
+		Processor:    hardware.Processor,
 	}
 
 	jsonData, _ := json.Marshal(req)
@@ -637,12 +646,13 @@ func (a *Agent) findLocalFile(filename string) (string, bool) {
 	return "", false
 }
 
-func (a *Agent) registerWithServer(name, ip string, port int, capabilities, agentKey string) error {
+func (a *Agent) registerWithServer(name, ip string, port int, hardware HardwareInfo, agentKey string) error {
 	req := domain.CreateAgentRequest{
 		Name:         name,
 		IPAddress:    ip,
 		Port:         port,
-		Capabilities: capabilities,
+		ResourceType: hardware.Type,
+		Processor:    hardware.Processor,
 		AgentKey:     agentKey,
 	}
 	jsonData, err := json.Marshal(req)
@@ -1518,96 +1528,162 @@ func validateLocalIP(providedIP string) error {
 	return fmt.Errorf("IP address validation failed: provided IP '%s' is not a valid local IP address. Local IPs: %v", providedIP, localIPs)
 }
 
-// detectCapabilitiesWithHashcat detects server capabilities using hashcat -I command
-func detectCapabilitiesWithHashcat() string {
-	infrastructure.AgentLogger.Info("Starting hashcat -I capabilities detection...")
+// hashcatDevice represents a device entry from hashcat -I output
+type hashcatDevice struct {
+	Type string
+	Name string
+}
 
-	// Check if hashcat is available
+// detectHardwareWithHashcat detects server hardware using hashcat -I command
+func detectHardwareWithHashcat() HardwareInfo {
+	infrastructure.AgentLogger.Info("Starting hashcat -I hardware detection...")
+
 	if _, err := exec.LookPath("hashcat"); err != nil {
 		infrastructure.AgentLogger.Warning("hashcat not found, falling back to basic detection")
 		infrastructure.AgentLogger.Debug("Error details: %v", err)
-		return detectCapabilitiesBasic()
+		return detectHardwareBasic()
 	}
 
 	infrastructure.AgentLogger.Info("hashcat command found, executing hashcat -I...")
 
-	// Run hashcat -I to get device information
 	cmd := exec.Command("hashcat", "-I")
 	output, err := cmd.Output()
 	if err != nil {
 		infrastructure.AgentLogger.Warning("Failed to run hashcat -I: %v", err)
 		infrastructure.AgentLogger.Info("Falling back to basic detection")
-		return detectCapabilitiesBasic()
+		return detectHardwareBasic()
 	}
 
 	infrastructure.AgentLogger.Success("hashcat -I executed successfully")
 
-	// Parse output to find device types
-	outputStr := string(output)
-	lines := strings.Split(outputStr, "\n")
-
-	infrastructure.AgentLogger.Debug("Hashcat -I output lines count: %d", len(lines))
-	infrastructure.AgentLogger.Debug("Raw output preview (first 10 lines):")
-	for i, line := range lines[:min(10, len(lines))] {
-		infrastructure.AgentLogger.Debug("   Line %d: %s", i+1, line)
+	devices := parseHashcatDevices(string(output))
+	if len(devices) == 0 {
+		infrastructure.AgentLogger.Warning("No devices found in hashcat -I output, falling back to basic detection")
+		return detectHardwareBasic()
 	}
 
-	var deviceTypes []string
+	for _, device := range devices {
+		infrastructure.AgentLogger.Info("Detected device: type=%s name=%s", device.Type, device.Name)
+	}
 
-	for i, line := range lines {
+	hardware := selectBestDeviceHardware(devices)
+	if hardware.Type == "" {
+		infrastructure.AgentLogger.Warning("Could not determine hardware from hashcat devices, falling back to basic detection")
+		return detectHardwareBasic()
+	}
+
+	infrastructure.AgentLogger.Success("Detected hardware: type=%s processor=%s", hardware.Type, hardware.Processor)
+	return hardware
+}
+
+func parseHashcatDevices(output string) []hashcatDevice {
+	var devices []hashcatDevice
+	var current *hashcatDevice
+
+	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
-
-		// Look for device section headers
 		if strings.Contains(line, "Backend Device ID #") {
-			infrastructure.AgentLogger.Debug("Found device section header at line %d: %s", i+1, line)
+			if current != nil && (current.Type != "" || current.Name != "") {
+				devices = append(devices, *current)
+			}
+			current = &hashcatDevice{}
+			continue
+		}
+		if current == nil {
 			continue
 		}
 
-		// Look for Type line
-		if strings.HasPrefix(line, "Type...........:") {
-			infrastructure.AgentLogger.Debug("Found Type line at line %d: %s", i+1, line)
-			parts := strings.Split(line, ":")
-			if len(parts) >= 2 {
-				deviceType := strings.TrimSpace(parts[1])
-				if deviceType != "" {
-					deviceTypes = append(deviceTypes, deviceType)
-					infrastructure.AgentLogger.Info("Detected device type: %s", deviceType)
-				}
+		if strings.HasPrefix(line, "Type") && strings.Contains(line, ":") {
+			current.Type = strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
+		}
+		if strings.HasPrefix(line, "Name") && strings.Contains(line, ":") {
+			current.Name = strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
+		}
+	}
+
+	if current != nil && (current.Type != "" || current.Name != "") {
+		devices = append(devices, *current)
+	}
+
+	return devices
+}
+
+func selectBestDeviceHardware(devices []hashcatDevice) HardwareInfo {
+	for _, device := range devices {
+		if isGPUDeviceType(device.Type) {
+			return deviceHardware("GPU", device.Name)
+		}
+	}
+	for _, device := range devices {
+		if isCPUDeviceType(device.Type) {
+			return deviceHardware("CPU", device.Name)
+		}
+	}
+	return HardwareInfo{}
+}
+
+func isGPUDeviceType(deviceType string) bool {
+	return strings.Contains(strings.ToUpper(deviceType), "GPU")
+}
+
+func isCPUDeviceType(deviceType string) bool {
+	return strings.Contains(strings.ToUpper(deviceType), "CPU")
+}
+
+func deviceHardware(deviceType, deviceName string) HardwareInfo {
+	shortName := shortenDeviceName(deviceName)
+	kind := strings.ToUpper(strings.TrimSpace(deviceType))
+	if isGPUDeviceType(kind) {
+		kind = "GPU"
+	} else if isCPUDeviceType(kind) {
+		kind = "CPU"
+	}
+	return HardwareInfo{Type: kind, Processor: shortName}
+}
+
+// shortenDeviceName turns hashcat's verbose Name into a short human-readable label.
+// e.g. "cpu-skylake-avx512-AMD Ryzen 7 8845HS w/ Radeon 780M Graphics" -> "AMD Ryzen 7 8845HS"
+func shortenDeviceName(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return ""
+	}
+
+	// Drop integrated GPU suffix on hybrid CPU entries
+	for _, sep := range []string{" w/ ", " with ", " + "} {
+		if idx := strings.Index(name, sep); idx > 0 {
+			name = strings.TrimSpace(name[:idx])
+			break
+		}
+	}
+
+	// Hashcat CPU names: cpu-<arch>-<real hardware name>
+	if strings.HasPrefix(strings.ToLower(name), "cpu-") {
+		for _, brand := range []string{"AMD ", "Intel", "Apple "} {
+			if idx := strings.Index(name, brand); idx >= 0 {
+				name = strings.TrimSpace(name[idx:])
+				break
 			}
 		}
 	}
 
-	infrastructure.AgentLogger.Info("Total device types found: %d", len(deviceTypes))
-	infrastructure.AgentLogger.Info("Device types: %v", deviceTypes)
+	// Clean trademark noise from /proc/cpuinfo style names
+	replacer := strings.NewReplacer("(R)", "", "(TM)", "", "(C)", "", "  ", " ")
+	name = strings.TrimSpace(replacer.Replace(name))
 
-	// Determine capabilities based on detected devices
-	if len(deviceTypes) == 0 {
-		infrastructure.AgentLogger.Warning("No device types found in hashcat -I output, falling back to basic detection")
-		return detectCapabilitiesBasic()
+	// Trim clock speed suffix
+	if idx := strings.Index(name, " CPU @"); idx > 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+	if idx := strings.Index(name, " @ "); idx > 0 {
+		name = strings.TrimSpace(name[:idx])
 	}
 
-	// Check if any GPU devices are found
-	for _, deviceType := range deviceTypes {
-		infrastructure.AgentLogger.Debug("Checking device type for GPU: %s", deviceType)
-		if strings.Contains(strings.ToUpper(deviceType), "GPU") {
-			infrastructure.AgentLogger.Success("GPU device detected: %s", deviceType)
-			return "GPU"
-		}
+	if len(name) > 48 {
+		name = name[:45] + "..."
 	}
 
-	// If no GPU, check for CPU
-	for _, deviceType := range deviceTypes {
-		infrastructure.AgentLogger.Debug("Checking device type for CPU: %s", deviceType)
-		if strings.Contains(strings.ToUpper(deviceType), "CPU") {
-			infrastructure.AgentLogger.Info("CPU device detected: %s", deviceType)
-			return "CPU"
-		}
-	}
-
-	// If we can't determine, log all found types and fallback
-	infrastructure.AgentLogger.Warning("Could not determine capabilities from device types: %v", deviceTypes)
-	infrastructure.AgentLogger.Info("Falling back to basic detection")
-	return detectCapabilitiesBasic()
+	return name
 }
 
 // min returns the minimum of two integers
@@ -1618,15 +1694,102 @@ func min(a, b int) int {
 	return b
 }
 
-// detectCapabilitiesBasic is the fallback detection method
-func detectCapabilitiesBasic() string {
-	// Try to detect GPU first
+// detectHardwareBasic is the fallback detection method
+func detectHardwareBasic() HardwareInfo {
+	if gpuName := detectNvidiaGPUName(); gpuName != "" {
+		return deviceHardware("GPU", gpuName)
+	}
+	if cpuName := detectCPUName(); cpuName != "" {
+		return deviceHardware("CPU", cpuName)
+	}
 	if hasGPU() {
-		return "GPU"
+		return HardwareInfo{Type: "GPU"}
+	}
+	return HardwareInfo{Type: "CPU"}
+}
+
+func parseManualHardware(input string) HardwareInfo {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return HardwareInfo{}
 	}
 
-	// Fallback to CPU
-	return "CPU"
+	lower := strings.ToLower(input)
+	if lower == "cpu" || lower == "gpu" {
+		return HardwareInfo{Type: strings.ToUpper(lower)}
+	}
+
+	if idx := strings.Index(input, ":"); idx > 0 {
+		return HardwareInfo{
+			Type:      strings.ToUpper(strings.TrimSpace(input[:idx])),
+			Processor: strings.TrimSpace(input[idx+1:]),
+		}
+	}
+
+	if strings.Contains(lower, "rtx") || strings.Contains(lower, "gtx") ||
+		strings.Contains(lower, "radeon") || strings.Contains(lower, "cuda") ||
+		strings.Contains(lower, "nvidia") {
+		return HardwareInfo{Type: "GPU", Processor: input}
+	}
+
+	return HardwareInfo{Type: "CPU", Processor: input}
+}
+
+func hardwareChanged(info AgentInfo, hw HardwareInfo) bool {
+	currentType := strings.ToUpper(strings.TrimSpace(info.ResourceType))
+	currentProcessor := strings.TrimSpace(info.Processor)
+
+	if currentType == "" && currentProcessor == "" && strings.TrimSpace(info.Capabilities) != "" {
+		legacy := parseManualHardware(info.Capabilities)
+		currentType = legacy.Type
+		currentProcessor = legacy.Processor
+	}
+
+	return currentType != strings.ToUpper(strings.TrimSpace(hw.Type)) ||
+		currentProcessor != strings.TrimSpace(hw.Processor)
+}
+
+func hardwareLabel(hw HardwareInfo) string {
+	if hw.Processor != "" {
+		if hw.Type != "" {
+			return hw.Type + ": " + hw.Processor
+		}
+		return hw.Processor
+	}
+	return hw.Type
+}
+
+func detectNvidiaGPUName() string {
+	if _, err := exec.LookPath("nvidia-smi"); err != nil {
+		return ""
+	}
+	cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		if name := strings.TrimSpace(line); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+func detectCPUName() string {
+	if content, err := os.ReadFile("/proc/cpuinfo"); err == nil {
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(line, "model name") {
+				parts := strings.SplitN(line, ":", 2)
+				if len(parts) == 2 {
+					if name := shortenDeviceName(parts[1]); name != "" {
+						return name
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // hasGPU checks if GPU is available on the system
@@ -1699,14 +1862,16 @@ func hasGPU() bool {
 	return false
 }
 
-// updateAgentCapabilities updates agent capabilities in the database
-func updateAgentCapabilities(a *Agent, agentKey, capabilities string) error {
+// updateAgentHardware updates agent type and processor in the database
+func updateAgentHardware(a *Agent, agentKey string, hardware HardwareInfo) error {
 	req := struct {
 		AgentKey     string `json:"agent_key"`
-		Capabilities string `json:"capabilities"`
+		ResourceType string `json:"type"`
+		Processor    string `json:"processor"`
 	}{
 		AgentKey:     agentKey,
-		Capabilities: capabilities,
+		ResourceType: hardware.Type,
+		Processor:    hardware.Processor,
 	}
 
 	jsonData, _ := json.Marshal(req)
@@ -1723,7 +1888,7 @@ func updateAgentCapabilities(a *Agent, agentKey, capabilities string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update capabilities: %s", string(body))
+		return fmt.Errorf("failed to update hardware: %s", string(body))
 	}
 
 	return nil

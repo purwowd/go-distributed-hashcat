@@ -40,7 +40,7 @@ type AgentUsecase interface {
 	GetByNameAndIP(ctx context.Context, name, ip string, port int) (*domain.Agent, error)
 	CreateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgent(ctx context.Context, agent *domain.Agent) error
-	UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error
+	UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, resourceType, processor, capabilities string) error
 	GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error)
 }
 
@@ -103,6 +103,8 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 
 			existingAgentByName.IPAddress = req.IPAddress
 			existingAgentByName.Port = port // Use processed port
+			existingAgentByName.ResourceType = req.ResourceType
+			existingAgentByName.Processor = req.Processor
 			existingAgentByName.Capabilities = req.Capabilities
 			existingAgentByName.Status = "offline"    // stay offline during update
 			existingAgentByName.LastSeen = time.Now() // Update LastSeen to current time
@@ -145,6 +147,8 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 		IPAddress:    req.IPAddress,
 		Port:         port,      // Use processed port
 		Status:       "offline", // default offline
+		ResourceType: req.ResourceType,
+		Processor:    req.Processor,
 		Capabilities: req.Capabilities,
 		AgentKey:     req.AgentKey,
 		CreatedAt:    existingAgentByKey.CreatedAt, // Use created_at from agent key
@@ -380,8 +384,8 @@ func (u *agentUsecase) UpdateAgent(ctx context.Context, agent *domain.Agent) err
 	return u.agentRepo.UpdateAgent(ctx, agent)
 }
 
-// UpdateAgentData updates only the data fields (ip_address, port, capabilities) without changing status
-func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, capabilities string) error {
+// UpdateAgentData updates agent metadata without changing status.
+func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, resourceType, processor, capabilities string) error {
 	// Get agent by agent key
 	agent, err := u.agentRepo.GetByAgentKey(ctx, agentKey)
 	if err != nil {
@@ -408,12 +412,14 @@ func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipA
 	// Update only data fields, keep status unchanged
 	agent.IPAddress = ipAddress
 	agent.Port = port
+	agent.ResourceType = resourceType
+	agent.Processor = processor
 	agent.Capabilities = capabilities
 	agent.UpdatedAt = time.Now()
 	// Note: Status remains unchanged (stays offline until agent binary runs)
 
-	log.Printf("Debug: Updated agent data: IP=%s, Port=%d, Capabilities=%s, UpdatedAt=%v",
-		agent.IPAddress, agent.Port, agent.Capabilities, agent.UpdatedAt)
+	log.Printf("Debug: Updated agent data: IP=%s, Port=%d, Type=%s, Processor=%s, UpdatedAt=%v",
+		agent.IPAddress, agent.Port, agent.ResourceType, agent.Processor, agent.UpdatedAt)
 
 	// Update in database
 	if err := u.agentRepo.Update(ctx, agent); err != nil {
@@ -426,8 +432,8 @@ func (u *agentUsecase) UpdateAgentData(ctx context.Context, agentKey string, ipA
 	// Broadcast real-time agent data update via WebSocket
 	if u.wsHub != nil {
 		u.wsHub.BroadcastAgentStatus(agent.ID.String(), agent.Status, agent.LastSeen.Format(time.RFC3339))
-		log.Printf("Real-time agent data broadcast: %s (IP=%s, Port=%d, Capabilities=%s)",
-			agent.Name, agent.IPAddress, agent.Port, agent.Capabilities)
+		log.Printf("Real-time agent data broadcast: %s (IP=%s, Port=%d, Type=%s, Processor=%s)",
+			agent.Name, agent.IPAddress, agent.Port, agent.ResourceType, agent.Processor)
 	} else {
 		log.Printf("Warning: WebSocket hub not available for real-time broadcast")
 	}

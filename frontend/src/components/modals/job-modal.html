@@ -243,10 +243,10 @@
                                                     <span x-text="agent.speed > 0 ? `${agent.speed} H/s` : 'No Speed'"></span>
                                                 </span>
                                                 <!-- Capabilities Badge -->
-                                                <span class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded" x-text="agent.capabilities || 'Unknown GPU'"></span>
+                                                <span class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded" x-text="getAgentGpuInfo(agent)"></span>
                                             </div>
                                         </div>
-                                        <div class="text-xs text-gray-600 truncate" x-text="agent.ip_address"></div>
+                                        <!-- <div class="text-xs text-gray-600 truncate" x-text="agent.ip_address"></div> -->
                                         <!-- Speed Information -->
                                         <div class="text-xs text-gray-500 flex items-center space-x-1">
                                             <i class="fas fa-tachometer-alt text-xs"></i>
@@ -308,7 +308,7 @@
                                                 <div class="w-6 h-6 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-bold" x-text="index + 1"></div>
                                                 <div>
                                                     <div class="font-medium text-gray-900 text-sm" x-text="agent.name"></div>
-                                                    <div class="text-xs text-gray-500" x-text="agent.ip_address"></div>
+                                                    <!-- <div class="text-xs text-gray-500" x-text="agent.ip_address"></div> -->
                                                 </div>
                                             </div>
                                             

@@ -34,6 +34,8 @@ interface Agent {
     ip_address: string
     port?: number | string
     status: 'online' | 'offline' | 'busy'
+    type?: string
+    processor?: string
     capabilities?: string
     gpu_info?: string
     last_seen: string
@@ -557,7 +559,8 @@ class DashboardApplication {
             // Computed properties with safe checks
             get onlineAgents() {
                 const agents = this.agents
-                return Array.isArray(agents) ? agents.filter((agent: any) => agent.status === 'online') : []
+                if (!Array.isArray(agents)) return []
+                return agents.filter((agent: any) => agent.status === 'online')
             },
             get runningJobs() {
                 const jobs = this.jobs
@@ -1704,12 +1707,45 @@ class DashboardApplication {
             },
 
             // Agent-specific helpers
+            getAgentHardwareType(agent: any): string {
+                const type = (agent?.type || '').trim().toUpperCase()
+                if (type === 'GPU' || type === 'CPU') return type
+                if (this.isGPUAgent(agent)) return 'GPU'
+                return 'CPU'
+            },
+
+            getAgentHardwareDetail(agent: any): string {
+                const processor = (agent?.processor || '').trim()
+                if (processor) return processor
+
+                const caps = (agent?.gpu_info || agent?.capabilities || '').trim()
+                if (!caps) return 'Belum dikonfigurasi'
+
+                const lower = caps.toLowerCase()
+                if (lower === 'gpu' || lower === 'cpu') {
+                    return 'Model belum dilaporkan agent'
+                }
+
+                const stripped = caps.replace(/^(gpu|cpu)\s*[:,:\-]\s*/i, '').trim()
+                return stripped || caps
+            },
+
             getAgentGpuInfo(agent: any) {
-                return agent?.gpu_info || agent?.capabilities || 'No GPU info available'
+                const type = this.getAgentHardwareType(agent)
+                const detail = this.getAgentHardwareDetail(agent)
+                if (detail === 'Belum dikonfigurasi' || detail === 'Model belum dilaporkan agent') {
+                    return `${type} — ${detail}`
+                }
+                return `${type}: ${detail}`
             },
 
             getAgentCapabilities(agent: any) {
-                return agent.capabilities || 'General Purpose'
+                const type = this.getAgentHardwareType(agent)
+                const detail = this.getAgentHardwareDetail(agent)
+                if (detail === 'Belum dikonfigurasi' || detail === 'Model belum dilaporkan agent') {
+                    return type
+                }
+                return `${type}: ${detail}`
             },
 
             // NEW: Get job count for agent
@@ -2579,13 +2615,31 @@ class DashboardApplication {
 
             // Check if agent is GPU-based
             isGPUAgent(agent: any): boolean {
+                const type = (agent?.type || '').trim().toUpperCase()
+                if (type === 'GPU') return true
+                if (type === 'CPU') return false
+
                 const capabilities = (agent.capabilities || '').toLowerCase()
-                return capabilities.includes('gpu') || 
-                       capabilities.includes('cuda') || 
-                       capabilities.includes('opencl') ||
-                       capabilities.includes('rtx') ||
-                       capabilities.includes('gtx') ||
-                       capabilities.includes('radeon')
+                const processor = (agent.processor || '').toLowerCase()
+                const combined = `${capabilities} ${processor}`
+                return combined.includes('gpu') || 
+                       combined.includes('cuda') || 
+                       combined.includes('opencl') ||
+                       combined.includes('rtx') ||
+                       combined.includes('gtx') ||
+                       combined.includes('radeon')
+            },
+
+            sortAgentsByPriority(agents: any[]): any[] {
+                return [...agents].sort((a, b) => {
+                    const aRank = this.isGPUAgent(a) ? 0 : 1
+                    const bRank = this.isGPUAgent(b) ? 0 : 1
+                    if (aRank !== bRank) return aRank - bRank
+
+                    const dateComparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                    if (dateComparison !== 0) return dateComparison
+                    return a.id.localeCompare(b.id)
+                })
             },
 
             // Get selected agents objects
@@ -2606,19 +2660,21 @@ class DashboardApplication {
                 }
                 
                 // Fallback to capability-based estimation for agents without speed data
-                const capabilities = (agent.capabilities || '').toLowerCase()
+                const processor = (agent.processor || agent.capabilities || '').toLowerCase()
+                const type = (agent.type || '').toLowerCase()
+                const capabilities = `${type} ${processor}`
                 
-                if (capabilities.includes('rtx 4090') || capabilities.includes('rtx 4080')) {
+                if (processor.includes('rtx 4090') || processor.includes('rtx 4080')) {
                     return 5000000 // 5M H/s for high-end RTX
-                } else if (capabilities.includes('rtx 4070') || capabilities.includes('rtx 3060')) {
+                } else if (processor.includes('rtx 4070') || processor.includes('rtx 3060')) {
                     return 4000000 // 4M H/s for mid-range RTX
-                } else if (capabilities.includes('gtx 1660') || capabilities.includes('gtx 1070')) {
+                } else if (processor.includes('gtx 1660') || processor.includes('gtx 1070')) {
                     return 3000000 // 3M H/s for GTX series
-                } else if (capabilities.includes('gpu') || capabilities.includes('cuda') || capabilities.includes('opencl')) {
+                } else if (type === 'gpu' || capabilities.includes('gpu') || capabilities.includes('cuda') || capabilities.includes('opencl')) {
                     return 3500000 // 3.5M H/s for generic GPU
-                } else if (capabilities.includes('ryzen 9') || capabilities.includes('i9')) {
+                } else if (processor.includes('ryzen 9') || processor.includes('i9')) {
                     return 200000 // 200K H/s for high-end CPU
-                } else if (capabilities.includes('ryzen 7') || capabilities.includes('i7')) {
+                } else if (processor.includes('ryzen 7') || processor.includes('i7')) {
                     return 150000 // 150K H/s for mid-range CPU
                 } else {
                     return 100000 // 100K H/s for standard CPU
@@ -3045,7 +3101,8 @@ class DashboardApplication {
                     
                     return {
                         name: agent.name,
-                        capabilities: agent.capabilities,
+                        type: this.getAgentHardwareType(agent),
+                        processor: this.getAgentHardwareDetail(agent),
                         performance: performance,
                         assignedWords: assignedWords,
                         percentage: percentage,
@@ -3506,7 +3563,8 @@ class DashboardApplication {
                     
                     return {
                         name: agent.name,
-                        capabilities: agent.capabilities,
+                        type: this.getAgentHardwareType(agent),
+                        processor: this.getAgentHardwareDetail(agent),
                         resourceType: resourceType,
                         performance: performance,
                         assignedWords: assignedWords,
