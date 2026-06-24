@@ -29,6 +29,18 @@ func NormalizeAgentHardware(agent *Agent) {
 	}
 }
 
+// PrepareAgentForResponse ensures API consumers always get type and processor fields.
+func PrepareAgentForResponse(agent *Agent) {
+	NormalizeAgentHardware(agent)
+}
+
+// PrepareAgentsForResponse normalizes hardware fields for a list of agents.
+func PrepareAgentsForResponse(agents []Agent) {
+	for i := range agents {
+		NormalizeAgentHardware(&agents[i])
+	}
+}
+
 // AgentUsesGPU reports whether the agent should be treated as a GPU worker.
 func AgentUsesGPU(agent *Agent) bool {
 	if agent == nil {

@@ -5,6 +5,8 @@
 -- +migrate Up
 ALTER TABLE agents ADD COLUMN resource_type TEXT;
 ALTER TABLE agents ADD COLUMN processor TEXT;
+UPDATE agents SET resource_type = '' WHERE resource_type IS NULL;
+UPDATE agents SET processor = '' WHERE processor IS NULL;
 
 -- +migrate Down
 ALTER TABLE agents DROP COLUMN processor;

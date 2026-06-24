@@ -1713,7 +1713,7 @@ class DashboardApplication {
 
                 const lower = caps.toLowerCase()
                 if (lower === 'gpu' || lower === 'cpu') {
-                    return 'Model belum dilaporkan agent'
+                    return 'Model Not Available'
                 }
 
                 const stripped = caps.replace(/^(gpu|cpu)\s*[:,:\-]\s*/i, '').trim()
@@ -1723,7 +1723,7 @@ class DashboardApplication {
             getAgentGpuInfo(agent: any) {
                 const type = this.getAgentHardwareType(agent)
                 const detail = this.getAgentHardwareDetail(agent)
-                if (detail === 'Belum dikonfigurasi' || detail === 'Model belum dilaporkan agent') {
+                if (detail === 'Belum dikonfigurasi' || detail === 'Model Not Available') {
                     return `${type} — ${detail}`
                 }
                 return `${type}: ${detail}`
@@ -1732,7 +1732,7 @@ class DashboardApplication {
             getAgentCapabilities(agent: any) {
                 const type = this.getAgentHardwareType(agent)
                 const detail = this.getAgentHardwareDetail(agent)
-                if (detail === 'Belum dikonfigurasi' || detail === 'Model belum dilaporkan agent') {
+                if (detail === 'Belum dikonfigurasi' || detail === 'Model Not Available') {
                     return type
                 }
                 return `${type}: ${detail}`

@@ -172,6 +172,8 @@ func (h *AgentHandler) GetAgent(c *gin.Context) {
 		return
 	}
 
+	domain.PrepareAgentForResponse(agent)
+
 	c.JSON(http.StatusOK, gin.H{"data": agent})
 }
 
@@ -189,11 +191,22 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 		}
 	}
 	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	agentKey := strings.TrimSpace(c.Query("agent_key"))
 
 	agents, err := h.agentUsecase.GetAllAgents(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if agentKey != "" {
+		filtered := make([]domain.Agent, 0, 1)
+		for _, a := range agents {
+			if a.AgentKey == agentKey {
+				filtered = append(filtered, a)
+			}
+		}
+		agents = filtered
 	}
 
 	if search != "" {
@@ -202,7 +215,9 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 			if strings.Contains(strings.ToLower(a.Name), search) ||
 				strings.Contains(strings.ToLower(a.IPAddress), search) ||
 				strings.Contains(strings.ToLower(a.Status), search) ||
-				strings.Contains(strings.ToLower(a.AgentKey), search) {
+				strings.Contains(strings.ToLower(a.AgentKey), search) ||
+				strings.Contains(strings.ToLower(a.ResourceType), search) ||
+				strings.Contains(strings.ToLower(a.Processor), search) {
 				filtered = append(filtered, a)
 			}
 		}
@@ -222,6 +237,7 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 		end = total
 	}
 	paginated := agents[start:end]
+	domain.PrepareAgentsForResponse(paginated)
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":      paginated,

@@ -172,6 +172,8 @@ func (s *SQLiteDB) migrate() error {
 		`ALTER TABLE jobs ADD COLUMN wordlist_id TEXT REFERENCES wordlists(id)`,
 		`ALTER TABLE agents ADD COLUMN resource_type TEXT`,
 		`ALTER TABLE agents ADD COLUMN processor TEXT`,
+		`UPDATE agents SET resource_type = '' WHERE resource_type IS NULL`,
+		`UPDATE agents SET processor = '' WHERE processor IS NULL`,
 	}
 
 	for _, query := range queries {

@@ -166,11 +166,21 @@ func (u *agentUsecase) RegisterAgent(ctx context.Context, req *domain.CreateAgen
 }
 
 func (u *agentUsecase) GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
-	return u.agentRepo.GetByID(ctx, id)
+	agent, err := u.agentRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	domain.PrepareAgentForResponse(agent)
+	return agent, nil
 }
 
 func (u *agentUsecase) GetAllAgents(ctx context.Context) ([]domain.Agent, error) {
-	return u.agentRepo.GetAll(ctx)
+	agents, err := u.agentRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	domain.PrepareAgentsForResponse(agents)
+	return agents, nil
 }
 
 func (u *agentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error {
@@ -345,7 +355,12 @@ func (u *agentUsecase) UpdateAgentStatusOffline(ctx context.Context, id uuid.UUI
 }
 
 func (u *agentUsecase) GetByAgentKey(ctx context.Context, agentKey string) (*domain.Agent, error) {
-	return u.agentRepo.GetByAgentKey(ctx, agentKey)
+	agent, err := u.agentRepo.GetByAgentKey(ctx, agentKey)
+	if err != nil {
+		return nil, err
+	}
+	domain.PrepareAgentForResponse(agent)
+	return agent, nil
 }
 
 func (u *agentUsecase) ValidateUniqueIPForAgentKey(ctx context.Context, agentKey, ipAddress, agentName string) error {

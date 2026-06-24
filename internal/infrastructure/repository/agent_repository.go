@@ -37,11 +37,17 @@ func NewAgentRepository(db *database.SQLiteDB) domain.AgentRepository {
 	return repo
 }
 
+const agentSelectColumns = `
+	id, name, ip_address, port, status, capabilities,
+	COALESCE(resource_type, '') AS resource_type,
+	COALESCE(processor, '') AS processor,
+	agent_key, speed, last_seen, created_at, updated_at`
+
 func (r *agentRepository) prepareStatements() {
 	var err error
 
 	r.getByIDStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
+		SELECT ` + agentSelectColumns + `
 		FROM agents WHERE id = ? LIMIT 1
 	`)
 	if err != nil {
@@ -49,7 +55,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
+		SELECT ` + agentSelectColumns + `
 		FROM agents WHERE name = ? LIMIT 1
 	`)
 	if err != nil {
@@ -57,7 +63,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByNameIPStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
+		SELECT ` + agentSelectColumns + `
 		FROM agents WHERE name = ? AND ip_address = ? AND port = ? LIMIT 1
 	`)
 	if err != nil {
@@ -65,7 +71,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByIPAddressStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
+		SELECT ` + agentSelectColumns + `
 		FROM agents WHERE ip_address = ? LIMIT 1
 	`)
 	if err != nil {
@@ -73,7 +79,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
+		SELECT ` + agentSelectColumns + `
 		FROM agents ORDER BY created_at DESC, id ASC
 	`)
 	if err != nil {
@@ -97,7 +103,7 @@ func (r *agentRepository) prepareStatements() {
 	}
 
 	r.getByAgentKeyStmt, err = r.db.DB().Prepare(`
-		SELECT id, name, ip_address, port, status, capabilities, resource_type, processor, agent_key, speed, last_seen, created_at, updated_at
+		SELECT ` + agentSelectColumns + `
 		FROM agents WHERE agent_key = ? LIMIT 1
 	`)
 	if err != nil {
