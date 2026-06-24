@@ -1466,17 +1466,21 @@ class DashboardApplication {
             async loadInitialData() {
                 try {
                     this.isLoading = true
+                    const currentRoute = router.getCurrentRoute()
                     
-                    // Add timeout to prevent infinite loading
-                    const timeout = new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Loading timeout')), 10000)
+                    const createTimeout = (ms: number) => new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Loading timeout')), ms)
                     )
                     
                     // Load with timeout protection
                     await Promise.race([
-                        timeout,
+                        createTimeout(10000),
                         Promise.all([
-                            agentStore.actions.fetchAgents().catch(err => {
+                            agentStore.actions.fetchAgents({
+                                page: this.agentTable.page,
+                                page_size: this.agentTable.pageSize,
+                                search: this.agentTable.search
+                            }).catch(err => {
                                 console.warn('Failed to load agents:', err)
                                 return []
                             }),
@@ -1496,22 +1500,23 @@ class DashboardApplication {
                         this.lastAgentStatuses.set(agent.id, agent.status)
                     })
                     
-                    // Load jobs with separate timeout
-                    const jobResult = await Promise.race([
-                        timeout,
-                        jobStore.actions.fetchJobs({
-                            page: this.jobTable.page,
-                            page_size: this.jobTable.pageSize,
-                            search: this.jobTable.search
-                        }).catch(err => {
-                            console.warn('Failed to load jobs:', err)
-                            return null
-                        })
-                    ])
-                    
-                    // Sync job pagination data
-                    if (jobResult) {
-                        this.jobTable.total = (jobResult as any).total
+                    // Load jobs unless the jobs tab will fetch them after route content loads
+                    if (currentRoute !== 'jobs') {
+                        const jobResult = await Promise.race([
+                            createTimeout(10000),
+                            jobStore.actions.fetchJobs({
+                                page: this.jobTable.page,
+                                page_size: this.jobTable.pageSize,
+                                search: this.jobTable.search
+                            }).catch(err => {
+                                console.warn('Failed to load jobs:', err)
+                                return null
+                            })
+                        ])
+                        
+                        if (jobResult) {
+                            this.jobTable.total = (jobResult as any).total
+                        }
                     }
                     
                     // Load cache stats
@@ -1602,6 +1607,8 @@ class DashboardApplication {
                         console.log('🔍 About to call checkLoginSuccessNotification...')
                         this.checkLoginSuccessNotification()
                         console.log('🔍 checkLoginSuccessNotification called')
+                    } else if (route === 'jobs') {
+                        await this.refreshJobsTable()
                     } else {
                         console.log('❌ Not overview route, skipping login success check. Route:', route)
                     }
@@ -2274,14 +2281,9 @@ class DashboardApplication {
                     if (selectedWordlist && selectedWordlist.content) {
                         wordlistContent = selectedWordlist.content
                     } else if (selectedWordlist && selectedWordlist.path) {
-                        // Try to fetch wordlist content from server
-                        try {
-                            const response = await fetch(`/api/v1/wordlists/${selectedWordlist.id}/content`)
-                            if (response.ok) {
-                                wordlistContent = await response.text()
-                            }
-                        } catch (error) {
-                            console.warn('Failed to fetch wordlist content:', error)
+                        const content = await apiService.getWordlistContent(selectedWordlist.id)
+                        if (content) {
+                            wordlistContent = content
                         }
                     }
                     

@@ -1,0 +1,18 @@
+[Unit]
+Description=Go Distributed Hashcat Backend
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/attacker/go-distributed-hashcat
+ExecStart=/usr/bin/bash /home/attacker/go-distributed-hashcat/scripts/dev-server.sh
+Restart=always
+RestartSec=5
+EnvironmentFile=-/home/attacker/go-distributed-hashcat/.env
+Environment=HOME=/root
+Environment=GOPATH=/root/go
+Environment=GOMODCACHE=/root/go/pkg/mod
+
+[Install]
+WantedBy=multi-user.target

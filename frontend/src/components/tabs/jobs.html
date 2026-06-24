@@ -19,8 +19,7 @@
             <div class="flex items-center gap-2 text-sm">
                 <span class="text-gray-600">Show</span>
                 <select class="input-modern py-1 px-2 w-24"
-                        @change="setJobTablePageSize($event)"
-                        x-init="$nextTick(()=>{ refreshJobsTable() })">
+                        @change="setJobTablePageSize($event)">
                     <option value="10">10</option>
                     <option value="25">25</option>
                     <option value="50">50</option>

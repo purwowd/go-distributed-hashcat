@@ -20,7 +20,15 @@ export SERVER_PORT=1337
 
 # Create necessary directories
 mkdir -p data
-mkdir -p uploads
+mkdir -p uploads/wordlists uploads/hash-files uploads/temp
+
+# uploads/ must be writable by this user (wordlist/hash uploads fail with 500 otherwise).
+if [ -d uploads/wordlists ] && [ ! -w uploads/wordlists ]; then
+	echo "⚠️  uploads/ is not writable by $(whoami) (often root-owned from a past sudo run)."
+	echo "    Fix uploads, then restart:"
+	echo "    sudo chown -R $(whoami):$(whoami) \"$(pwd)/uploads\""
+	exit 1
+fi
 
 # Run the server
 go run cmd/server/main.go 

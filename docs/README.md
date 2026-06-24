@@ -67,4 +67,8 @@ Architecture → VPN Deployment → Performance
 
 ---
 
+
+user login
+username:admin
+pasword:admin123
 **📖 Total Reading Time**: ~2 hours for complete system mastery

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +75,19 @@ func (h *JobHandler) GetJob(c *gin.Context) {
 
 func (h *JobHandler) GetAllJobs(c *gin.Context) {
 	status := c.Query("status")
+	page := 1
+	pageSize := 10
+	if p := c.Query("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+			page = v
+		}
+	}
+	if s := c.Query("page_size"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 && v <= 500 {
+			pageSize = v
+		}
+	}
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
 
 	var jobs []domain.Job
 	var err error
@@ -89,8 +103,37 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 		return
 	}
 
-	// Enrich jobs with readable names using service
-	enrichedJobs, err := h.enrichmentService.EnrichJobs(c.Request.Context(), jobs)
+	filtered := make([]domain.Job, 0, len(jobs))
+	for _, job := range jobs {
+		if job.Name == "" || job.Name == "-" || job.Name == "null" || strings.TrimSpace(job.Name) == "" {
+			continue
+		}
+		if search != "" {
+			if !strings.Contains(strings.ToLower(job.Name), search) &&
+				!strings.Contains(strings.ToLower(job.Status), search) &&
+				!strings.Contains(strings.ToLower(job.ID.String()), search) {
+				continue
+			}
+		}
+		filtered = append(filtered, job)
+	}
+
+	total := len(filtered)
+	start := (page - 1) * pageSize
+	if start < 0 {
+		start = 0
+	}
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	paginated := filtered[start:end]
+
+	// Enrich only the current page to keep responses fast
+	enrichedJobs, err := h.enrichmentService.EnrichJobs(c.Request.Context(), paginated)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -99,10 +142,6 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 	// Normalize response to ensure all fields are populated with sensible defaults
 	normalized := make([]gin.H, 0, len(enrichedJobs))
 	for _, ej := range enrichedJobs {
-		// Skip jobs with invalid or empty names
-		if ej.Name == "" || ej.Name == "-" || ej.Name == "null" || strings.TrimSpace(ej.Name) == "" {
-			continue
-		}
 		var (
 			hashFileID     string
 			wordlistID     string
@@ -169,7 +208,12 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": normalized})
+	c.JSON(http.StatusOK, gin.H{
+		"data":      normalized,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 func (h *JobHandler) StartJob(c *gin.Context) {
