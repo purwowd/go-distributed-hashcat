@@ -834,18 +834,8 @@ class DashboardApplication {
                     agentUpdateTimeout = setTimeout(() => {
                         const state = agentStore.getState()
                         
-                        // ✅ Implement stable sorting to maintain card positions
-                        const agents = state.agents || []
-                        // Sort by created_at DESC, then by ID ASC for stable ordering
-                        const stableSortedAgents = agents.sort((a, b) => {
-                            // First sort by created_at DESC (newest first)
-                            const dateComparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                            if (dateComparison !== 0) {
-                                return dateComparison
-                            }
-                            // If dates are equal, sort by ID ASC for stable ordering
-                            return a.id.localeCompare(b.id)
-                        })
+                        // Sort GPU agents first, then by created_at DESC for stable ordering
+                        const stableSortedAgents = this.sortAgentsByPriority(state.agents || [])
                         
                         // ✅ Force Alpine.js reactivity by creating new array reference
                         this.reactiveAgents = [...stableSortedAgents]
