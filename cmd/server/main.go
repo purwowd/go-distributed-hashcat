@@ -296,6 +296,7 @@ func startServer() {
 
 	// Initialize repositories
 	agentRepo := repository.NewAgentRepository(db)
+	agentLocalFileRepo := repository.NewAgentLocalFileRepository(db)
 	jobRepo := repository.NewJobRepository(db)
 	hashFileRepo := repository.NewHashFileRepository(db)
 	wordlistRepo := repository.NewWordlistRepository(db)
@@ -305,7 +306,7 @@ func startServer() {
 	jwtService := infrastructure.NewJWTService()
 
 	// Initialize use cases
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentLocalFileRepo)
 	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 	hashFileUsecase := usecase.NewHashFileUsecase(hashFileRepo, config.Upload.Directory)
 	wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, config.Upload.Directory)

@@ -35,7 +35,7 @@ func TestJobsAPIResponseSize(t *testing.T) {
 
 	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 	enrichment := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)
-	jobHandler := handler.NewJobHandler(jobUsecase, enrichment, usecase.NewAgentUsecase(agentRepo), usecase.NewWordlistUsecase(wordlistRepo, "uploads/wordlists"))
+	jobHandler := handler.NewJobHandler(jobUsecase, enrichment, usecase.NewAgentUsecase(agentRepo, nil), usecase.NewWordlistUsecase(wordlistRepo, "uploads/wordlists"))
 
 	router := gin.New()
 	router.GET("/jobs", jobHandler.GetAllJobs)

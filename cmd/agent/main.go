@@ -564,18 +564,13 @@ func (a *Agent) watchLocalFiles(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			oldCount := len(a.LocalFiles)
 			if err := a.scanLocalFiles(); err != nil {
 				infrastructure.AgentLogger.Error("Error rescanning local files: %v", err)
 				continue
 			}
 
-			newCount := len(a.LocalFiles)
-			if newCount != oldCount {
-				infrastructure.AgentLogger.Info("Local files changed: %d -> %d", oldCount, newCount)
-				if err := a.registerLocalFiles(); err != nil {
-					infrastructure.AgentLogger.Error("Error re-registering local files: %v", err)
-				}
+			if err := a.registerLocalFiles(); err != nil {
+				infrastructure.AgentLogger.Error("Error re-registering local files: %v", err)
 			}
 		}
 	}

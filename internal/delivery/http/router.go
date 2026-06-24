@@ -115,6 +115,7 @@ func NewRouter(
 			agents.POST("/update-data", agentHandler.UpdateAgentData)   // New route for updating agent data (no status change)
 			agents.POST("/", agentHandler.RegisterAgent)
 			agents.GET("/", agentHandler.GetAllAgents)
+			agents.GET("/local-files", agentHandler.ListAgentLocalFiles)
 			agents.GET("/:id", agentHandler.GetAgent)
 			agents.PUT("/:id/status", agentHandler.UpdateAgentStatus)
 			agents.PUT("/:id/speed", agentHandler.UpdateAgentSpeed)
@@ -123,6 +124,7 @@ func NewRouter(
 			agents.PUT("/:id/status-offline", agentHandler.UpdateAgentStatusOffline) // Update status to offline without resetting speed
 			agents.PUT("/:id/heartbeat", agentHandler.UpdateAgentHeartbeat)
 			agents.POST("/:id/files", agentHandler.RegisterAgentFiles)
+			agents.GET("/:id/files", agentHandler.GetAgentLocalFiles)
 			agents.GET("/:id/jobs", jobHandler.GetJobsByAgentID)
 			agents.GET("/:id/jobs/next", jobHandler.GetAvailableJobForAgent)
 			agents.DELETE("/:id", agentHandler.DeleteAgent)

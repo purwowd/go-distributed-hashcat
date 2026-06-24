@@ -36,7 +36,7 @@ func BenchmarkAgentCreation(b *testing.B) {
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
 	agentHandler := handler.NewAgentHandler(agentUsecase)
 
 	gin.SetMode(gin.TestMode)
@@ -141,7 +141,7 @@ func BenchmarkAgentListing(b *testing.B) {
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
 	agentHandler := handler.NewAgentHandler(agentUsecase)
 
 	gin.SetMode(gin.TestMode)
@@ -183,7 +183,7 @@ func BenchmarkDirectAgentCreation(b *testing.B) {
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
 
 	agentReq := domain.CreateAgentRequest{
 		Name:         "Direct Agent",
@@ -212,7 +212,7 @@ func BenchmarkLimitedConcurrentAgentCreation(b *testing.B) {
 	defer db.Close()
 
 	agentRepo := repository.NewAgentRepository(db)
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
 	agentHandler := handler.NewAgentHandler(agentUsecase)
 
 	gin.SetMode(gin.TestMode)

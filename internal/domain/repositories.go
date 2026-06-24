@@ -87,6 +87,13 @@ type HashFileRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
+// AgentLocalFileRepository defines persistence for agent-reported local files.
+type AgentLocalFileRepository interface {
+	ReplaceInventory(ctx context.Context, agentID uuid.UUID, files []AgentLocalFile) error
+	GetByAgentID(ctx context.Context, agentID uuid.UUID) ([]AgentLocalFile, error)
+	ListWithAgents(ctx context.Context, fileType, name string) ([]AgentLocalFileEntry, error)
+}
+
 // WordlistRepository defines the interface for wordlist data operations
 type WordlistRepository interface {
 	Create(ctx context.Context, wordlist *Wordlist) error

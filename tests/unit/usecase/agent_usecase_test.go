@@ -303,7 +303,7 @@ func TestAgentUsecase_RegisterAgent(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, nil)
 			ctx := context.Background()
 
 			agent, err := usecase.RegisterAgent(ctx, tt.request)
@@ -376,7 +376,7 @@ func TestAgentUsecase_GetAgent(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, nil)
 			ctx := context.Background()
 
 			agent, err := usecase.GetAgent(ctx, tt.agentID)
@@ -449,7 +449,7 @@ func TestAgentUsecase_GetAllAgents(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, nil)
 			ctx := context.Background()
 
 			agents, err := usecase.GetAllAgents(ctx)
@@ -508,7 +508,7 @@ func TestAgentUsecase_UpdateAgentStatus(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, nil)
 			ctx := context.Background()
 
 			err := usecase.UpdateAgentStatus(ctx, tt.agentID, tt.status)
@@ -556,7 +556,7 @@ func TestAgentUsecase_DeleteAgent(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, nil)
 			ctx := context.Background()
 
 			err := usecase.DeleteAgent(ctx, tt.agentID)
@@ -629,7 +629,7 @@ func TestAgentUsecase_GetAvailableAgent(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, nil)
 			ctx := context.Background()
 
 			agent, err := usecase.GetAvailableAgent(ctx)
@@ -702,7 +702,7 @@ func TestAgentUsecase_UpdateAgentHeartbeat(t *testing.T) {
 			mockRepo := new(MockAgentRepository)
 			tt.mockSetup(mockRepo)
 
-			usecase := usecase.NewAgentUsecase(mockRepo)
+			usecase := usecase.NewAgentUsecase(mockRepo, nil)
 			ctx := context.Background()
 
 			err := usecase.UpdateAgentHeartbeat(ctx, tt.agentID)

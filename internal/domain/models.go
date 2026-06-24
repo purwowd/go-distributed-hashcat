@@ -64,6 +64,26 @@ type HashFile struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
+// AgentLocalFile represents a file reported by an agent from its local filesystem.
+type AgentLocalFile struct {
+	ID        uuid.UUID `json:"id" db:"id"`
+	AgentID   uuid.UUID `json:"agent_id" db:"agent_id"`
+	Name      string    `json:"name" db:"name"`
+	Path      string    `json:"path" db:"path"`
+	Size      int64     `json:"size" db:"size"`
+	Type      string    `json:"type" db:"type"`
+	Hash      string    `json:"hash,omitempty" db:"hash"`
+	ModTime   time.Time `json:"mod_time,omitempty" db:"mod_time"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// AgentLocalFileEntry is returned when listing inventory with agent metadata.
+type AgentLocalFileEntry struct {
+	AgentLocalFile
+	AgentName   string `json:"agent_name"`
+	AgentStatus string `json:"agent_status"`
+}
+
 // Wordlist represents a wordlist file
 type Wordlist struct {
 	ID        uuid.UUID `json:"id" db:"id"`

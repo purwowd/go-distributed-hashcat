@@ -30,5 +30,9 @@ if [ -d uploads/wordlists ] && [ ! -w uploads/wordlists ]; then
 	exit 1
 fi
 
-# Run the server
-go run cmd/server/main.go 
+# Run the server (prefer compiled binary when present)
+if [ -x ./bin/server ]; then
+	exec ./bin/server
+else
+	exec go run cmd/server/main.go
+fi

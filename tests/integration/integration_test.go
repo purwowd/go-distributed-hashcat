@@ -67,7 +67,7 @@ func (suite *APITestSuite) SetupTest() {
 	wordlistRepo := repository.NewWordlistRepository(db)
 
 	// Initialize use cases
-	agentUsecase := usecase.NewAgentUsecase(agentRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
 	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
 	// Initialize enrichment service for integration tests

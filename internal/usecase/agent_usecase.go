@@ -42,16 +42,30 @@ type AgentUsecase interface {
 	UpdateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, resourceType, processor, capabilities string) error
 	GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error)
+	ReplaceAgentLocalFiles(ctx context.Context, agentID uuid.UUID, files map[string]AgentLocalFileInput) error
+	GetAgentLocalFiles(ctx context.Context, agentID uuid.UUID) ([]domain.AgentLocalFile, error)
+	ListAgentLocalFiles(ctx context.Context, fileType, name string) ([]domain.AgentLocalFileEntry, error)
+}
+
+type AgentLocalFileInput struct {
+	Name    string
+	Path    string
+	Size    int64
+	Type    string
+	Hash    string
+	ModTime time.Time
 }
 
 type agentUsecase struct {
-	agentRepo domain.AgentRepository
-	wsHub     WebSocketHub
+	agentRepo          domain.AgentRepository
+	agentLocalFileRepo domain.AgentLocalFileRepository
+	wsHub              WebSocketHub
 }
 
-func NewAgentUsecase(agentRepo domain.AgentRepository) AgentUsecase {
+func NewAgentUsecase(agentRepo domain.AgentRepository, agentLocalFileRepo domain.AgentLocalFileRepository) AgentUsecase {
 	return &agentUsecase{
-		agentRepo: agentRepo,
+		agentRepo:          agentRepo,
+		agentLocalFileRepo: agentLocalFileRepo,
 	}
 }
 
@@ -522,4 +536,51 @@ func (u *agentUsecase) GenerateAgentKey(ctx context.Context, name, agentKey stri
 	}
 
 	return agent, nil
+}
+
+func (u *agentUsecase) ReplaceAgentLocalFiles(ctx context.Context, agentID uuid.UUID, files map[string]AgentLocalFileInput) error {
+	if u.agentLocalFileRepo == nil {
+		return fmt.Errorf("agent local file repository not configured")
+	}
+
+	if _, err := u.agentRepo.GetByID(ctx, agentID); err != nil {
+		return err
+	}
+
+	inventory := make([]domain.AgentLocalFile, 0, len(files))
+	for _, file := range files {
+		fileType := file.Type
+		if fileType == "" {
+			fileType = "wordlist"
+		}
+		inventory = append(inventory, domain.AgentLocalFile{
+			ID:      uuid.New(),
+			AgentID: agentID,
+			Name:    file.Name,
+			Path:    file.Path,
+			Size:    file.Size,
+			Type:    fileType,
+			Hash:    file.Hash,
+			ModTime: file.ModTime,
+		})
+	}
+
+	return u.agentLocalFileRepo.ReplaceInventory(ctx, agentID, inventory)
+}
+
+func (u *agentUsecase) GetAgentLocalFiles(ctx context.Context, agentID uuid.UUID) ([]domain.AgentLocalFile, error) {
+	if u.agentLocalFileRepo == nil {
+		return nil, fmt.Errorf("agent local file repository not configured")
+	}
+	if _, err := u.agentRepo.GetByID(ctx, agentID); err != nil {
+		return nil, err
+	}
+	return u.agentLocalFileRepo.GetByAgentID(ctx, agentID)
+}
+
+func (u *agentUsecase) ListAgentLocalFiles(ctx context.Context, fileType, name string) ([]domain.AgentLocalFileEntry, error) {
+	if u.agentLocalFileRepo == nil {
+		return nil, fmt.Errorf("agent local file repository not configured")
+	}
+	return u.agentLocalFileRepo.ListWithAgents(ctx, fileType, name)
 }

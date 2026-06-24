@@ -587,11 +587,74 @@ func (h *AgentHandler) RegisterAgentFiles(c *gin.Context) {
 		return
 	}
 
+	files := make(map[string]usecase.AgentLocalFileInput, len(req.Files))
+	for key, file := range req.Files {
+		modTime, _ := time.Parse(time.RFC3339, file.ModTime)
+		if modTime.IsZero() {
+			modTime, _ = time.Parse(time.RFC3339Nano, file.ModTime)
+		}
+		name := file.Name
+		if name == "" {
+			name = key
+		}
+		files[key] = usecase.AgentLocalFileInput{
+			Name:    name,
+			Path:    file.Path,
+			Size:    file.Size,
+			Type:    file.Type,
+			Hash:    file.Hash,
+			ModTime: modTime,
+		}
+	}
+
+	if err := h.agentUsecase.ReplaceAgentLocalFiles(c.Request.Context(), id, files); err != nil {
+		if errors.Is(err, domain.ErrAgentNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Agent files registered successfully",
 		"agent_id":   req.AgentID,
 		"file_count": len(req.Files),
 	})
+}
+
+func (h *AgentHandler) GetAgentLocalFiles(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid agent ID"})
+		return
+	}
+
+	files, err := h.agentUsecase.GetAgentLocalFiles(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrAgentNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": files})
+}
+
+func (h *AgentHandler) ListAgentLocalFiles(c *gin.Context) {
+	fileType := strings.TrimSpace(c.Query("type"))
+	name := strings.TrimSpace(c.Query("name"))
+
+	entries, err := h.agentUsecase.ListAgentLocalFiles(c.Request.Context(), fileType, name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": entries})
 }
 
 // DeleteAgent deletes an agent

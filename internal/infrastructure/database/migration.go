@@ -267,9 +267,9 @@ func (mr *MigrationRunner) MigrateUp() error {
 			return fmt.Errorf("failed to start transaction: %w", err)
 		}
 
-		// Execute UP SQL
+		// Execute UP SQL statement-by-statement (ignore idempotent conflicts)
 		if migration.UpSQL != "" {
-			if _, err := tx.Exec(migration.UpSQL); err != nil {
+			if err := execMigrationStatements(tx, migration.UpSQL); err != nil {
 				tx.Rollback()
 				return fmt.Errorf("failed to execute migration %d: %w", migration.Version, err)
 			}
@@ -427,4 +427,55 @@ func generateChecksum(content string) string {
 		hash = hash*31 + int(char)
 	}
 	return fmt.Sprintf("%x", hash)
+}
+
+func execMigrationStatements(tx *sql.Tx, sqlBlock string) error {
+	for _, stmt := range splitMigrationStatements(sqlBlock) {
+		if _, err := tx.Exec(stmt); err != nil {
+			if isIgnorableMigrationError(err) {
+				continue
+			}
+			return fmt.Errorf("%w (statement: %s)", err, stmt)
+		}
+	}
+	return nil
+}
+
+func splitMigrationStatements(sqlBlock string) []string {
+	parts := strings.Split(sqlBlock, ";")
+	statements := make([]string, 0, len(parts))
+	for _, part := range parts {
+		lines := strings.Split(part, "\n")
+		var builder strings.Builder
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+				continue
+			}
+			builder.WriteString(line)
+			builder.WriteString("\n")
+		}
+		stmt := strings.TrimSpace(builder.String())
+		if stmt != "" {
+			statements = append(statements, stmt)
+		}
+	}
+	return statements
+}
+
+func isIgnorableMigrationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	ignorable := []string{
+		"duplicate column name",
+		"already exists",
+	}
+	for _, needle := range ignorable {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
 }
