@@ -24,6 +24,17 @@ func defaultString(s string, fallback string) string {
 	return s
 }
 
+func truncateForList(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
+}
+
 type JobHandler struct {
 	jobUsecase        usecase.JobUsecase
 	enrichmentService usecase.JobEnrichmentService
@@ -89,51 +100,14 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 	}
 	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
 
-	var jobs []domain.Job
-	var err error
-
-	if status != "" {
-		jobs, err = h.jobUsecase.GetJobsByStatus(c.Request.Context(), status)
-	} else {
-		jobs, err = h.jobUsecase.GetAllJobs(c.Request.Context())
-	}
-
+	jobs, total, err := h.jobUsecase.GetJobsPaginated(c.Request.Context(), page, pageSize, search, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	filtered := make([]domain.Job, 0, len(jobs))
-	for _, job := range jobs {
-		if job.Name == "" || job.Name == "-" || job.Name == "null" || strings.TrimSpace(job.Name) == "" {
-			continue
-		}
-		if search != "" {
-			if !strings.Contains(strings.ToLower(job.Name), search) &&
-				!strings.Contains(strings.ToLower(job.Status), search) &&
-				!strings.Contains(strings.ToLower(job.ID.String()), search) {
-				continue
-			}
-		}
-		filtered = append(filtered, job)
-	}
-
-	total := len(filtered)
-	start := (page - 1) * pageSize
-	if start < 0 {
-		start = 0
-	}
-	if start > total {
-		start = total
-	}
-	end := start + pageSize
-	if end > total {
-		end = total
-	}
-	paginated := filtered[start:end]
-
 	// Enrich only the current page to keep responses fast
-	enrichedJobs, err := h.enrichmentService.EnrichJobs(c.Request.Context(), paginated)
+	enrichedJobs, err := h.enrichmentService.EnrichJobs(c.Request.Context(), jobs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -188,10 +162,8 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 			"status":         defaultString(ej.Status, "pending"),
 			"hash_type":      ej.HashType,
 			"attack_mode":    ej.AttackMode,
-			"hash_file":      defaultString(ej.HashFile, ""),
 			"hash_file_id":   hashFileID,
 			"hash_file_name": defaultString(ej.HashFileName, "-"),
-			"wordlist":       defaultString(ej.Wordlist, ""),
 			"wordlist_id":    wordlistID,
 			"wordlist_name":  defaultString(ej.WordlistName, "-"),
 			"rules":          defaultString(ej.Rules, "-"),
@@ -200,7 +172,7 @@ func (h *JobHandler) GetAllJobs(c *gin.Context) {
 			"progress":       ej.Progress,
 			"speed":          ej.Speed,
 			"eta":            etaStr,
-			"result":         defaultString(ej.Result, "-"),
+			"result":         truncateForList(ej.Result, 500),
 			"created_at":     ej.CreatedAt.Format(time.RFC3339),
 			"updated_at":     ej.UpdatedAt.Format(time.RFC3339),
 			"started_at":     startedAtStr,

@@ -12,7 +12,13 @@
     </div>
     
     <!-- Card wrapper for the table -->
-    <div class="card-modern">
+    <div class="card-modern relative">
+        <div x-show="jobsTableLoading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[1px] rounded-2xl">
+            <div class="flex items-center gap-2 text-sm text-gray-600">
+                <div class="animate-spin rounded-full h-5 w-5 border-2 border-blue-200 border-t-blue-600"></div>
+                <span>Loading jobs...</span>
+            </div>
+        </div>
         <!-- Table view -->
         <!-- Server-side table controls -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 p-4 sm:p-6">
@@ -248,7 +254,7 @@
             </div>
             
             <!-- Empty State - Compact -->
-            <div x-show="jobs.length === 0" class="text-center py-12">
+            <div x-show="!jobsTableLoading && jobs.length === 0" class="text-center py-12">
                 <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-4">
                     <i class="fas fa-tasks text-2xl text-gray-400"></i>
                 </div>

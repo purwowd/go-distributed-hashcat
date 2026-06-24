@@ -103,9 +103,20 @@ export default defineConfig(({ command, mode }) => {
       },
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://10.0.0.14:1337',
+          target: env.VITE_API_BASE_URL || 'http://10.0.0.10:1337',
           changeOrigin: true,
           secure: false,
+        },
+        '/health': {
+          target: env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL || 'http://10.0.0.10:1337',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/ws': {
+          target: env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL || 'http://10.0.0.10:1337',
+          changeOrigin: true,
+          secure: false,
+          ws: true,
         },
       },
     },

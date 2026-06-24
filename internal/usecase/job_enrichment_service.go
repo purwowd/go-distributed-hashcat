@@ -254,7 +254,7 @@ func (s *jobEnrichmentService) EnrichJobs(ctx context.Context, jobs []domain.Job
 		enrichedJobs[i] = domain.EnrichedJob{
 			Job:          job,
 			AgentName:    s.getAgentName(job.AgentID),
-			WordlistName: s.getWordlistName(job.Wordlist),
+			WordlistName: s.getWordlistNameForJob(job),
 			HashFileName: s.getHashFileName(job.HashFileID, job.HashFile),
 		}
 	}
@@ -283,7 +283,13 @@ func (s *jobEnrichmentService) extractMissingWordlistIDs(jobs []domain.Job) []uu
 	seen := make(map[uuid.UUID]bool)
 
 	for _, job := range jobs {
-		if job.Wordlist != "" {
+		if job.WordlistID != nil && !seen[*job.WordlistID] {
+			seen[*job.WordlistID] = true
+			if _, cached := s.cache.getWordlist(*job.WordlistID); !cached {
+				missingIDs = append(missingIDs, *job.WordlistID)
+			}
+		}
+		if job.Wordlist != "" && len(job.Wordlist) <= 64 {
 			if id, err := uuid.Parse(job.Wordlist); err == nil && !seen[id] {
 				seen[id] = true
 				if _, cached := s.cache.getWordlist(id); !cached {
@@ -379,9 +385,33 @@ func (s *jobEnrichmentService) getAgentName(agentID *uuid.UUID) string {
 	return agentID.String()[:8] + "..."
 }
 
+func (s *jobEnrichmentService) getWordlistNameForJob(job domain.Job) string {
+	if job.WordlistID != nil {
+		if wl, cached := s.cache.getWordlist(*job.WordlistID); cached {
+			if wl.OrigName != "" {
+				return wl.OrigName
+			}
+			return wl.Name
+		}
+		if wl, err := s.wordlistRepo.GetByID(context.Background(), *job.WordlistID); err == nil {
+			s.cache.setWordlist(*job.WordlistID, wl)
+			if wl.OrigName != "" {
+				return wl.OrigName
+			}
+			return wl.Name
+		}
+	}
+	return s.getWordlistName(job.Wordlist)
+}
+
 func (s *jobEnrichmentService) getWordlistName(wordlist string) string {
 	if wordlist == "" {
 		return ""
+	}
+
+	// Never return embedded wordlist payloads in list views
+	if len(wordlist) > 256 {
+		return "embedded-wordlist"
 	}
 
 	// Try to parse as UUID

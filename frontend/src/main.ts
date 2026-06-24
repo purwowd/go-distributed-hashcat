@@ -424,6 +424,7 @@ class DashboardApplication {
             currentTab: router.getCurrentRoute(),
             mobileMenuOpen: false,
             isLoading: false,
+            jobsTableLoading: false,
             isAlpineInitialized: false,
             notifications: [] as Array<{id: number, message: string, type: 'success' | 'error' | 'info' | 'warning', timestamp: Date}>,
             
@@ -527,6 +528,7 @@ class DashboardApplication {
                 search: '',
                 total: 0
             },
+            jobSearchDebounceTimer: null as ReturnType<typeof setTimeout> | null,
 
             // Getters that return reactive data
             get agents() {
@@ -749,14 +751,12 @@ class DashboardApplication {
                 // Setup router listener
                 router.subscribe(async (route: string) => {
                     this.currentTab = route
-                    // Only clear login form when navigating away from login page
-                    // But don't clear if we're in loading state (successful login)
                     if (this.currentTab !== 'login' && route !== 'login' && !this.isLoading) {
                         this.clearLoginForm()
                     }
-                    
-                    // Load content based on route
-                    await this.loadContentForRoute(route)
+                    if (route === 'jobs') {
+                        await this.refreshJobsTable({ background: true })
+                    }
                 })
                 
                 // Additional protection: Listen for direct URL changes
@@ -874,6 +874,7 @@ class DashboardApplication {
                     
                     jobUpdateTimeout = setTimeout(() => {
                         const state = jobStore.getState()
+                        this.jobsTableLoading = state.tableLoading
                         // ✅ Force Alpine.js reactivity by creating new array reference
                         this.reactiveJobs = [...(state.jobs || [])]
                         // console.log('Job store updated:', this.reactiveJobs.length, 'jobs')
@@ -1289,12 +1290,12 @@ class DashboardApplication {
             },
 
             // Server-side table helpers for Jobs
-            async refreshJobsTable() {
+            async refreshJobsTable(options?: { force?: boolean; background?: boolean }) {
                 const result = await jobStore.actions.fetchJobs({
                     page: this.jobTable.page,
                     page_size: this.jobTable.pageSize,
                     search: this.jobTable.search
-                })
+                }, options)
                 if (result) {
                     this.jobTable.total = result.total
                 }
@@ -1303,12 +1304,17 @@ class DashboardApplication {
                 const val = parseInt(event?.target?.value || '10')
                 this.jobTable.pageSize = isNaN(val) ? 10 : val
                 this.jobTable.page = 1
-                await this.refreshJobsTable()
+                await this.refreshJobsTable({ force: true })
             },
-            async setJobTableSearch(event: any) {
+            setJobTableSearch(event: any) {
                 this.jobTable.search = event?.target?.value || ''
                 this.jobTable.page = 1
-                await this.refreshJobsTable()
+                if (this.jobSearchDebounceTimer) {
+                    clearTimeout(this.jobSearchDebounceTimer)
+                }
+                this.jobSearchDebounceTimer = setTimeout(() => {
+                    this.refreshJobsTable({ force: true })
+                }, 300)
             },
             async goPrevJobsPage() {
                 if (this.jobTable.page > 1) {
@@ -1465,70 +1471,47 @@ class DashboardApplication {
 
             async loadInitialData() {
                 try {
-                    this.isLoading = true
-                    const currentRoute = router.getCurrentRoute()
-                    
-                    const createTimeout = (ms: number) => new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Loading timeout')), ms)
-                    )
-                    
-                    // Load with timeout protection
-                    await Promise.race([
-                        createTimeout(10000),
-                        Promise.all([
-                            agentStore.actions.fetchAgents({
-                                page: this.agentTable.page,
-                                page_size: this.agentTable.pageSize,
-                                search: this.agentTable.search
-                            }).catch(err => {
-                                console.warn('Failed to load agents:', err)
-                                return []
-                            }),
-                            fileStore.actions.fetchHashFiles().catch(err => {
-                                console.warn('Failed to load hash files:', err)
-                                return []
-                            }),
-                            wordlistStore.actions.fetchWordlists().catch(err => {
-                                console.warn('Failed to load wordlists:', err)
-                                return []
-                            })
-                        ])
+                    await Promise.all([
+                        agentStore.actions.fetchAgents({
+                            page: this.agentTable.page,
+                            page_size: this.agentTable.pageSize,
+                            search: this.agentTable.search
+                        }).catch(err => {
+                            console.warn('Failed to load agents:', err)
+                            return []
+                        }),
+                        fileStore.actions.fetchHashFiles().catch(err => {
+                            console.warn('Failed to load hash files:', err)
+                            return []
+                        }),
+                        wordlistStore.actions.fetchWordlists().catch(err => {
+                            console.warn('Failed to load wordlists:', err)
+                            return []
+                        })
                     ])
                     
-                    // ✅ Initialize agent status tracking after agents are loaded
                     this.agents.forEach(agent => {
                         this.lastAgentStatuses.set(agent.id, agent.status)
                     })
                     
-                    // Load jobs unless the jobs tab will fetch them after route content loads
-                    if (currentRoute !== 'jobs') {
-                        const jobResult = await Promise.race([
-                            createTimeout(10000),
-                            jobStore.actions.fetchJobs({
-                                page: this.jobTable.page,
-                                page_size: this.jobTable.pageSize,
-                                search: this.jobTable.search
-                            }).catch(err => {
-                                console.warn('Failed to load jobs:', err)
-                                return null
-                            })
-                        ])
-                        
-                        if (jobResult) {
-                            this.jobTable.total = (jobResult as any).total
-                        }
-                    }
-                    
-                    // Load cache stats
-                    await this.refreshCacheStats().catch(err => {
-                        console.warn('Failed to load cache stats:', err)
+                    const jobResult = await jobStore.actions.fetchJobs({
+                        page: this.jobTable.page,
+                        page_size: this.jobTable.pageSize,
+                        search: this.jobTable.search
+                    }, { background: true }).catch(err => {
+                        console.warn('Failed to load jobs:', err)
+                        return null
                     })
                     
+                    if (jobResult) {
+                        this.jobTable.total = jobResult.total
+                    }
+                    
+                    this.refreshCacheStats(true).catch(err => {
+                        console.warn('Failed to load cache stats:', err)
+                    })
                 } catch (error) {
                     console.error('Failed to load initial data:', error)
-                    this.showNotification('Failed to load data. Please refresh the page.', 'error')
-                } finally {
-                    this.isLoading = false
                 }
             },
 
@@ -1607,8 +1590,6 @@ class DashboardApplication {
                         console.log('🔍 About to call checkLoginSuccessNotification...')
                         this.checkLoginSuccessNotification()
                         console.log('🔍 checkLoginSuccessNotification called')
-                    } else if (route === 'jobs') {
-                        await this.refreshJobsTable()
                     } else {
                         console.log('❌ Not overview route, skipping login success check. Route:', route)
                     }
@@ -1904,7 +1885,7 @@ class DashboardApplication {
                                 page: this.jobTable.page,
                                 page_size: this.jobTable.pageSize,
                                 search: this.jobTable.search
-                            })
+                            }, { force: true, background: true })
                         ])
                         
                         // Sync job pagination data
@@ -3441,20 +3422,17 @@ class DashboardApplication {
             },
 
             // NEW: Cache Management Methods
-            async refreshCacheStats() {
+            async refreshCacheStats(silent = false) {
                 try {
                     const stats = await apiService.getCacheStats()
                     if (stats) {
                         this.cacheStats = stats
-                        // console.log('📊 Cache stats refreshed:', stats)
-                        // Only show notification if explicitly requested, not on auto-refresh
-                        if (this.showCacheStatsNotification) {
+                        if (!silent && this.showCacheStatsNotification) {
                             this.showNotification('Cache stats refreshed', 'info')
                             this.showCacheStatsNotification = false
                         }
                     } else {
                         console.warn('No cache stats received from API')
-                        // Keep existing stats or set defaults if null
                         if (!this.cacheStats) {
                             this.cacheStats = {
                                 hitRate: 0,
@@ -3470,7 +3448,9 @@ class DashboardApplication {
                     }
                 } catch (error) {
                     console.error('Failed to refresh cache stats:', error)
-                    this.showNotification('Failed to refresh cache stats', 'error')
+                    if (!silent) {
+                        this.showNotification('Failed to refresh cache stats', 'error')
+                    }
                     // Set default values if stats don't exist
                     if (!this.cacheStats) {
                         this.cacheStats = {

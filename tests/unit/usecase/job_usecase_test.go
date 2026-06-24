@@ -36,6 +36,11 @@ func (m *MockJobRepository) GetAll(ctx context.Context) ([]domain.Job, error) {
 	return args.Get(0).([]domain.Job), args.Error(1)
 }
 
+func (m *MockJobRepository) GetPaginated(ctx context.Context, page, pageSize int, search, status string) ([]domain.Job, int, error) {
+	args := m.Called(ctx, page, pageSize, search, status)
+	return args.Get(0).([]domain.Job), args.Int(1), args.Error(2)
+}
+
 func (m *MockJobRepository) GetByStatus(ctx context.Context, status string) ([]domain.Job, error) {
 	args := m.Called(ctx, status)
 	return args.Get(0).([]domain.Job), args.Error(1)

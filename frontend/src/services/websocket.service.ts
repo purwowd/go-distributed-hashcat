@@ -46,6 +46,10 @@ class WebSocketService {
 
     private getWebSocketUrl(): string {
         const baseUrl = this.config.apiBaseUrl
+        if (!baseUrl) {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+            return `${protocol}//${window.location.host}/ws`
+        }
         const wsUrl = baseUrl
             .replace('http://', 'ws://')
             .replace('https://', 'wss://')

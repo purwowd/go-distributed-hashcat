@@ -50,6 +50,7 @@ type JobRepository interface {
 	Create(ctx context.Context, job *Job) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Job, error)
 	GetAll(ctx context.Context) ([]Job, error)
+	GetPaginated(ctx context.Context, page, pageSize int, search, status string) ([]Job, int, error)
 	GetByStatus(ctx context.Context, status string) ([]Job, error)
 	GetByAgentID(ctx context.Context, agentID uuid.UUID) ([]Job, error)
 	GetAvailableJobForAgent(ctx context.Context, agentID uuid.UUID) (*Job, error)
@@ -64,6 +65,7 @@ type JobUsecase interface {
 	CreateJob(ctx context.Context, req *CreateJobRequest) (*Job, error)
 	GetJob(ctx context.Context, id uuid.UUID) (*Job, error)
 	GetAllJobs(ctx context.Context) ([]Job, error)
+	GetJobsPaginated(ctx context.Context, page, pageSize int, search, status string) ([]Job, int, error)
 	GetJobsByStatus(ctx context.Context, status string) ([]Job, error)
 	GetJobsByAgentID(ctx context.Context, agentID uuid.UUID) ([]Job, error)
 	StartJob(ctx context.Context, id uuid.UUID) error

@@ -4,19 +4,39 @@ import { apiService, type Job } from '@/services/api.service'
 interface JobState {
     jobs: Job[]
     loading: boolean
+    tableLoading: boolean
     error: string | null
     lastUpdated: Date | null
+}
+
+interface JobPageCacheEntry {
+    data: Job[]
+    total: number
+    page: number
+    page_size: number
+    fetchedAt: number
 }
 
 class JobStore {
     private state: JobState = {
         jobs: [],
         loading: false,
+        tableLoading: false,
         error: null,
         lastUpdated: null
     }
 
     private listeners: Set<() => void> = new Set()
+    private pageCache = new Map<string, JobPageCacheEntry>()
+    private readonly CACHE_TTL_MS = 60_000
+
+    private cacheKey(params?: { page?: number; page_size?: number; search?: string }): string {
+        return `${params?.page || 1}:${params?.page_size || 10}:${params?.search || ''}`
+    }
+
+    private clearPageCache(): void {
+        this.pageCache.clear()
+    }
 
     public getState(): JobState {
         return { ...this.state }
@@ -43,14 +63,50 @@ class JobStore {
     }
 
     public actions = {
-        fetchJobs: async (params?: { page?: number; page_size?: number; search?: string }): Promise<{ data: Job[]; total: number; page: number; page_size: number } | null> => {
-            this.setState({ loading: true, error: null })
+        fetchJobs: async (
+            params?: { page?: number; page_size?: number; search?: string },
+            options?: { force?: boolean; background?: boolean }
+        ): Promise<{ data: Job[]; total: number; page: number; page_size: number } | null> => {
+            const key = this.cacheKey(params)
+            const cached = this.pageCache.get(key)
+            const force = options?.force ?? false
+            const background = options?.background ?? false
+
+            if (!force && cached && Date.now() - cached.fetchedAt < this.CACHE_TTL_MS) {
+                this.setState({
+                    jobs: cached.data,
+                    loading: false,
+                    tableLoading: false,
+                    lastUpdated: new Date(cached.fetchedAt),
+                    error: null
+                })
+                return {
+                    data: cached.data,
+                    total: cached.total,
+                    page: cached.page,
+                    page_size: cached.page_size
+                }
+            }
+
+            this.setState({
+                tableLoading: true,
+                loading: background ? this.state.loading : true,
+                error: null
+            })
             
             try {
                 const result = await apiService.getJobs(params)
+                this.pageCache.set(key, {
+                    data: result.data,
+                    total: result.total,
+                    page: result.page,
+                    page_size: result.page_size,
+                    fetchedAt: Date.now()
+                })
                 this.setState({
                     jobs: result.data,
                     loading: false,
+                    tableLoading: false,
                     lastUpdated: new Date(),
                     error: null
                 })
@@ -58,6 +114,7 @@ class JobStore {
             } catch (error) {
                 this.setState({
                     loading: false,
+                    tableLoading: false,
                     error: error instanceof Error ? error.message : 'Failed to fetch jobs'
                 })
                 return null
@@ -87,7 +144,7 @@ class JobStore {
 
         createJob: async (jobData: Partial<Job>): Promise<Job | null> => {
             this.setState({ loading: true, error: null })
-            
+            this.clearPageCache()
             try {
                 // Check if multiple agents are selected - use distributed job endpoint
                 if ((jobData as any).agent_ids && (jobData as any).agent_ids.length > 1) {
@@ -178,6 +235,7 @@ class JobStore {
             try {
                 const success = await apiService.deleteJob(id)
                 if (success) {
+                    this.clearPageCache()
                     const updatedJobs = this.state.jobs.filter(job => job.id !== id)
                     this.setState({ jobs: updatedJobs })
                 }
@@ -255,9 +313,11 @@ class JobStore {
         },
 
         reset: (): void => {
+            this.clearPageCache()
             this.setState({
                 jobs: [],
                 loading: false,
+                tableLoading: false,
                 error: null,
                 lastUpdated: null
             })

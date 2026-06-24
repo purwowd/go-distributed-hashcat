@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
@@ -221,6 +222,56 @@ func (r *jobRepository) GetAll(ctx context.Context) ([]domain.Job, error) {
 	r.cache.Set(ctx, cacheKey, jobs)
 
 	return jobs, nil
+}
+
+func (r *jobRepository) GetPaginated(ctx context.Context, page, pageSize int, search, status string) ([]domain.Job, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 500 {
+		pageSize = 500
+	}
+
+	where := `WHERE name != '' AND name != '-' AND name != 'null' AND TRIM(name) != ''`
+	args := make([]interface{}, 0, 5)
+
+	if status != "" {
+		where += ` AND status = ?`
+		args = append(args, status)
+	}
+	if search != "" {
+		pattern := "%" + strings.ToLower(search) + "%"
+		where += ` AND (LOWER(name) LIKE ? OR LOWER(status) LIKE ? OR LOWER(CAST(id AS TEXT)) LIKE ?)`
+		args = append(args, pattern, pattern, pattern)
+	}
+
+	var total int
+	countQuery := `SELECT COUNT(*) FROM jobs ` + where
+	if err := r.db.DB().QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	selectQuery := `
+		SELECT id, name, status, hash_type, attack_mode, hash_file_id, wordlist_id, rules,
+		       agent_id, progress, speed, eta, result, created_at, updated_at, started_at, completed_at, skip, word_limit
+		FROM jobs ` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+
+	queryArgs := append(append([]interface{}{}, args...), pageSize, (page-1)*pageSize)
+	rows, err := r.db.DB().QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	jobs, err := r.scanJobsList(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return jobs, total, nil
 }
 
 func (r *jobRepository) GetByStatus(ctx context.Context, status string) ([]domain.Job, error) {
@@ -490,6 +541,82 @@ func (r *jobRepository) scanJob(row *sql.Row) (domain.Job, error) {
 	}
 
 	return job, nil
+}
+
+func (r *jobRepository) scanJobsList(rows *sql.Rows) ([]domain.Job, error) {
+	jobs := make([]domain.Job, 0, 10)
+
+	for rows.Next() {
+		var job domain.Job
+		var idStr string
+		var agentIDStr sql.NullString
+		var hashFileIDStr sql.NullString
+		var wordlistIDStr sql.NullString
+		var eta sql.NullTime
+		var startedAt sql.NullTime
+		var completedAt sql.NullTime
+		var skip sql.NullInt64
+		var wordLimit sql.NullInt64
+
+		err := rows.Scan(
+			&idStr,
+			&job.Name,
+			&job.Status,
+			&job.HashType,
+			&job.AttackMode,
+			&hashFileIDStr,
+			&wordlistIDStr,
+			&job.Rules,
+			&agentIDStr,
+			&job.Progress,
+			&job.Speed,
+			&eta,
+			&job.Result,
+			&job.CreatedAt,
+			&job.UpdatedAt,
+			&startedAt,
+			&completedAt,
+			&skip,
+			&wordLimit,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		job.ID = uuid.MustParse(idStr)
+
+		if agentIDStr.Valid {
+			agentID := uuid.MustParse(agentIDStr.String)
+			job.AgentID = &agentID
+		}
+		if hashFileIDStr.Valid {
+			hashFileID := uuid.MustParse(hashFileIDStr.String)
+			job.HashFileID = &hashFileID
+		}
+		if wordlistIDStr.Valid {
+			wordlistID := uuid.MustParse(wordlistIDStr.String)
+			job.WordlistID = &wordlistID
+		}
+		if eta.Valid {
+			job.ETA = &eta.Time
+		}
+		if startedAt.Valid {
+			job.StartedAt = &startedAt.Time
+		}
+		if completedAt.Valid {
+			job.CompletedAt = &completedAt.Time
+		}
+		if skip.Valid {
+			job.Skip = &skip.Int64
+		}
+		if wordLimit.Valid {
+			job.WordLimit = &wordLimit.Int64
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	return jobs, nil
 }
 
 func (r *jobRepository) scanJobs(rows *sql.Rows) ([]domain.Job, error) {

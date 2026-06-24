@@ -203,6 +203,11 @@ func (m *MockJobUsecase) GetAllJobs(ctx context.Context) ([]domain.Job, error) {
 	return args.Get(0).([]domain.Job), args.Error(1)
 }
 
+func (m *MockJobUsecase) GetJobsPaginated(ctx context.Context, page, pageSize int, search, status string) ([]domain.Job, int, error) {
+	args := m.Called(ctx, page, pageSize, search, status)
+	return args.Get(0).([]domain.Job), args.Int(1), args.Error(2)
+}
+
 func (m *MockJobUsecase) GetJobsByStatus(ctx context.Context, status string) ([]domain.Job, error) {
 	args := m.Called(ctx, status)
 	return args.Get(0).([]domain.Job), args.Error(1)
@@ -504,7 +509,7 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 						Job: jobs[1],
 					},
 				}
-				mockUsecase.On("GetAllJobs", mock.Anything).Return(jobs, nil)
+				mockUsecase.On("GetJobsPaginated", mock.Anything, 1, 10, "", "").Return(jobs, 2, nil)
 				mockEnrichment.On("EnrichJobs", mock.Anything, jobs).Return(enrichedJobs, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -528,7 +533,7 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 			mockSetup: func(mockUsecase *MockJobUsecase, mockEnrichment *MockJobEnrichmentService) {
 				jobs := []domain.Job{}
 				enrichedJobs := []domain.EnrichedJob{}
-				mockUsecase.On("GetAllJobs", mock.Anything).Return(jobs, nil)
+				mockUsecase.On("GetJobsPaginated", mock.Anything, 1, 10, "", "").Return(jobs, 0, nil)
 				mockEnrichment.On("EnrichJobs", mock.Anything, jobs).Return(enrichedJobs, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -543,7 +548,7 @@ func TestJobHandler_GetAllJobs(t *testing.T) {
 		{
 			name: "usecase error",
 			mockSetup: func(mockUsecase *MockJobUsecase, mockEnrichment *MockJobEnrichmentService) {
-				mockUsecase.On("GetAllJobs", mock.Anything).Return([]domain.Job{}, errors.New("database error"))
+				mockUsecase.On("GetJobsPaginated", mock.Anything, 1, 10, "", "").Return([]domain.Job{}, 0, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {

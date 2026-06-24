@@ -15,6 +15,7 @@ type JobUsecase interface {
 	CreateJob(ctx context.Context, req *domain.CreateJobRequest) (*domain.Job, error)
 	GetJob(ctx context.Context, id uuid.UUID) (*domain.Job, error)
 	GetAllJobs(ctx context.Context) ([]domain.Job, error)
+	GetJobsPaginated(ctx context.Context, page, pageSize int, search, status string) ([]domain.Job, int, error)
 	GetJobsByStatus(ctx context.Context, status string) ([]domain.Job, error)
 	GetJobsByAgentID(ctx context.Context, agentID uuid.UUID) ([]domain.Job, error)
 	GetAvailableJobForAgent(ctx context.Context, agentID uuid.UUID) (*domain.Job, error)
@@ -322,6 +323,14 @@ func (u *jobUsecase) GetAllJobs(ctx context.Context) ([]domain.Job, error) {
 		return nil, fmt.Errorf("failed to get jobs: %w", err)
 	}
 	return jobs, nil
+}
+
+func (u *jobUsecase) GetJobsPaginated(ctx context.Context, page, pageSize int, search, status string) ([]domain.Job, int, error) {
+	jobs, total, err := u.jobRepo.GetPaginated(ctx, page, pageSize, search, status)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get paginated jobs: %w", err)
+	}
+	return jobs, total, nil
 }
 
 func (u *jobUsecase) GetJobsByStatus(ctx context.Context, status string) ([]domain.Job, error) {
