@@ -2257,24 +2257,13 @@ class DashboardApplication {
                     const selectedWordlist = this.wordlists.find((w: any) => w.id === jobData.wordlist_id)
                     const wordlistName = selectedWordlist ? (selectedWordlist.orig_name || selectedWordlist.name) : 'unknown.txt'
                     
-                    // Get wordlist content for distribution
-                    let wordlistContent = ''
-                    if (selectedWordlist && selectedWordlist.content) {
-                        wordlistContent = selectedWordlist.content
-                    } else if (selectedWordlist && selectedWordlist.path) {
-                        const content = await apiService.getWordlistContent(selectedWordlist.id)
-                        if (content) {
-                            wordlistContent = content
-                        }
-                    }
-                    
                     // Enhanced job creation with agent assignment
                     const jobPayload = {
                         name: jobData.name,
                         hash_type: parseInt(jobData.hash_type),
                         attack_mode: parseInt(jobData.attack_mode),
                         hash_file_id: jobData.hash_file_id,
-                        wordlist: wordlistContent || wordlistName,  // Send content if available, otherwise name
+                        wordlist: wordlistName,
                         wordlist_id: jobData.wordlist_id,         // Optional reference ID
                         agent_ids: jobData.agent_ids || [],       // Include multiple agent assignments
                         distribution_data: this.agentDistributionData // Include calculated distribution data

@@ -179,7 +179,8 @@ func NewRouter(
 			wordlists.POST("/upload", wordlistHandler.UploadWordlist)
 			wordlists.GET("/", wordlistHandler.GetAllWordlists)
 			wordlists.GET("/:id", wordlistHandler.GetWordlist)
-			wordlists.GET("/:id/content", wordlistHandler.GetWordlistContent)
+			// Disabled: loads entire wordlist into memory — use /:id/download for large files
+			// wordlists.GET("/:id/content", wordlistHandler.GetWordlistContent)
 			wordlists.GET("/:id/download", wordlistHandler.DownloadWordlist)
 			wordlists.DELETE("/:id", wordlistHandler.DeleteWordlist)
 		}

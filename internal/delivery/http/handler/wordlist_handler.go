@@ -3,7 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"os"
+	// "os" // used by GetWordlistContent (disabled)
 
 	"go-distributed-hashcat/internal/usecase"
 
@@ -94,6 +94,7 @@ func (h *WordlistHandler) DeleteWordlist(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Wordlist deleted successfully"})
 }
 
+/*
 func (h *WordlistHandler) GetWordlistContent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -119,6 +120,7 @@ func (h *WordlistHandler) GetWordlistContent(c *gin.Context) {
 	c.Header("Content-Type", "text/plain")
 	c.Data(http.StatusOK, "text/plain", content)
 }
+*/
 
 func (h *WordlistHandler) DownloadWordlist(c *gin.Context) {
 	idStr := c.Param("id")

@@ -461,23 +461,24 @@ class ApiService {
         return response.success
     }
 
-    public async getWordlistContent(id: string): Promise<string | null> {
-        try {
-            const response = await fetch(`${this.baseUrl}/api/v1/wordlists/${id}/content`, {
-                headers: {
-                    ...authService.getAuthHeader(),
-                    ...(this.xToken ? { 'X-Token': this.xToken } : {})
-                }
-            })
-            if (!response.ok) {
-                throw new Error(`Fetch failed: ${response.statusText}`)
-            }
-            return await response.text()
-        } catch (error) {
-            console.error('Wordlist content fetch failed:', error)
-            return null
-        }
-    }
+    // Disabled: use downloadWordlist() for large files; content endpoint loads entire file into memory
+    // public async getWordlistContent(id: string): Promise<string | null> {
+    //     try {
+    //         const response = await fetch(`${this.baseUrl}/api/v1/wordlists/${id}/content`, {
+    //             headers: {
+    //                 ...authService.getAuthHeader(),
+    //                 ...(this.xToken ? { 'X-Token': this.xToken } : {})
+    //             }
+    //         })
+    //         if (!response.ok) {
+    //             throw new Error(`Fetch failed: ${response.statusText}`)
+    //         }
+    //         return await response.text()
+    //     } catch (error) {
+    //         console.error('Wordlist content fetch failed:', error)
+    //         return null
+    //     }
+    // }
 
     public async downloadWordlist(id: string): Promise<Blob | null> {
         try {
