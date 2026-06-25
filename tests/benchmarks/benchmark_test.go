@@ -37,7 +37,7 @@ func BenchmarkAgentCreation(b *testing.B) {
 
 	agentRepo := repository.NewAgentRepository(db)
 	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
-	agentHandler := handler.NewAgentHandler(agentUsecase)
+	agentHandler := handler.NewAgentHandler(agentUsecase, nil)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -99,7 +99,7 @@ func BenchmarkJobCreation(b *testing.B) {
 		b.Fatalf("Failed to create test hash file: %v", err)
 	}
 
-	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 	jobHandler := handler.NewJobHandler(jobUsecase, nil, nil, nil)
 
 	gin.SetMode(gin.TestMode)
@@ -142,7 +142,7 @@ func BenchmarkAgentListing(b *testing.B) {
 
 	agentRepo := repository.NewAgentRepository(db)
 	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
-	agentHandler := handler.NewAgentHandler(agentUsecase)
+	agentHandler := handler.NewAgentHandler(agentUsecase, nil)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -213,7 +213,7 @@ func BenchmarkLimitedConcurrentAgentCreation(b *testing.B) {
 
 	agentRepo := repository.NewAgentRepository(db)
 	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
-	agentHandler := handler.NewAgentHandler(agentUsecase)
+	agentHandler := handler.NewAgentHandler(agentUsecase, nil)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

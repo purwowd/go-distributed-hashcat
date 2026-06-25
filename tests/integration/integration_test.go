@@ -62,19 +62,21 @@ func (suite *APITestSuite) SetupTest() {
 
 	// Initialize repositories
 	agentRepo := repository.NewAgentRepository(db)
+	agentLocalFileRepo := repository.NewAgentLocalFileRepository(db)
 	jobRepo := repository.NewJobRepository(db)
 	hashFileRepo := repository.NewHashFileRepository(db)
 	wordlistRepo := repository.NewWordlistRepository(db)
 
 	// Initialize use cases
-	agentUsecase := usecase.NewAgentUsecase(agentRepo, nil)
-	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+	agentUsecase := usecase.NewAgentUsecase(agentRepo, agentLocalFileRepo)
+	wordlistUsecase := usecase.NewWordlistUsecase(wordlistRepo, "/tmp")
+	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, agentLocalFileRepo)
 
 	// Initialize enrichment service for integration tests
 	jobEnrichmentService := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)
 
 	// Initialize handlers
-	suite.agentHandler = handler.NewAgentHandler(agentUsecase)
+	suite.agentHandler = handler.NewAgentHandler(agentUsecase, wordlistUsecase)
 	suite.jobHandler = handler.NewJobHandler(jobUsecase, jobEnrichmentService, nil, nil)
 
 	// Setup router

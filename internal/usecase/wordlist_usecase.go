@@ -16,6 +16,8 @@ import (
 
 type WordlistUsecase interface {
 	UploadWordlist(ctx context.Context, name string, content io.Reader, size int64) (*domain.Wordlist, error)
+	RegisterLocalWordlist(ctx context.Context, req *domain.RegisterLocalWordlistRequest) (*domain.Wordlist, error)
+	SyncAgentLocalWordlists(ctx context.Context, files []domain.AgentLocalFile) error
 	GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error)
 	GetAllWordlists(ctx context.Context) ([]domain.Wordlist, error)
 	DeleteWordlist(ctx context.Context, id uuid.UUID) error
@@ -72,6 +74,7 @@ func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, conte
 		Path:      filePath,
 		Size:      written,
 		WordCount: &wordCount,
+		Source:    domain.WordlistSourceUploaded,
 	}
 
 	if err := u.wordlistRepo.Create(ctx, wordlist); err != nil {
@@ -81,6 +84,81 @@ func (u *wordlistUsecase) UploadWordlist(ctx context.Context, name string, conte
 	}
 
 	return wordlist, nil
+}
+
+func normalizeWordlistOrigName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	if !strings.HasSuffix(strings.ToLower(name), ".txt") {
+		name += ".txt"
+	}
+	return name
+}
+
+func agentLocalWordlistPath(origName string) string {
+	return "agent_local:" + origName
+}
+
+func (u *wordlistUsecase) RegisterLocalWordlist(ctx context.Context, req *domain.RegisterLocalWordlistRequest) (*domain.Wordlist, error) {
+	origName := normalizeWordlistOrigName(req.OrigName)
+	if origName == "" {
+		return nil, fmt.Errorf("orig_name is required")
+	}
+
+	if existing, err := u.wordlistRepo.GetByOrigName(ctx, origName); err == nil && existing != nil {
+		if existing.Source == domain.WordlistSourceUploaded {
+			return existing, nil
+		}
+		if req.Size > existing.Size {
+			existing.Size = req.Size
+		}
+		if req.WordCount > 0 {
+			existing.WordCount = &req.WordCount
+		}
+		if err := u.wordlistRepo.Update(ctx, existing); err != nil {
+			return nil, fmt.Errorf("failed to update local wordlist metadata: %w", err)
+		}
+		return existing, nil
+	}
+
+	wordCount := req.WordCount
+	wordlist := &domain.Wordlist{
+		ID:        uuid.New(),
+		Name:      origName,
+		OrigName:  origName,
+		Path:      agentLocalWordlistPath(origName),
+		Size:      req.Size,
+		WordCount: &wordCount,
+		Source:    domain.WordlistSourceAgentLocal,
+	}
+
+	if err := u.wordlistRepo.Create(ctx, wordlist); err != nil {
+		return nil, fmt.Errorf("failed to register local wordlist: %w", err)
+	}
+	return wordlist, nil
+}
+
+func (u *wordlistUsecase) SyncAgentLocalWordlists(ctx context.Context, files []domain.AgentLocalFile) error {
+	for _, file := range files {
+		if file.Type != "" && file.Type != "wordlist" {
+			continue
+		}
+		if !strings.HasSuffix(strings.ToLower(file.Name), ".txt") {
+			continue
+		}
+		wordCount := int64(0)
+		_, err := u.RegisterLocalWordlist(ctx, &domain.RegisterLocalWordlistRequest{
+			OrigName:  file.Name,
+			Size:      file.Size,
+			WordCount: wordCount,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (u *wordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error) {
@@ -105,9 +183,11 @@ func (u *wordlistUsecase) DeleteWordlist(ctx context.Context, id uuid.UUID) erro
 		return fmt.Errorf("failed to get wordlist: %w", err)
 	}
 
-	// Delete the physical file
-	if err := os.Remove(wordlist.Path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete physical file: %w", err)
+	// Delete the physical file only for uploaded wordlists stored on the server.
+	if wordlist.Source != domain.WordlistSourceAgentLocal && !strings.HasPrefix(wordlist.Path, "agent_local:") {
+		if err := os.Remove(wordlist.Path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete physical file: %w", err)
+		}
 	}
 
 	// Delete the record

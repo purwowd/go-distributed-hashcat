@@ -92,13 +92,16 @@ type AgentLocalFileRepository interface {
 	ReplaceInventory(ctx context.Context, agentID uuid.UUID, files []AgentLocalFile) error
 	GetByAgentID(ctx context.Context, agentID uuid.UUID) ([]AgentLocalFile, error)
 	ListWithAgents(ctx context.Context, fileType, name string) ([]AgentLocalFileEntry, error)
+	AgentHasWordlist(ctx context.Context, agentID uuid.UUID, origName string) (bool, error)
 }
 
 // WordlistRepository defines the interface for wordlist data operations
 type WordlistRepository interface {
 	Create(ctx context.Context, wordlist *Wordlist) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Wordlist, error)
+	GetByOrigName(ctx context.Context, origName string) (*Wordlist, error)
 	GetAll(ctx context.Context) ([]Wordlist, error)
+	Update(ctx context.Context, wordlist *Wordlist) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 

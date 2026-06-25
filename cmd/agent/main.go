@@ -927,8 +927,11 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			}
 		}
 
-		// If still empty, download from server
+		// If still empty, download from server unless wordlist is agent-local metadata only
 		if localWordlist == "" {
+			if job.WordlistSource == domain.WordlistSourceAgentLocal {
+				return fmt.Errorf("agent_local wordlist %q not found on this agent", job.Wordlist)
+			}
 			infrastructure.AgentLogger.Debug("No local copy found for wordlist ID %s, downloading...", job.WordlistID.String())
 			downloadedPath, err := a.downloadWordlist(*job.WordlistID)
 			if err != nil {

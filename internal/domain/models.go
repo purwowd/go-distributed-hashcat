@@ -36,6 +36,7 @@ type Job struct {
 	HashFileID     *uuid.UUID  `json:"hash_file_id" db:"hash_file_id"`
 	Wordlist       string      `json:"wordlist" db:"wordlist"`
 	WordlistID     *uuid.UUID  `json:"wordlist_id" db:"wordlist_id"`
+	WordlistSource string      `json:"wordlist_source,omitempty" db:"-"`
 	Rules          string      `json:"rules" db:"rules"`                     // Password hasil cracking atau hashcat rules
 	AgentID        *uuid.UUID  `json:"agent_id" db:"agent_id"`               // Single agent (legacy)
 	AgentIDs       []uuid.UUID `json:"agent_ids,omitempty" db:"-"`           // Multiple agents (not stored in DB, computed)
@@ -84,6 +85,11 @@ type AgentLocalFileEntry struct {
 	AgentStatus string `json:"agent_status"`
 }
 
+const (
+	WordlistSourceUploaded   = "uploaded"
+	WordlistSourceAgentLocal = "agent_local"
+)
+
 // Wordlist represents a wordlist file
 type Wordlist struct {
 	ID        uuid.UUID `json:"id" db:"id"`
@@ -92,7 +98,15 @@ type Wordlist struct {
 	Path      string    `json:"path" db:"path"`
 	Size      int64     `json:"size" db:"size"`
 	WordCount *int64    `json:"word_count,omitempty" db:"word_count"`
+	Source    string    `json:"source" db:"source"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+// RegisterLocalWordlistRequest registers agent-local wordlist metadata without uploading the file.
+type RegisterLocalWordlistRequest struct {
+	OrigName  string `json:"orig_name" binding:"required"`
+	Size      int64  `json:"size"`
+	WordCount int64  `json:"word_count"`
 }
 
 // JobStatus represents different job statuses

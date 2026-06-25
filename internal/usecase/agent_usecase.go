@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +46,7 @@ type AgentUsecase interface {
 	UpdateAgent(ctx context.Context, agent *domain.Agent) error
 	UpdateAgentData(ctx context.Context, agentKey string, ipAddress string, port int, resourceType, processor, capabilities string) error
 	GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error)
+	FilterAgentsWithLocalWordlist(ctx context.Context, agents []domain.Agent, origName string) ([]domain.Agent, error)
 	ReplaceAgentLocalFiles(ctx context.Context, agentID uuid.UUID, files map[string]AgentLocalFileInput) error
 	GetAgentLocalFiles(ctx context.Context, agentID uuid.UUID) ([]domain.AgentLocalFile, error)
 	ListAgentLocalFiles(ctx context.Context, fileType, name string) ([]domain.AgentLocalFileEntry, error)
@@ -620,6 +622,28 @@ func (u *agentUsecase) ReplaceAgentLocalFiles(ctx context.Context, agentID uuid.
 	}
 
 	return u.agentLocalFileRepo.ReplaceInventory(ctx, agentID, inventory)
+}
+
+func (u *agentUsecase) FilterAgentsWithLocalWordlist(ctx context.Context, agents []domain.Agent, origName string) ([]domain.Agent, error) {
+	if u.agentLocalFileRepo == nil {
+		return agents, nil
+	}
+	name := strings.TrimSpace(origName)
+	if name == "" {
+		return nil, fmt.Errorf("orig_name is required")
+	}
+
+	filtered := make([]domain.Agent, 0, len(agents))
+	for _, agent := range agents {
+		has, err := u.agentLocalFileRepo.AgentHasWordlist(ctx, agent.ID, name)
+		if err != nil {
+			return nil, err
+		}
+		if has {
+			filtered = append(filtered, agent)
+		}
+	}
+	return filtered, nil
 }
 
 func (u *agentUsecase) GetAgentLocalFiles(ctx context.Context, agentID uuid.UUID) ([]domain.AgentLocalFile, error) {

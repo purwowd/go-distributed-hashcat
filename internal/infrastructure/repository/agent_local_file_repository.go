@@ -165,6 +165,23 @@ func scanAgentLocalFiles(rows *sql.Rows) ([]domain.AgentLocalFile, error) {
 	return out, rows.Err()
 }
 
+func (r *agentLocalFileRepository) AgentHasWordlist(ctx context.Context, agentID uuid.UUID, origName string) (bool, error) {
+	name := strings.TrimSpace(origName)
+	if name == "" {
+		return false, nil
+	}
+	var count int
+	err := r.db.DB().QueryRowContext(ctx, `
+		SELECT COUNT(1)
+		FROM agent_local_files
+		WHERE agent_id = ? AND type = 'wordlist' AND LOWER(name) = LOWER(?)
+	`, agentID.String(), name).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("check agent wordlist: %w", err)
+	}
+	return count > 0, nil
+}
+
 func nullIfEmpty(s string) interface{} {
 	if strings.TrimSpace(s) == "" {
 		return nil

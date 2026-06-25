@@ -3,8 +3,10 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	// "os" // used by GetWordlistContent (disabled)
 
+	"go-distributed-hashcat/internal/domain"
 	"go-distributed-hashcat/internal/usecase"
 
 	"github.com/gin-gonic/gin"
@@ -49,6 +51,22 @@ func (h *WordlistHandler) UploadWordlist(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"data": wordlist})
+}
+
+func (h *WordlistHandler) RegisterLocalWordlist(c *gin.Context) {
+	var req domain.RegisterLocalWordlistRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	wordlist, err := h.wordlistUsecase.RegisterLocalWordlist(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": wordlist})
 }
 
 func (h *WordlistHandler) GetWordlist(c *gin.Context) {
@@ -133,6 +151,15 @@ func (h *WordlistHandler) DownloadWordlist(c *gin.Context) {
 	wordlist, err := h.wordlistUsecase.GetWordlist(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	if wordlist.Source == domain.WordlistSourceAgentLocal || strings.HasPrefix(wordlist.Path, "agent_local:") {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "agent_local wordlists are not downloadable from the server",
+			"code":    "AGENT_LOCAL_WORDLIST",
+			"message": "Use the wordlist file on the agent that reported it.",
+		})
 		return
 	}
 

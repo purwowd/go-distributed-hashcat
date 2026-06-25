@@ -115,8 +115,8 @@ func (m *MockAgentUsecase) UpdateAgent(ctx context.Context, agent *domain.Agent)
 	return args.Error(0)
 }
 
-func (m *MockAgentUsecase) GenerateAgentKey(ctx context.Context, name string) (*domain.Agent, error) {
-	args := m.Called(ctx, name)
+func (m *MockAgentUsecase) GenerateAgentKey(ctx context.Context, name, agentKey string) (*domain.Agent, error) {
+	args := m.Called(ctx, name, agentKey)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -141,6 +141,35 @@ func (m *MockAgentUsecase) UpdateAgentSpeedWithStatus(ctx context.Context, id uu
 func (m *MockAgentUsecase) UpdateAgentStatusOffline(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
+}
+
+func (m *MockAgentUsecase) ReplaceAgentLocalFiles(ctx context.Context, agentID uuid.UUID, files map[string]usecase.AgentLocalFileInput) error {
+	args := m.Called(ctx, agentID, files)
+	return args.Error(0)
+}
+
+func (m *MockAgentUsecase) GetAgentLocalFiles(ctx context.Context, agentID uuid.UUID) ([]domain.AgentLocalFile, error) {
+	args := m.Called(ctx, agentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.AgentLocalFile), args.Error(1)
+}
+
+func (m *MockAgentUsecase) ListAgentLocalFiles(ctx context.Context, fileType, name string) ([]domain.AgentLocalFileEntry, error) {
+	args := m.Called(ctx, fileType, name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.AgentLocalFileEntry), args.Error(1)
+}
+
+func (m *MockAgentUsecase) FilterAgentsWithLocalWordlist(ctx context.Context, agents []domain.Agent, origName string) ([]domain.Agent, error) {
+	args := m.Called(ctx, agents, origName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.Agent), args.Error(1)
 }
 
 func setupTestRouter() *gin.Engine {
@@ -271,7 +300,7 @@ func TestAgentHandler_CreateAgent(t *testing.T) {
 			mockUsecase := new(MockAgentUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewAgentHandler(mockUsecase)
+			handler := handler.NewAgentHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.POST("/agents", handler.RegisterAgent)
 
@@ -366,7 +395,7 @@ func TestAgentHandler_GetAgent(t *testing.T) {
 			mockUsecase := new(MockAgentUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewAgentHandler(mockUsecase)
+			handler := handler.NewAgentHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.GET("/agents/:id", handler.GetAgent)
 
@@ -458,7 +487,7 @@ func TestAgentHandler_GetAllAgents(t *testing.T) {
 			mockUsecase := new(MockAgentUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewAgentHandler(mockUsecase)
+			handler := handler.NewAgentHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.GET("/agents", handler.GetAllAgents)
 
@@ -561,7 +590,7 @@ func TestAgentHandler_UpdateAgentStatus(t *testing.T) {
 			mockUsecase := new(MockAgentUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewAgentHandler(mockUsecase)
+			handler := handler.NewAgentHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.PUT("/agents/:id/status", handler.UpdateAgentStatus)
 
@@ -641,7 +670,7 @@ func TestAgentHandler_DeleteAgent(t *testing.T) {
 			mockUsecase := new(MockAgentUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewAgentHandler(mockUsecase)
+			handler := handler.NewAgentHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.DELETE("/agents/:id", handler.DeleteAgent)
 
@@ -717,7 +746,7 @@ func TestAgentHandler_HeartbeatAgent(t *testing.T) {
 			mockUsecase := new(MockAgentUsecase)
 			tt.mockSetup(mockUsecase)
 
-			handler := handler.NewAgentHandler(mockUsecase)
+			handler := handler.NewAgentHandler(mockUsecase, nil)
 			router := setupTestRouter()
 			router.POST("/agents/:id/heartbeat", handler.UpdateAgentHeartbeat)
 

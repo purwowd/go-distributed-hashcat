@@ -51,6 +51,19 @@ func (m *MockWordlistUsecase) DeleteWordlist(ctx context.Context, id uuid.UUID) 
 	return args.Error(0)
 }
 
+func (m *MockWordlistUsecase) RegisterLocalWordlist(ctx context.Context, req *domain.RegisterLocalWordlistRequest) (*domain.Wordlist, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Wordlist), args.Error(1)
+}
+
+func (m *MockWordlistUsecase) SyncAgentLocalWordlists(ctx context.Context, files []domain.AgentLocalFile) error {
+	args := m.Called(ctx, files)
+	return args.Error(0)
+}
+
 func TestWordlistHandler_UploadWordlist(t *testing.T) {
 	tests := []struct {
 		name           string

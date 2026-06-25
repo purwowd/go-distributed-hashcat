@@ -17,12 +17,14 @@ import (
 )
 
 type AgentHandler struct {
-	agentUsecase usecase.AgentUsecase
+	agentUsecase    usecase.AgentUsecase
+	wordlistUsecase usecase.WordlistUsecase
 }
 
-func NewAgentHandler(agentUsecase usecase.AgentUsecase) *AgentHandler {
+func NewAgentHandler(agentUsecase usecase.AgentUsecase, wordlistUsecase usecase.WordlistUsecase) *AgentHandler {
 	return &AgentHandler{
-		agentUsecase: agentUsecase,
+		agentUsecase:    agentUsecase,
+		wordlistUsecase: wordlistUsecase,
 	}
 }
 
@@ -620,6 +622,15 @@ func (h *AgentHandler) RegisterAgentFiles(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if h.wordlistUsecase != nil {
+		localFiles, syncErr := h.agentUsecase.GetAgentLocalFiles(c.Request.Context(), id)
+		if syncErr != nil {
+			log.Printf("Failed to load agent files for wordlist sync: %v", syncErr)
+		} else if err := h.wordlistUsecase.SyncAgentLocalWordlists(c.Request.Context(), localFiles); err != nil {
+			log.Printf("Failed to sync agent local wordlists: %v", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

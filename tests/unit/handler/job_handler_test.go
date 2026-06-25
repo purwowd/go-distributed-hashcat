@@ -135,6 +135,19 @@ func (m *MockWordlistRepository) Delete(ctx context.Context, id uuid.UUID) error
 	return args.Error(0)
 }
 
+func (m *MockWordlistRepository) GetByOrigName(ctx context.Context, origName string) (*domain.Wordlist, error) {
+	args := m.Called(ctx, origName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Wordlist), args.Error(1)
+}
+
+func (m *MockWordlistRepository) Update(ctx context.Context, wordlist *domain.Wordlist) error {
+	args := m.Called(ctx, wordlist)
+	return args.Error(0)
+}
+
 // MockHashFileRepository for testing
 type MockHashFileRepository struct {
 	mock.Mock

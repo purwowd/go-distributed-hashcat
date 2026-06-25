@@ -173,17 +173,6 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 
 				// Mock job creation
 				jobRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
-
-				// Mock job retrieval for StartJob (called internally when agent is assigned)
-				createdJob := &domain.Job{
-					ID:       uuid.New(),
-					Name:     "test-job",
-					Status:   "pending",
-					AgentID:  &agentID,
-					HashType: 0,
-				}
-				jobRepo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(createdJob, nil)
-				jobRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Job")).Return(nil)
 			},
 			expectedError: false,
 		},
@@ -250,7 +239,7 @@ func TestJobUsecase_CreateJob(t *testing.T) {
 
 			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 			ctx := context.Background()
 
 			job, err := usecase.CreateJob(ctx, tt.request)
@@ -342,7 +331,7 @@ func TestJobUsecase_StartJob(t *testing.T) {
 
 			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 			ctx := context.Background()
 
 			err := usecase.StartJob(ctx, tt.jobID)
@@ -401,7 +390,7 @@ func TestJobUsecase_UpdateJobProgress(t *testing.T) {
 
 			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 			ctx := context.Background()
 
 			err := usecase.UpdateJobProgress(ctx, tt.jobID, tt.progress, tt.speed)
@@ -478,7 +467,7 @@ func TestJobUsecase_CompleteJob(t *testing.T) {
 
 			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 			ctx := context.Background()
 
 			err := usecase.CompleteJob(ctx, tt.jobID, tt.result, 1000000) // Add speed parameter
@@ -568,7 +557,7 @@ func TestJobUsecase_AssignJobsToAgents(t *testing.T) {
 
 			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 			ctx := context.Background()
 
 			err := usecase.AssignJobsToAgents(ctx)
@@ -634,7 +623,7 @@ func TestJobUsecase_GetJobsByStatus(t *testing.T) {
 
 			tt.mockSetup(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
 
-			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+			usecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 			ctx := context.Background()
 
 			jobs, err := usecase.GetJobsByStatus(ctx, tt.status)

@@ -561,11 +561,29 @@ func (h *JobHandler) CreateParallelJobs(c *gin.Context) {
 		return
 	}
 
+	if wordlist.Source == domain.WordlistSourceAgentLocal {
+		var err error
+		onlineAgents, err = h.agentUsecase.FilterAgentsWithLocalWordlist(c.Request.Context(), onlineAgents, wordlist.OrigName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if len(onlineAgents) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No online agents have the local wordlist"})
+			return
+		}
+	}
+
 	// Get word count from repository
 	var totalWords int64
-	if wordlist.WordCount != nil {
+	if wordlist.WordCount != nil && *wordlist.WordCount > 0 {
 		totalWords = *wordlist.WordCount
 		log.Printf("📝 Wordlist contains %d words (from repository)", totalWords)
+	} else if wordlist.Source == domain.WordlistSourceAgentLocal {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "word_count is required for agent_local wordlists; register with word_count metadata",
+		})
+		return
 	} else {
 		// Fallback: read file content if word count not available
 		wordlistLines, err := readWordlistFile(wordlist.Path)

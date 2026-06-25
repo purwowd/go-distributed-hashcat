@@ -45,7 +45,7 @@ func NewRouter(
 	jwtService := infrastructure.NewJWTService()
 
 	// Initialize handlers
-	agentHandler := handler.NewAgentHandler(agentUsecase)
+	agentHandler := handler.NewAgentHandler(agentUsecase, wordlistUsecase)
 	jobHandler := handler.NewJobHandler(jobUsecase, jobEnrichmentService, agentUsecase, wordlistUsecase)
 	hashFileHandler := handler.NewHashFileHandler(hashFileUsecase)
 	wordlistHandler := handler.NewWordlistHandler(wordlistUsecase)
@@ -179,6 +179,7 @@ func NewRouter(
 		wordlists.Use(middleware.XTokenAuthMiddleware())
 		{
 			wordlists.POST("/upload", wordlistHandler.UploadWordlist)
+			wordlists.POST("/register-local", wordlistHandler.RegisterLocalWordlist)
 			wordlists.GET("/", wordlistHandler.GetAllWordlists)
 			wordlists.GET("/:id", wordlistHandler.GetWordlist)
 			// Disabled: loads entire wordlist into memory — use /:id/download for large files

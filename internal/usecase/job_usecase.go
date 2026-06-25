@@ -31,19 +31,56 @@ type JobUsecase interface {
 }
 
 type jobUsecase struct {
-	jobRepo      domain.JobRepository
-	agentRepo    domain.AgentRepository
-	hashFileRepo domain.HashFileRepository
-	wordlistRepo domain.WordlistRepository
+	jobRepo            domain.JobRepository
+	agentRepo          domain.AgentRepository
+	hashFileRepo       domain.HashFileRepository
+	wordlistRepo       domain.WordlistRepository
+	agentLocalFileRepo domain.AgentLocalFileRepository
 }
 
-func NewJobUsecase(jobRepo domain.JobRepository, agentRepo domain.AgentRepository, hashFileRepo domain.HashFileRepository, wordlistRepo domain.WordlistRepository) JobUsecase {
+func NewJobUsecase(jobRepo domain.JobRepository, agentRepo domain.AgentRepository, hashFileRepo domain.HashFileRepository, wordlistRepo domain.WordlistRepository, agentLocalFileRepo domain.AgentLocalFileRepository) JobUsecase {
 	return &jobUsecase{
-		jobRepo:      jobRepo,
-		agentRepo:    agentRepo,
-		hashFileRepo: hashFileRepo,
-		wordlistRepo: wordlistRepo,
+		jobRepo:            jobRepo,
+		agentRepo:          agentRepo,
+		hashFileRepo:       hashFileRepo,
+		wordlistRepo:       wordlistRepo,
+		agentLocalFileRepo: agentLocalFileRepo,
 	}
+}
+
+func (u *jobUsecase) enrichJobWordlist(ctx context.Context, job *domain.Job) {
+	if job == nil || job.WordlistID == nil {
+		return
+	}
+	wordlist, err := u.wordlistRepo.GetByID(ctx, *job.WordlistID)
+	if err != nil {
+		return
+	}
+	job.WordlistSource = wordlist.Source
+	if job.Wordlist == "" || strings.Contains(job.Wordlist, "\n") {
+		job.Wordlist = wordlist.OrigName
+	}
+}
+
+func (u *jobUsecase) filterAgentIDsForWordlist(ctx context.Context, wordlist *domain.Wordlist, agentIDs []uuid.UUID) ([]uuid.UUID, error) {
+	if wordlist == nil || wordlist.Source != domain.WordlistSourceAgentLocal || u.agentLocalFileRepo == nil {
+		return agentIDs, nil
+	}
+
+	filtered := make([]uuid.UUID, 0, len(agentIDs))
+	for _, agentID := range agentIDs {
+		has, err := u.agentLocalFileRepo.AgentHasWordlist(ctx, agentID, wordlist.OrigName)
+		if err != nil {
+			return nil, err
+		}
+		if has {
+			filtered = append(filtered, agentID)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no agents have local wordlist %s", wordlist.OrigName)
+	}
+	return filtered, nil
 }
 
 func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest) (*domain.Job, error) {
@@ -76,6 +113,7 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 
 	// Handle wordlist ID if provided
 	var wordlistID *uuid.UUID
+	var wordlistRecord *domain.Wordlist
 	if req.WordlistID != "" {
 		parsedWordlistID, err := uuid.Parse(req.WordlistID)
 		if err != nil {
@@ -83,6 +121,15 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 		}
 		wordlistID = &parsedWordlistID
 		job.WordlistID = wordlistID
+
+		wordlistRecord, err = u.wordlistRepo.GetByID(ctx, parsedWordlistID)
+		if err != nil {
+			return nil, fmt.Errorf("wordlist not found: %w", err)
+		}
+		if req.Wordlist == "" {
+			job.Wordlist = wordlistRecord.OrigName
+		}
+		job.WordlistSource = wordlistRecord.Source
 	}
 
 	// Handle agent assignment (single or multiple)
@@ -107,6 +154,14 @@ func (u *jobUsecase) CreateJob(ctx context.Context, req *domain.CreateJobRequest
 			}
 
 			agentIDs = append(agentIDs, agentID)
+		}
+
+		if wordlistRecord != nil {
+			var err error
+			agentIDs, err = u.filterAgentIDsForWordlist(ctx, wordlistRecord, agentIDs)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// Create separate job for each agent (distributed job creation)
@@ -354,6 +409,7 @@ func (u *jobUsecase) GetAvailableJobForAgent(ctx context.Context, agentID uuid.U
 	if err != nil {
 		return nil, fmt.Errorf("failed to get available job for agent: %w", err)
 	}
+	u.enrichJobWordlist(ctx, job)
 	return job, nil
 }
 

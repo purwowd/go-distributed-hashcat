@@ -33,7 +33,7 @@ func TestJobsAPIResponseSize(t *testing.T) {
 	wordlistRepo := repository.NewWordlistRepository(db)
 	hashFileRepo := repository.NewHashFileRepository(db)
 
-	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo)
+	jobUsecase := usecase.NewJobUsecase(jobRepo, agentRepo, hashFileRepo, wordlistRepo, nil)
 	enrichment := usecase.NewJobEnrichmentService(agentRepo, wordlistRepo, hashFileRepo)
 	jobHandler := handler.NewJobHandler(jobUsecase, enrichment, usecase.NewAgentUsecase(agentRepo, nil), usecase.NewWordlistUsecase(wordlistRepo, "uploads/wordlists"))
 
