@@ -332,27 +332,6 @@ func startServer() {
 		Handler: router,
 	}
 
-	// Initialize health monitoring with ultra-fast real-time intervals
-	healthConfig := usecase.HealthConfig{
-		CheckInterval:       1 * time.Second, // Ultra-fast: check every 1 second
-		AgentTimeout:        5 * time.Second, // Ultra-fast timeout detection in 5 seconds
-		HeartbeatGrace:      2 * time.Second, // Very short grace period
-		MaxConcurrentChecks: 20,              // More concurrent checks
-	}
-
-	healthMonitor := usecase.NewAgentHealthMonitor(
-		agentUsecase,
-		wsHub,
-		healthConfig,
-	)
-
-	// Start health monitor
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	healthMonitor.Start(ctx)
-	defer healthMonitor.Stop()
-
 	// Start server in a goroutine
 	go func() {
 		infrastructure.ServerLogger.Info("Server starting on %s:%d", config.Server.Host, config.Server.Port)
@@ -367,9 +346,6 @@ func startServer() {
 	<-quit
 
 	infrastructure.ServerLogger.Info("Shutting down server...")
-
-	// Stop health monitor
-	healthMonitor.Stop()
 
 	// Shutdown server with timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)

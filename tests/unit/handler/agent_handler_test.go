@@ -48,6 +48,10 @@ func (m *MockAgentUsecase) GetAllAgents(ctx context.Context) ([]domain.Agent, er
 	return args.Get(0).([]domain.Agent), args.Error(1)
 }
 
+func (m *MockAgentUsecase) ProbeAndUpdateAgents(ctx context.Context, agents []domain.Agent) {
+	m.Called(ctx, agents)
+}
+
 func (m *MockAgentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error {
 	args := m.Called(ctx, id, status)
 	return args.Error(0)
@@ -404,6 +408,7 @@ func TestAgentHandler_GetAllAgents(t *testing.T) {
 					},
 				}
 				mockUsecase.On("GetAllAgents", mock.Anything).Return(agents, nil)
+				mockUsecase.On("ProbeAndUpdateAgents", mock.Anything, agents).Return()
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -422,6 +427,7 @@ func TestAgentHandler_GetAllAgents(t *testing.T) {
 			name: "no agents found",
 			mockSetup: func(mockUsecase *MockAgentUsecase) {
 				mockUsecase.On("GetAllAgents", mock.Anything).Return([]domain.Agent{}, nil)
+				mockUsecase.On("ProbeAndUpdateAgents", mock.Anything, []domain.Agent{}).Return()
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {

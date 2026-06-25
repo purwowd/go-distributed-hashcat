@@ -199,6 +199,12 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 		return
 	}
 
+	// On-demand 2-phase check: server probes agents (phase 1), agents reply via heartbeat (phase 2).
+	// Skip when agent_key is set — used internally by the agent binary during startup.
+	if agentKey == "" {
+		h.agentUsecase.ProbeAndUpdateAgents(c.Request.Context(), agents)
+	}
+
 	if agentKey != "" {
 		filtered := make([]domain.Agent, 0, 1)
 		for _, a := range agents {
@@ -852,7 +858,7 @@ func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 		return
 	}
 
-	// Update last seen
+	// Phase 2: agent confirmed reachability — update last seen and mark online unless busy.
 	if err := h.agentUsecase.UpdateAgentLastSeen(c.Request.Context(), agent.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to update agent heartbeat",
@@ -862,12 +868,25 @@ func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 		return
 	}
 
+	status := agent.Status
+	if agent.Status != "busy" {
+		if err := h.agentUsecase.UpdateAgentStatus(c.Request.Context(), agent.ID, "online"); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to update agent status",
+				"code":    "UPDATE_STATUS_FAILED",
+				"message": "Failed to update agent status after heartbeat.",
+			})
+			return
+		}
+		status = "online"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Agent heartbeat updated successfully",
 		"data": gin.H{
 			"id":         agent.ID.String(),
 			"name":       agent.Name,
-			"status":     agent.Status,
+			"status":     status,
 			"updated_at": time.Now().Format(time.RFC3339),
 		},
 	})

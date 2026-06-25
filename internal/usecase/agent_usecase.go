@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
+	"go-distributed-hashcat/internal/infrastructure"
 
 	"github.com/google/uuid"
 )
@@ -26,6 +28,7 @@ type AgentUsecase interface {
 	RegisterAgent(ctx context.Context, req *domain.CreateAgentRequest) (*domain.Agent, error)
 	GetAgent(ctx context.Context, id uuid.UUID) (*domain.Agent, error)
 	GetAllAgents(ctx context.Context) ([]domain.Agent, error)
+	ProbeAndUpdateAgents(ctx context.Context, agents []domain.Agent)
 	UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateAgentSpeed(ctx context.Context, id uuid.UUID, speed int64) error
 	UpdateAgentSpeedWithStatus(ctx context.Context, id uuid.UUID, speed int64, status string) error
@@ -195,6 +198,57 @@ func (u *agentUsecase) GetAllAgents(ctx context.Context) ([]domain.Agent, error)
 	}
 	domain.PrepareAgentsForResponse(agents)
 	return agents, nil
+}
+
+// ProbeAndUpdateAgents runs phase-1 health probes against each agent and updates status in DB.
+// Agents that respond will send a heartbeat back to the server (phase 2).
+func (u *agentUsecase) ProbeAndUpdateAgents(ctx context.Context, agents []domain.Agent) {
+	if len(agents) == 0 {
+		return
+	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 10)
+
+	for i := range agents {
+		wg.Add(1)
+		go func(agent *domain.Agent) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			alive := infrastructure.ProbeAgentHealth(agent.IPAddress, agent.Port)
+			now := time.Now()
+
+			if alive {
+				_ = u.UpdateAgentLastSeen(ctx, agent.ID)
+				agent.LastSeen = now
+
+				if agent.Status == "busy" {
+					return
+				}
+
+				if err := u.UpdateAgentStatus(ctx, agent.ID, "online"); err != nil {
+					log.Printf("Failed to set agent %s online after probe: %v", agent.Name, err)
+					return
+				}
+				agent.Status = "online"
+				return
+			}
+
+			if agent.Status == "offline" {
+				return
+			}
+
+			if err := u.UpdateAgentStatusOffline(ctx, agent.ID); err != nil {
+				log.Printf("Failed to set agent %s offline after probe: %v", agent.Name, err)
+				return
+			}
+			agent.Status = "offline"
+		}(&agents[i])
+	}
+
+	wg.Wait()
 }
 
 func (u *agentUsecase) UpdateAgentStatus(ctx context.Context, id uuid.UUID, status string) error {

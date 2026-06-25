@@ -294,7 +294,8 @@ func runAgent(cmd *cobra.Command, args []string) {
 	// Start real-time speed monitoring in background
 	agent.startRealTimeSpeedMonitoring(ctx)
 
-	go agent.startHeartbeat(ctx)
+	const agentHealthPort = 8081
+	go agent.startHealthServer(ctx, agentHealthPort)
 	go agent.pollForJobs(ctx)
 	go agent.watchLocalFiles(ctx)
 
@@ -683,26 +684,42 @@ func (a *Agent) registerWithServer(name, ip string, port int, hardware HardwareI
 	return nil
 }
 
-func (a *Agent) startHeartbeat(ctx context.Context) {
-	// Ultra-fast real-time heartbeat: every 1 second for instant detection
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+func (a *Agent) startHealthServer(ctx context.Context, port int) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 
-	// Send initial heartbeat immediately
-	if err := a.sendHeartbeat(); err != nil {
-		infrastructure.AgentLogger.Warning("Initial heartbeat failed: %v", err)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
+		// Phase 2: confirm reachability to the dashboard server.
+		go func() {
 			if err := a.sendHeartbeat(); err != nil {
-				infrastructure.AgentLogger.Error("Failed to send heartbeat: %v", err)
+				infrastructure.AgentLogger.Warning("Phase-2 heartbeat after health probe failed: %v", err)
 			}
-		}
+		}()
+	})
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: mux,
 	}
+
+	infrastructure.AgentLogger.Info("Health server listening on :%d (GET /health)", port)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			infrastructure.AgentLogger.Error("Health server error: %v", err)
+		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			infrastructure.AgentLogger.Warning("Health server shutdown error: %v", err)
+		}
+	}()
 }
 
 func (a *Agent) sendHeartbeat() error {
