@@ -1199,10 +1199,69 @@ func (a *Agent) cleanupJobFiles(jobID uuid.UUID) {
 	}
 }
 
+// hashcatSpeedRegex matches hashcat speed lines in H/s, kH/s, MH/s, or GH/s.
+var hashcatSpeedRegex = regexp.MustCompile(`Speed\.#(\d+|\*)\.+:\s*(\d+(?:\.\d+)?)\s*([kMG]?H/s)`)
+
+func parseHashcatSpeedHps(valueStr, unit string) (int64, error) {
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	switch strings.ToUpper(unit) {
+	case "H/S":
+		return int64(value), nil
+	case "KH/S":
+		return int64(value * 1_000), nil
+	case "MH/S":
+		return int64(value * 1_000_000), nil
+	case "GH/S":
+		return int64(value * 1_000_000_000), nil
+	default:
+		return 0, fmt.Errorf("unknown speed unit: %s", unit)
+	}
+}
+
+// extractHashcatSpeed parses hashcat output and returns total speed in H/s.
+// Prefers the aggregate Speed.#* line; otherwise sums per-device Speed.#N lines.
+func extractHashcatSpeed(output string) (int64, bool) {
+	matches := hashcatSpeedRegex.FindAllStringSubmatch(output, -1)
+	if len(matches) == 0 {
+		return 0, false
+	}
+
+	var aggregate int64
+	hasAggregate := false
+	var deviceTotal int64
+
+	for _, m := range matches {
+		if len(m) < 4 {
+			continue
+		}
+		speed, err := parseHashcatSpeedHps(m[2], m[3])
+		if err != nil || speed <= 0 {
+			continue
+		}
+		if m[1] == "*" {
+			aggregate = speed
+			hasAggregate = true
+		} else {
+			deviceTotal += speed
+		}
+	}
+
+	if hasAggregate {
+		return aggregate, true
+	}
+	if deviceTotal > 0 {
+		return deviceTotal, true
+	}
+	return 0, false
+}
+
 func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) {
 	// Parse hashcat output for progress updates
 	progressRegex := regexp.MustCompile(`Progress\.+:\s*(\d+)/(\d+)\s*\((\d+\.\d+)%\)`)
-	speedRegex := regexp.MustCompile(`Speed\.+:\s*(\d+)\s*H/s`)
 	etaRegex := regexp.MustCompile(`ETA\.+:\s*(\d+):(\d+):(\d+)`)
 
 	scanner := func(reader io.Reader) {
@@ -1219,10 +1278,9 @@ func (a *Agent) monitorHashcatOutput(job *domain.Job, stdout, stderr io.Reader) 
 			if matches := progressRegex.FindStringSubmatch(output); len(matches) > 3 {
 				progress, _ := strconv.ParseFloat(matches[3], 64)
 
-				// Parse speed
 				var speed int64
-				if speedMatches := speedRegex.FindStringSubmatch(output); len(speedMatches) > 1 {
-					speed, _ = strconv.ParseInt(speedMatches[1], 10, 64)
+				if parsedSpeed, ok := extractHashcatSpeed(output); ok {
+					speed = parsedSpeed
 				}
 
 				// Parse ETA
@@ -1987,8 +2045,6 @@ func (a *Agent) runHashcatBenchmark() error {
 		return fmt.Errorf("failed to start hashcat benchmark: %w", err)
 	}
 
-	// Parse output for speed
-	speedRegex := regexp.MustCompile(`Speed\.#\d+\.+:\s*(\d+)\s*H/s`)
 	var detectedSpeed int64
 
 	scanner := func(reader io.Reader) {
@@ -2001,12 +2057,9 @@ func (a *Agent) runHashcatBenchmark() error {
 
 			output := string(buf[:n])
 
-			// Parse speed from output
-			if matches := speedRegex.FindStringSubmatch(output); len(matches) > 1 {
-				if speed, err := strconv.ParseInt(matches[1], 10, 64); err == nil {
-					detectedSpeed = speed
-					infrastructure.AgentLogger.Info("Detected hashcat speed: %d H/s", detectedSpeed)
-				}
+			if speed, ok := extractHashcatSpeed(output); ok && speed > detectedSpeed {
+				detectedSpeed = speed
+				infrastructure.AgentLogger.Info("Detected hashcat speed: %d H/s", detectedSpeed)
 			}
 		}
 	}
