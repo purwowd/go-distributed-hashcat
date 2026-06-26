@@ -232,6 +232,8 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 		agents = filtered
 	}
 
+	domain.SortAgentsByPriority(agents)
+
 	total := len(agents)
 	start := (page - 1) * pageSize
 	if start < 0 {

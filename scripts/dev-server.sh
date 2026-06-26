@@ -22,13 +22,15 @@ export SERVER_PORT=1337
 mkdir -p data
 mkdir -p uploads/wordlists uploads/hash-files uploads/temp
 
-# uploads/ must be writable by this user (wordlist/hash uploads fail with 500 otherwise).
-if [ -d uploads/wordlists ] && [ ! -w uploads/wordlists ]; then
-	echo "⚠️  uploads/ is not writable by $(whoami) (often root-owned from a past sudo run)."
-	echo "    Fix uploads, then restart:"
-	echo "    sudo chown -R $(whoami):$(whoami) \"$(pwd)/uploads\""
-	exit 1
-fi
+# data/ and uploads/ must be writable (past sudo runs often leave them root-owned).
+for dir in data uploads; do
+	if [ -d "$dir" ] && [ ! -w "$dir" ]; then
+		echo "⚠️  $dir/ is not writable by $(whoami) (often root-owned from a past sudo run)."
+		echo "    Fix ownership, then restart:"
+		echo "    sudo chown -R $(whoami):$(whoami) \"$(pwd)/$dir\""
+		exit 1
+	fi
+done
 
 # Run the server (prefer compiled binary when present)
 if [ -x ./bin/server ]; then

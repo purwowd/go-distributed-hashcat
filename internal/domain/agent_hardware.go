@@ -1,6 +1,9 @@
 package domain
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // NormalizeAgentHardware fills type/processor from legacy capabilities when needed.
 func NormalizeAgentHardware(agent *Agent) {
@@ -39,6 +42,45 @@ func PrepareAgentsForResponse(agents []Agent) {
 	for i := range agents {
 		NormalizeAgentHardware(&agents[i])
 	}
+}
+
+// AgentSortRank returns 0 for real GPU workers, 1 for CPU/PoCL-class workers.
+func AgentSortRank(agent *Agent) int {
+	if agent == nil {
+		return 1
+	}
+	NormalizeAgentHardware(agent)
+	processor := strings.ToLower(agent.Processor)
+	capabilities := strings.ToLower(agent.Capabilities)
+	if strings.Contains(processor, "portable computing language") ||
+		strings.Contains(processor, "pocl") ||
+		strings.Contains(capabilities, "portable computing language") ||
+		strings.Contains(capabilities, "pocl") {
+		return 1
+	}
+	if AgentUsesGPU(agent) {
+		return 0
+	}
+	return 1
+}
+
+// SortAgentsByPriority orders agents with real GPU workers first, then by speed DESC, created_at DESC, ID.
+func SortAgentsByPriority(agents []Agent) {
+	PrepareAgentsForResponse(agents)
+	sort.SliceStable(agents, func(i, j int) bool {
+		aRank := AgentSortRank(&agents[i])
+		bRank := AgentSortRank(&agents[j])
+		if aRank != bRank {
+			return aRank < bRank
+		}
+		if agents[i].Speed != agents[j].Speed {
+			return agents[i].Speed > agents[j].Speed
+		}
+		if !agents[i].CreatedAt.Equal(agents[j].CreatedAt) {
+			return agents[i].CreatedAt.After(agents[j].CreatedAt)
+		}
+		return agents[i].ID.String() < agents[j].ID.String()
+	})
 }
 
 // AgentUsesGPU reports whether the agent should be treated as a GPU worker.

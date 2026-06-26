@@ -2622,14 +2622,29 @@ class DashboardApplication {
 
             sortAgentsByPriority(agents: any[]): any[] {
                 return [...agents].sort((a, b) => {
-                    const aRank = this.isGPUAgent(a) ? 0 : 1
-                    const bRank = this.isGPUAgent(b) ? 0 : 1
+                    const aRank = this.getAgentSortRank(a)
+                    const bRank = this.getAgentSortRank(b)
                     if (aRank !== bRank) return aRank - bRank
+
+                    const speedDiff = (b.speed || 0) - (a.speed || 0)
+                    if (speedDiff !== 0) return speedDiff
 
                     const dateComparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
                     if (dateComparison !== 0) return dateComparison
                     return a.id.localeCompare(b.id)
                 })
+            },
+
+            getAgentSortRank(agent: any): number {
+                const processor = (agent?.processor || '').toLowerCase()
+                const capabilities = (agent?.capabilities || '').toLowerCase()
+                if (processor.includes('portable computing language') ||
+                    processor.includes('pocl') ||
+                    capabilities.includes('portable computing language') ||
+                    capabilities.includes('pocl')) {
+                    return 1
+                }
+                return this.isGPUAgent(agent) ? 0 : 1
             },
 
             // Get selected agents objects
