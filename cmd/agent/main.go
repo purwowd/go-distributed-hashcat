@@ -1649,12 +1649,21 @@ func detectHardwareWithHashcat() HardwareInfo {
 	return hardware
 }
 
+// hashcatDeviceFieldIndent is the minimum leading whitespace for Backend Device
+// detail lines (Type, Name, etc.). Platform-level fields use fewer spaces and
+// must not overwrite the previous device's parsed fields.
+const hashcatDeviceFieldIndent = 4
+
+func hashcatLineIndent(rawLine string) int {
+	return len(rawLine) - len(strings.TrimLeft(rawLine, " \t"))
+}
+
 func parseHashcatDevices(output string) []hashcatDevice {
 	var devices []hashcatDevice
 	var current *hashcatDevice
 
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
+	for _, rawLine := range strings.Split(output, "\n") {
+		line := strings.TrimSpace(rawLine)
 		if strings.Contains(line, "Backend Device ID #") {
 			if current != nil && (current.Type != "" || current.Name != "") {
 				devices = append(devices, *current)
@@ -1663,6 +1672,9 @@ func parseHashcatDevices(output string) []hashcatDevice {
 			continue
 		}
 		if current == nil {
+			continue
+		}
+		if hashcatLineIndent(rawLine) < hashcatDeviceFieldIndent {
 			continue
 		}
 
