@@ -3,6 +3,7 @@ package usecase
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -141,6 +142,22 @@ func (u *wordlistUsecase) RegisterLocalWordlist(ctx context.Context, req *domain
 }
 
 func (u *wordlistUsecase) SyncAgentLocalWordlists(ctx context.Context, files []domain.AgentLocalFile) error {
+	// Companion *.txt.meta.json files (written beside wordlists) carry word_count.
+	metaCounts := make(map[string]int64)
+	for _, file := range files {
+		lowerName := strings.ToLower(file.Name)
+		if !strings.HasSuffix(lowerName, ".meta.json") {
+			continue
+		}
+		baseName := file.Name[:len(file.Name)-len(".meta.json")]
+		if !strings.HasSuffix(strings.ToLower(baseName), ".txt") {
+			continue
+		}
+		if wc, ok := readWordlistMetaWordCount(file.Path); ok && wc > 0 {
+			metaCounts[baseName] = wc
+		}
+	}
+
 	for _, file := range files {
 		if file.Type != "" && file.Type != "wordlist" {
 			continue
@@ -148,7 +165,12 @@ func (u *wordlistUsecase) SyncAgentLocalWordlists(ctx context.Context, files []d
 		if !strings.HasSuffix(strings.ToLower(file.Name), ".txt") {
 			continue
 		}
-		wordCount := int64(0)
+		wordCount := metaCounts[file.Name]
+		if wordCount == 0 {
+			if wc, ok := readWordlistMetaWordCount(file.Path + ".meta.json"); ok {
+				wordCount = wc
+			}
+		}
 		_, err := u.RegisterLocalWordlist(ctx, &domain.RegisterLocalWordlistRequest{
 			OrigName:  file.Name,
 			Size:      file.Size,
@@ -159,6 +181,29 @@ func (u *wordlistUsecase) SyncAgentLocalWordlists(ctx context.Context, files []d
 		}
 	}
 	return nil
+}
+
+type wordlistMetaFile struct {
+	WordCount int64 `json:"word_count"`
+	FileSize  int64 `json:"file_size"`
+}
+
+func readWordlistMetaWordCount(metaPath string) (int64, bool) {
+	if metaPath == "" {
+		return 0, false
+	}
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return 0, false
+	}
+	var meta wordlistMetaFile
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return 0, false
+	}
+	if meta.WordCount <= 0 {
+		return 0, false
+	}
+	return meta.WordCount, true
 }
 
 func (u *wordlistUsecase) GetWordlist(ctx context.Context, id uuid.UUID) (*domain.Wordlist, error) {
