@@ -194,6 +194,7 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 	}
 	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
 	agentKey := strings.TrimSpace(c.Query("agent_key"))
+	skipProbe := c.Query("skip_probe") == "true" || c.Query("skip_probe") == "1"
 
 	agents, err := h.agentUsecase.GetAllAgents(c.Request.Context())
 	if err != nil {
@@ -203,7 +204,8 @@ func (h *AgentHandler) GetAllAgents(c *gin.Context) {
 
 	// On-demand 2-phase check: server probes agents (phase 1), agents reply via heartbeat (phase 2).
 	// Skip when agent_key is set — used internally by the agent binary during startup.
-	if agentKey == "" {
+	// Skip when skip_probe=1 — used by internal services that only need cached agent metadata.
+	if agentKey == "" && !skipProbe {
 		h.agentUsecase.ProbeAndUpdateAgents(c.Request.Context(), agents)
 	}
 

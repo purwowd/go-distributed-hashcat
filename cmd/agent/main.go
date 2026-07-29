@@ -1038,8 +1038,10 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 			exitCode := exitError.ExitCode()
 			switch exitCode {
 			case 1:
-				a.completeJob(job.ID, "Password not found - exhausted")
-				a.cleanupJobFiles(job.ID)
+				// Exit 1 = exhausted keyspace. Hashcat can still recover some digests
+				// (e.g. multi-handshake .hccapx) and write them to outfile. Always
+				// check outfile before treating this as "not found".
+				a.finishJobFromOutfile(job.ID, true)
 				return nil
 			case 255:
 				a.failJob(job.ID, "Password not found")
@@ -1056,18 +1058,28 @@ func (a *Agent) runHashcat(job *domain.Job) error {
 		return err
 	}
 
-	// Success - password found, now capture the actual password
-	password, err := a.extractPassword(job.ID)
-	if err != nil {
-		infrastructure.AgentLogger.Warning("Failed to extract password: %v", err)
-		a.completeJob(job.ID, "Password found (extraction failed)")
-	} else {
-		a.completeJob(job.ID, fmt.Sprintf("Password found: %s", password))
-	}
-
-	// Cleanup outfile after job completion
-	a.cleanupJobFiles(job.ID)
+	// Exit 0 = cracked; still read outfile for the actual password.
+	a.finishJobFromOutfile(job.ID, false)
 	return nil
+}
+
+// finishJobFromOutfile completes a job based on hashcat outfile contents.
+// If allowExhausted is true and outfile is empty, the job is marked exhausted.
+// If allowExhausted is false (exit 0) and outfile cannot be read, report extraction failure.
+func (a *Agent) finishJobFromOutfile(jobID uuid.UUID, allowExhausted bool) {
+	password, err := a.extractPassword(jobID)
+	if err != nil {
+		if allowExhausted {
+			infrastructure.AgentLogger.Info("No password in outfile after exhausted run: %v", err)
+			a.completeJob(jobID, "Password not found - exhausted")
+		} else {
+			infrastructure.AgentLogger.Warning("Failed to extract password: %v", err)
+			a.completeJob(jobID, "Password found (extraction failed)")
+		}
+	} else {
+		a.completeJob(jobID, fmt.Sprintf("Password found: %s", password))
+	}
+	a.cleanupJobFiles(jobID)
 }
 
 func (a *Agent) downloadHashFile(hashFileID uuid.UUID) (string, error) {
