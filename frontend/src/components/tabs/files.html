@@ -9,9 +9,17 @@
             <i class="fas fa-upload mr-2"></i>Upload Hash File
         </button>
     </div>
+
+    <div class="flex justify-end mb-4">
+        <div class="relative">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+            <input type="text" class="input-modern py-1 pl-8" placeholder="Search files..."
+                   @input="setFileTableSearch($event)">
+        </div>
+    </div>
     
     <!-- Loading Skeletons -->
-    <div x-show="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div x-show="filesTableLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div class="card-modern p-4 animate-pulse">
             <div class="flex items-center space-x-3 mb-3">
                 <div class="w-8 h-8 bg-gray-300 rounded-lg"></div>
@@ -57,18 +65,16 @@
     </div>
     
     <!-- Hash Files Grid -->
-    <div x-show="!isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div x-show="!filesTableLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <template x-for="file in hashFiles" :key="file.id">
-            <div class="card-modern p-4 group hover:shadow-lg transition-all duration-200">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center text-white">
-                            <i class="fas fa-wifi text-xs"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <h3 class="font-semibold text-gray-900 text-sm truncate" x-text="file.orig_name || file.name">File Name</h3>
-                            <p class="text-xs text-gray-500" x-text="formatFileSize(file.size)">File Size</p>
-                        </div>
+            <div class="card-modern p-4 group hover:shadow-lg transition-all duration-200 overflow-hidden">
+                <div class="flex items-start space-x-3 mb-3 min-w-0">
+                    <div class="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center text-white">
+                        <i class="fas fa-wifi text-xs"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <h3 class="font-semibold text-gray-900 text-sm break-all leading-snug" x-text="file.orig_name || file.name">File Name</h3>
+                        <p class="text-xs text-gray-500 mt-1" x-text="formatFileSize(file.size)">File Size</p>
                     </div>
                 </div>
                 
@@ -109,4 +115,27 @@
             </button>
         </div>
     </div>
-</section> 
+
+    <div x-show="(fileTable.total||0) > (fileTable.pageSize||20)"
+         class="flex items-center justify-end mt-4 text-sm">
+        <div class="flex items-center gap-2 flex-wrap">
+            <button class="px-3 py-1 rounded-md border text-gray-600 hover:bg-gray-50"
+                    :class="(fileTable.page||1) === 1 ? 'opacity-50 cursor-not-allowed bg-gray-200' : ''"
+                    :disabled="(fileTable.page||1) === 1"
+                    @click="goPrevFilesPage()">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <template x-for="p in Math.max(1, Math.ceil((fileTable.total||0)/(fileTable.pageSize||20)))" :key="p">
+                <button class="px-3 py-1 rounded-md border"
+                        :class="(fileTable.page===p) ? 'bg-blue-50 border-blue-400 text-blue-600' : 'text-gray-700 hover:bg-gray-50'"
+                        @click="goToFilesPage(p)" x-text="p"></button>
+            </template>
+            <button class="px-3 py-1 rounded-md border text-gray-600 hover:bg-gray-50"
+                    :class="(() => { const page=fileTable.page||1; const size=parseInt(fileTable.pageSize||20); const total=fileTable.total||0; return page*size>=total ? 'opacity-50 cursor-not-allowed bg-gray-200' : '' })()"
+                    :disabled="(() => { const page=fileTable.page||1; const size=parseInt(fileTable.pageSize||20); const total=fileTable.total||0; return page*size>=total })()"
+                    @click="goNextFilesPage()">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+</section>

@@ -96,7 +96,9 @@ export class ApiClient {
 
     // Hash file methods
     async getHashFiles(): Promise<HashFile[]> {
-        return this.request<HashFile[]>('/hashfiles')
+        const res = await this.request<any>('/hashfiles')
+        if (Array.isArray(res)) return res
+        return res?.data || []
     }
 
     async uploadHashFile(file: File): Promise<HashFile> {

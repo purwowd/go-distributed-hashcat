@@ -3,6 +3,8 @@ import { apiService, type HashFile } from '@/services/api.service'
 
 interface FileState {
     hashFiles: HashFile[]
+    hashFileOptions: HashFile[]
+    total: number
     loading: boolean
     error: string | null
     lastUpdated: Date | null
@@ -11,6 +13,8 @@ interface FileState {
 class FileStore {
     private state: FileState = {
         hashFiles: [],
+        hashFileOptions: [],
+        total: 0,
         loading: false,
         error: null,
         lastUpdated: null
@@ -37,21 +41,48 @@ class FileStore {
     }
 
     public actions = {
-        fetchHashFiles: async (): Promise<void> => {
+        fetchHashFiles: async (
+            params?: { page?: number; page_size?: number; search?: string }
+        ): Promise<{ data: HashFile[]; total: number; page: number; page_size: number } | null> => {
             this.setState({ loading: true, error: null })
-            
+
             try {
-                const hashFiles = await apiService.getHashFiles()
-                this.setState({ 
-                    hashFiles, 
-                    loading: false, 
+                const result = await apiService.getHashFiles(params)
+                const reportedTotal = Number(result.total)
+                const total = Number.isFinite(reportedTotal) && reportedTotal > 0
+                    ? reportedTotal
+                    : Math.max(this.state.total, result.data.length)
+                this.setState({
+                    hashFiles: result.data,
+                    total,
+                    loading: false,
                     lastUpdated: new Date(),
-                    error: null 
+                    error: null
+                })
+                return { ...result, total }
+            } catch (error) {
+                this.setState({
+                    loading: false,
+                    error: error instanceof Error ? error.message : 'Failed to fetch hash files'
+                })
+                return null
+            }
+        },
+
+        fetchHashFileOptions: async (): Promise<void> => {
+            try {
+                const result = await apiService.getHashFiles({ page: 1, page_size: 500 })
+                const reportedTotal = Number(result.total)
+                const total = Number.isFinite(reportedTotal) && reportedTotal > 0
+                    ? reportedTotal
+                    : Math.max(this.state.total, result.data.length)
+                this.setState({
+                    hashFileOptions: result.data,
+                    total
                 })
             } catch (error) {
-                this.setState({ 
-                    loading: false, 
-                    error: error instanceof Error ? error.message : 'Failed to fetch hash files' 
+                this.setState({
+                    error: error instanceof Error ? error.message : 'Failed to fetch hash file options'
                 })
             }
         },
@@ -60,7 +91,7 @@ class FileStore {
             try {
                 const hashFile = await apiService.getHashFile(id)
                 if (hashFile) {
-                    const updatedFiles = this.state.hashFiles.map(f => 
+                    const updatedFiles = this.state.hashFiles.map(f =>
                         f.id === hashFile.id ? hashFile : f
                     )
                     if (!updatedFiles.find(f => f.id === hashFile.id)) {
@@ -70,8 +101,8 @@ class FileStore {
                 }
                 return hashFile
             } catch (error) {
-                this.setState({ 
-                    error: error instanceof Error ? error.message : 'Failed to fetch hash file' 
+                this.setState({
+                    error: error instanceof Error ? error.message : 'Failed to fetch hash file'
                 })
                 return null
             }
@@ -79,20 +110,15 @@ class FileStore {
 
         uploadHashFile: async (file: File): Promise<HashFile | null> => {
             this.setState({ loading: true, error: null })
-            
+
             try {
                 const newHashFile = await apiService.uploadHashFile(file)
-                if (newHashFile) {
-                    this.setState({ 
-                        hashFiles: [...this.state.hashFiles, newHashFile],
-                        loading: false 
-                    })
-                }
+                this.setState({ loading: false })
                 return newHashFile
             } catch (error) {
-                this.setState({ 
-                    loading: false, 
-                    error: error instanceof Error ? error.message : 'Failed to upload hash file' 
+                this.setState({
+                    loading: false,
+                    error: error instanceof Error ? error.message : 'Failed to upload hash file'
                 })
                 return null
             }
@@ -103,12 +129,17 @@ class FileStore {
                 const success = await apiService.deleteHashFile(id)
                 if (success) {
                     const updatedFiles = this.state.hashFiles.filter(file => file.id !== id)
-                    this.setState({ hashFiles: updatedFiles })
+                    const updatedOptions = this.state.hashFileOptions.filter(file => file.id !== id)
+                    this.setState({
+                        hashFiles: updatedFiles,
+                        hashFileOptions: updatedOptions,
+                        total: Math.max(0, this.state.total - 1)
+                    })
                 }
                 return success
             } catch (error) {
-                this.setState({ 
-                    error: error instanceof Error ? error.message : 'Failed to delete hash file' 
+                this.setState({
+                    error: error instanceof Error ? error.message : 'Failed to delete hash file'
                 })
                 return false
             }
@@ -121,6 +152,8 @@ class FileStore {
         reset: (): void => {
             this.setState({
                 hashFiles: [],
+                hashFileOptions: [],
+                total: 0,
                 loading: false,
                 error: null,
                 lastUpdated: null
@@ -130,17 +163,18 @@ class FileStore {
 
     public getters = {
         getHashFileById: (id: string): HashFile | undefined => {
-            return this.state.hashFiles.find(file => file.id === id)
+            return this.state.hashFileOptions.find(file => file.id === id)
+                || this.state.hashFiles.find(file => file.id === id)
         },
 
         getHashFilesByName: (name: string): HashFile[] => {
-            return this.state.hashFiles.filter(file => 
+            return this.state.hashFiles.filter(file =>
                 file.name.toLowerCase().includes(name.toLowerCase())
             )
         },
 
         getTotalCount: (): number => {
-            return this.state.hashFiles.length
+            return this.state.total
         },
 
         getTotalSize: (): number => {
@@ -155,4 +189,4 @@ class FileStore {
 }
 
 export const fileStore = new FileStore()
-export type { FileState } 
+export type { FileState }

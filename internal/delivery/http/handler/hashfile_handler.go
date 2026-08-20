@@ -3,6 +3,8 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"go-distributed-hashcat/internal/usecase"
 
@@ -68,13 +70,32 @@ func (h *HashFileHandler) GetHashFile(c *gin.Context) {
 }
 
 func (h *HashFileHandler) GetAllHashFiles(c *gin.Context) {
-	hashFiles, err := h.hashFileUsecase.GetAllHashFiles(c.Request.Context())
+	page := 1
+	pageSize := 20
+	if p := c.Query("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+			page = v
+		}
+	}
+	if s := c.Query("page_size"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 && v <= 500 {
+			pageSize = v
+		}
+	}
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+
+	hashFiles, total, err := h.hashFileUsecase.GetHashFilesPaginated(c.Request.Context(), page, pageSize, search)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": hashFiles})
+	c.JSON(http.StatusOK, gin.H{
+		"data":      hashFiles,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 func (h *HashFileHandler) DeleteHashFile(c *gin.Context) {

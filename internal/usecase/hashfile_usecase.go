@@ -17,6 +17,7 @@ type HashFileUsecase interface {
 	UploadHashFile(ctx context.Context, name string, content io.Reader, size int64) (*domain.HashFile, error)
 	GetHashFile(ctx context.Context, id uuid.UUID) (*domain.HashFile, error)
 	GetAllHashFiles(ctx context.Context) ([]domain.HashFile, error)
+	GetHashFilesPaginated(ctx context.Context, page, pageSize int, search string) ([]domain.HashFile, int, error)
 	DeleteHashFile(ctx context.Context, id uuid.UUID) error
 }
 
@@ -95,6 +96,14 @@ func (u *hashFileUsecase) GetAllHashFiles(ctx context.Context) ([]domain.HashFil
 		return nil, fmt.Errorf("failed to get hash files: %w", err)
 	}
 	return hashFiles, nil
+}
+
+func (u *hashFileUsecase) GetHashFilesPaginated(ctx context.Context, page, pageSize int, search string) ([]domain.HashFile, int, error) {
+	hashFiles, total, err := u.hashFileRepo.GetPaginated(ctx, page, pageSize, search)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get hash files: %w", err)
+	}
+	return hashFiles, total, nil
 }
 
 func (u *hashFileUsecase) DeleteHashFile(ctx context.Context, id uuid.UUID) error {

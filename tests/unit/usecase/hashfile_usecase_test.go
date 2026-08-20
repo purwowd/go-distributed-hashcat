@@ -203,6 +203,24 @@ func TestHashFileUsecase_GetAllHashFiles(t *testing.T) {
 	}
 }
 
+func TestHashFileUsecase_GetHashFilesPaginated(t *testing.T) {
+	expectedHashFiles := []domain.HashFile{
+		{ID: uuid.New(), Name: "test1.hash", OrigName: "one.hccapx"},
+		{ID: uuid.New(), Name: "test2.hash", OrigName: "two.hccapx"},
+	}
+
+	mockRepo := new(MockHashFileRepository)
+	mockRepo.On("GetPaginated", mock.Anything, 2, 12, "swadaya").Return(expectedHashFiles, 126, nil)
+
+	uc := usecase.NewHashFileUsecase(mockRepo, "/tmp/uploads")
+	hashFiles, total, err := uc.GetHashFilesPaginated(context.Background(), 2, 12, "swadaya")
+
+	assert.NoError(t, err)
+	assert.Equal(t, 126, total)
+	assert.Len(t, hashFiles, 2)
+	mockRepo.AssertExpectations(t)
+}
+
 func TestHashFileUsecase_DeleteHashFile(t *testing.T) {
 	hashFileID := uuid.New()
 	expectedHashFile := &domain.HashFile{

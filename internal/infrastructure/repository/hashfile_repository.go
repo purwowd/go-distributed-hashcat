@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"go-distributed-hashcat/internal/domain"
@@ -46,7 +47,7 @@ func (r *hashFileRepository) prepareStatements() {
 
 	r.getAllStmt, err = r.db.DB().Prepare(`
 		SELECT id, name, orig_name, path, size, type, created_at
-		FROM hash_files ORDER BY created_at DESC LIMIT 50
+		FROM hash_files ORDER BY created_at DESC
 	`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare getAll statement: %v", err))
@@ -165,6 +166,67 @@ func (r *hashFileRepository) GetAll(ctx context.Context) ([]domain.HashFile, err
 	r.cache.Set(ctx, cacheKey, hashFiles)
 
 	return hashFiles, nil
+}
+
+func (r *hashFileRepository) GetPaginated(ctx context.Context, page, pageSize int, search string) ([]domain.HashFile, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 500 {
+		pageSize = 500
+	}
+
+	where := `WHERE 1=1`
+	args := make([]interface{}, 0, 4)
+	if search = strings.TrimSpace(search); search != "" {
+		pattern := "%" + strings.ToLower(search) + "%"
+		where += ` AND (LOWER(orig_name) LIKE ? OR LOWER(name) LIKE ? OR LOWER(CAST(id AS TEXT)) LIKE ?)`
+		args = append(args, pattern, pattern, pattern)
+	}
+
+	var total int
+	countQuery := `SELECT COUNT(*) FROM hash_files ` + where
+	if err := r.db.DB().QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	selectQuery := `
+		SELECT id, name, orig_name, path, size, type, created_at
+		FROM hash_files ` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?
+	`
+	queryArgs := append(append([]interface{}{}, args...), pageSize, (page-1)*pageSize)
+	rows, err := r.db.DB().QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	hashFiles := make([]domain.HashFile, 0, pageSize)
+	for rows.Next() {
+		var hashFile domain.HashFile
+		var idStr string
+		if err := rows.Scan(
+			&idStr,
+			&hashFile.Name,
+			&hashFile.OrigName,
+			&hashFile.Path,
+			&hashFile.Size,
+			&hashFile.Type,
+			&hashFile.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		hashFile.ID = uuid.MustParse(idStr)
+		hashFiles = append(hashFiles, hashFile)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return hashFiles, total, nil
 }
 
 func (r *hashFileRepository) Delete(ctx context.Context, id uuid.UUID) error {

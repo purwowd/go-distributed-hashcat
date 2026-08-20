@@ -171,6 +171,14 @@ func (m *MockHashFileRepository) GetAll(ctx context.Context) ([]domain.HashFile,
 	return args.Get(0).([]domain.HashFile), args.Error(1)
 }
 
+func (m *MockHashFileRepository) GetPaginated(ctx context.Context, page, pageSize int, search string) ([]domain.HashFile, int, error) {
+	args := m.Called(ctx, page, pageSize, search)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]domain.HashFile), args.Int(1), args.Error(2)
+}
+
 func (m *MockHashFileRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)

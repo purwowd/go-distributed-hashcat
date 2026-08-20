@@ -65,9 +65,9 @@
                 <template x-if="currentTab === 'files'">
                     <div class="flex items-center text-sm text-gray-600">
                         <i class="fas fa-file-alt text-purple-500 mr-2"></i>
-                        <span x-text="`${getArrayLength(hashFiles)} hash files`"></span>
+                        <span x-text="`${hashFilesTotal} hash files`"></span>
                         <span class="mx-2">•</span>
-                        <span class="text-purple-600 font-medium" x-text="formatFileSize(hashFiles.reduce((total, file) => total + (file.size || 0), 0))"></span>
+                        <span class="text-purple-600 font-medium" x-text="`page ${fileTable.page}`"></span>
                     </div>
                 </template>
                 

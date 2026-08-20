@@ -89,7 +89,7 @@
                                     required 
                                     class="select-modern">
                                 <option value="">Select handshake file (.hccapx)</option>
-                                <template x-for="file in hashFiles" :key="file.id">
+                                <template x-for="file in hashFileOptions" :key="file.id">
                                     <option :value="file.id" x-text="file.orig_name || file.name"></option>
                                 </template>
                             </select>

@@ -427,6 +427,7 @@ class DashboardApplication {
             mobileMenuOpen: false,
             isLoading: false,
             jobsTableLoading: false,
+            filesTableLoading: false,
             isAlpineInitialized: false,
             notifications: [] as Array<{id: number, message: string, type: 'success' | 'error' | 'info' | 'warning', timestamp: Date}>,
             
@@ -506,6 +507,7 @@ class DashboardApplication {
             reactiveAgentKeys: [] as any[],
             reactiveJobs: [] as any[],
             reactiveHashFiles: [] as any[],
+            reactiveHashFileOptions: [] as any[],
             reactiveWordlists: [] as any[],
 
             // Store references for Alpine.js expressions
@@ -532,6 +534,14 @@ class DashboardApplication {
             },
             jobSearchDebounceTimer: null as ReturnType<typeof setTimeout> | null,
 
+            fileTable: {
+                page: 1,
+                pageSize: 20,
+                search: '',
+                total: 0
+            },
+            fileSearchDebounceTimer: null as ReturnType<typeof setTimeout> | null,
+
             // Getters that return reactive data
             get agents() {
                 return this.reactiveAgents || []
@@ -551,6 +561,13 @@ class DashboardApplication {
             },
             get hashFiles() {
                 return this.reactiveHashFiles || []
+            },
+            get hashFileOptions() {
+                const options = this.reactiveHashFileOptions || []
+                return options.length > 0 ? options : (this.reactiveHashFiles || [])
+            },
+            get hashFilesTotal() {
+                return this.fileTable?.total || 0
             },
             get wordlists() {
                 return this.reactiveWordlists || []
@@ -660,7 +677,7 @@ class DashboardApplication {
                     return '2500' // Default for WPA/WPA2
                 }
                 
-                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                const selectedFile = this.findHashFile(this.jobForm.hash_file_id)
                 if (!selectedFile) {
                     return '2500'
                 }
@@ -684,7 +701,7 @@ class DashboardApplication {
                     return 'WPA/WPA2'
                 }
                 
-                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                const selectedFile = this.findHashFile(this.jobForm.hash_file_id)
                 if (!selectedFile) {
                     return 'WPA/WPA2'
                 }
@@ -708,7 +725,7 @@ class DashboardApplication {
                     return 'This system is specialized for WPA/WPA2 cracking'
                 }
                 
-                const selectedFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                const selectedFile = this.findHashFile(this.jobForm.hash_file_id)
                 if (!selectedFile) {
                     return 'This system is specialized for WPA/WPA2 cracking'
                 }
@@ -880,7 +897,10 @@ class DashboardApplication {
                 // Subscribe to file store changes
                 fileStore.subscribe(() => {
                     const state = fileStore.getState()
+                    this.filesTableLoading = state.loading
                     this.reactiveHashFiles = [...(state.hashFiles || [])]
+                    this.reactiveHashFileOptions = [...(state.hashFileOptions || [])]
+                    this.fileTable.total = state.total || 0
                 })
                 
                 // Subscribe to wordlist store changes
@@ -1339,6 +1359,58 @@ class DashboardApplication {
                 }
             },
 
+            async refreshFilesTable() {
+                const result = await fileStore.actions.fetchHashFiles({
+                    page: this.fileTable.page,
+                    page_size: this.fileTable.pageSize,
+                    search: this.fileTable.search
+                })
+                if (result) {
+                    this.fileTable.total = result.total
+                }
+            },
+            async setFileTablePageSize(event: any) {
+                const val = parseInt(event?.target?.value || '12')
+                this.fileTable.pageSize = isNaN(val) ? 20 : val
+                this.fileTable.page = 1
+                await this.refreshFilesTable()
+            },
+            setFileTableSearch(event: any) {
+                this.fileTable.search = event?.target?.value || ''
+                this.fileTable.page = 1
+                if (this.fileSearchDebounceTimer) {
+                    clearTimeout(this.fileSearchDebounceTimer)
+                }
+                this.fileSearchDebounceTimer = setTimeout(() => {
+                    this.refreshFilesTable()
+                }, 300)
+            },
+            async goPrevFilesPage() {
+                if (this.fileTable.page > 1) {
+                    this.fileTable.page -= 1
+                    await this.refreshFilesTable()
+                }
+            },
+            async goNextFilesPage() {
+                const canNext = this.fileTable.page * this.fileTable.pageSize < (this.fileTable.total || 0)
+                if (canNext) {
+                    this.fileTable.page += 1
+                    await this.refreshFilesTable()
+                }
+            },
+            async goToFilesPage(page: number) {
+                const totalPages = Math.max(1, Math.ceil((this.fileTable.total || 0) / (this.fileTable.pageSize || 20)))
+                const target = Math.min(Math.max(1, page), totalPages)
+                if (target !== this.fileTable.page) {
+                    this.fileTable.page = target
+                    await this.refreshFilesTable()
+                }
+            },
+            findHashFile(id: string) {
+                return this.hashFileOptions.find((f: any) => f.id === id)
+                    || this.hashFiles.find((f: any) => f.id === id)
+            },
+
             // NEW: Setup WebSocket subscriptions for real-time updates
             setupWebSocketSubscriptions() {
                 // Don't setup WebSocket on login page
@@ -1473,9 +1545,12 @@ class DashboardApplication {
                             console.warn('Failed to load agents:', err)
                             return []
                         }),
-                        fileStore.actions.fetchHashFiles().catch(err => {
+                        this.refreshFilesTable().catch(err => {
                             console.warn('Failed to load hash files:', err)
                             return []
+                        }),
+                        fileStore.actions.fetchHashFileOptions().catch(err => {
+                            console.warn('Failed to load hash file options:', err)
                         }),
                         wordlistStore.actions.fetchWordlists().catch(err => {
                             console.warn('Failed to load wordlists:', err)
@@ -2264,7 +2339,7 @@ class DashboardApplication {
 
             getSelectedHashFileName(): string {
                 if (!this.jobForm.hash_file_id) return 'Not selected'
-                const hashFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                const hashFile = this.findHashFile(this.jobForm.hash_file_id)
                 return hashFile ? (hashFile.orig_name || hashFile.name) : 'Not selected'
             },
 
@@ -2463,7 +2538,7 @@ class DashboardApplication {
                 }
 
                 // Get file names for display
-                const hashFile = this.hashFiles.find((f: any) => f.id === this.jobForm.hash_file_id)
+                const hashFile = this.findHashFile(this.jobForm.hash_file_id)
                 const wordlist = this.wordlists.find((w: any) => w.id === this.jobForm.wordlist_id)
                 
                 const hashFileName = hashFile ? (hashFile.orig_name || hashFile.name) : 'hashfile'
@@ -3040,7 +3115,7 @@ class DashboardApplication {
                     return
                 }
 
-                const hashFile = this.hashFiles.find((f: any) => f.id === this.distributedJobForm.hash_file_id)
+                const hashFile = this.findHashFile(this.distributedJobForm.hash_file_id)
                 const wordlist = this.wordlists.find((w: any) => w.id === this.distributedJobForm.wordlist_id)
                 
                 if (!hashFile || !wordlist) return
@@ -3258,8 +3333,9 @@ class DashboardApplication {
                     
                     const result = await fileStore.actions.uploadHashFile(file)
                     if (result) {
-                        // Immediate UI update with uploaded file data
-                        await fileStore.actions.fetchHashFiles()
+                        this.fileTable.page = 1
+                        await this.refreshFilesTable()
+                        await fileStore.actions.fetchHashFileOptions()
                         
                         this.showNotification('Hash file uploaded successfully!', 'success')
                         this.closeFileModal()
@@ -3390,11 +3466,16 @@ class DashboardApplication {
                     this.showNotification('Error: No file ID provided', 'error')
                     return
                 }
-                const file = this.hashFiles.find((f: any) => f.id === id)
+                const file = this.findHashFile(id)
                 if (file) {
                     this.openDeleteModal('file', file, async () => {
                     const success = await fileStore.actions.deleteHashFile(id)
                     if (success) {
+                        if (this.hashFiles.length === 0 && this.fileTable.page > 1) {
+                            this.fileTable.page -= 1
+                        }
+                        await this.refreshFilesTable()
+                        await fileStore.actions.fetchHashFileOptions()
                         this.showNotification('Hash file deleted successfully!', 'success')
                     } else {
                         this.showNotification('Failed to delete hash file', 'error')

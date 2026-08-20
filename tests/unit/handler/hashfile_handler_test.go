@@ -46,6 +46,14 @@ func (m *MockHashFileUsecase) GetAllHashFiles(ctx context.Context) ([]domain.Has
 	return args.Get(0).([]domain.HashFile), args.Error(1)
 }
 
+func (m *MockHashFileUsecase) GetHashFilesPaginated(ctx context.Context, page, pageSize int, search string) ([]domain.HashFile, int, error) {
+	args := m.Called(ctx, page, pageSize, search)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]domain.HashFile), args.Int(1), args.Error(2)
+}
+
 func (m *MockHashFileUsecase) DeleteHashFile(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
@@ -280,7 +288,7 @@ func TestHashFileHandler_GetAllHashFiles(t *testing.T) {
 						Size:     2048,
 					},
 				}
-				mockUsecase.On("GetAllHashFiles", mock.Anything).Return(hashFiles, nil)
+				mockUsecase.On("GetHashFilesPaginated", mock.Anything, 1, 20, "").Return(hashFiles, 2, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -289,12 +297,15 @@ func TestHashFileHandler_GetAllHashFiles(t *testing.T) {
 				assert.NoError(t, err)
 				data := response["data"].([]interface{})
 				assert.Len(t, data, 2)
+				assert.Equal(t, float64(2), response["total"])
+				assert.Equal(t, float64(1), response["page"])
+				assert.Equal(t, float64(20), response["page_size"])
 			},
 		},
 		{
 			name: "no hash files found",
 			mockSetup: func(mockUsecase *MockHashFileUsecase) {
-				mockUsecase.On("GetAllHashFiles", mock.Anything).Return([]domain.HashFile{}, nil)
+				mockUsecase.On("GetHashFilesPaginated", mock.Anything, 1, 20, "").Return([]domain.HashFile{}, 0, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -308,7 +319,7 @@ func TestHashFileHandler_GetAllHashFiles(t *testing.T) {
 		{
 			name: "usecase error",
 			mockSetup: func(mockUsecase *MockHashFileUsecase) {
-				mockUsecase.On("GetAllHashFiles", mock.Anything).Return([]domain.HashFile{}, errors.New("database error"))
+				mockUsecase.On("GetHashFilesPaginated", mock.Anything, 1, 20, "").Return([]domain.HashFile{}, 0, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {

@@ -356,12 +356,24 @@ class ApiService {
     }
 
     // File Management
-    public async getHashFiles(): Promise<HashFile[]> {
-        const response = await this.get<{data: HashFile[]}>('/api/v1/hashfiles/')
-        if (response.success && response.data && response.data.data) {
-            return response.data.data // Extract array from wrapper
+    public async getHashFiles(params?: { page?: number; page_size?: number; search?: string }): Promise<{ data: HashFile[]; total: number; page: number; page_size: number }> {
+        const query: string[] = []
+        if (params?.page) query.push(`page=${params.page}`)
+        if (params?.page_size) query.push(`page_size=${params.page_size}`)
+        if (params?.search) query.push(`search=${encodeURIComponent(params.search)}`)
+        const qs = query.length ? `?${query.join('&')}` : ''
+        const response = await this.get<{ data: HashFile[]; total: number; page: number; page_size: number }>(`/api/v1/hashfiles/${qs}`)
+        if (response.success && response.data) {
+            const payload = response.data as any
+            const total = Number(payload.total)
+            return {
+                data: payload.data || [],
+                total: Number.isFinite(total) ? total : 0,
+                page: payload.page || 1,
+                page_size: payload.page_size || 20
+            }
         }
-        return []
+        return { data: [], total: 0, page: 1, page_size: 20 }
     }
 
     public async getHashFile(id: string): Promise<HashFile | null> {

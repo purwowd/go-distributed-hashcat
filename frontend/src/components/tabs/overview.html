@@ -33,9 +33,9 @@
             <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center mx-auto mb-2">
                 <i class="fas fa-file-alt text-sm"></i>
             </div>
-            <div class="text-lg font-bold text-gray-900" x-text="hashFiles.length">0</div>
+            <div class="text-lg font-bold text-gray-900" x-text="hashFilesTotal">0</div>
             <div class="text-xs text-gray-500">Hash Files</div>
-            <div class="text-xs text-gray-600 mt-1" x-text="formatFileSize(hashFiles.reduce((t, f) => t + (f.size || 0), 0))"></div>
+            <div class="text-xs text-gray-600 mt-1">uploaded</div>
         </div>
         
         <div class="card-modern p-4 text-center group hover:shadow-lg transition-all duration-200">

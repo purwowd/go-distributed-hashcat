@@ -84,6 +84,7 @@ type HashFileRepository interface {
 	Create(ctx context.Context, hashFile *HashFile) error
 	GetByID(ctx context.Context, id uuid.UUID) (*HashFile, error)
 	GetAll(ctx context.Context) ([]HashFile, error)
+	GetPaginated(ctx context.Context, page, pageSize int, search string) ([]HashFile, int, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 

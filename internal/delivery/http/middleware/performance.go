@@ -77,7 +77,7 @@ func Cache() gin.HandlerFunc {
 		} else if strings.HasPrefix(path, "/api/v1/") {
 			// API responses - short cache for GET requests
 			if c.Request.Method == "GET" {
-				c.Header("Cache-Control", "public, max-age=30")
+				c.Header("Cache-Control", "no-store")
 			} else {
 				c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 			}
